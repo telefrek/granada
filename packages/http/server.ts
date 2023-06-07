@@ -5,15 +5,12 @@
 import EventEmitter from "events"
 import * as http2 from "http2"
 import { Router, createRouter } from "./routing"
+import { LifecycleEvents } from "@telefrek/core/lifecycle"
 
 /**
  * Set of supported events on an {@link HttpServer}
  */
-interface HttpServerEvents {
-	/**
-	 * Fired when the {@link HttpServer} has closed
-	 */
-	closed: () => void
+interface HttpServerEvents extends LifecycleEvents {
 
 	/**
 	 * Fired when the {@link HttpServer} is started
@@ -41,7 +38,6 @@ export interface HttpServer {
      * @param port The port to listen on
      */
     listen(port: number): void
-
 
 	/**
 	 * Match all EventEmitter.on functionality

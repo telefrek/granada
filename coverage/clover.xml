@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<coverage generated="1686109313246" clover="3.2.0">
-  <project timestamp="1686109313246" name="All files">
-    <metrics statements="53" coveredstatements="42" conditionals="7" coveredconditionals="6" methods="18" coveredmethods="12" elements="78" coveredelements="60" complexity="0" loc="53" ncloc="53" packages="2" files="6" classes="6"/>
+<coverage generated="1686112965139" clover="3.2.0">
+  <project timestamp="1686112965140" name="All files">
+    <metrics statements="60" coveredstatements="42" conditionals="7" coveredconditionals="6" methods="21" coveredmethods="12" elements="88" coveredelements="60" complexity="0" loc="60" ncloc="60" packages="3" files="7" classes="7"/>
     <package name="core.concurrency">
       <metrics statements="23" coveredstatements="19" conditionals="5" coveredconditionals="4" methods="7" coveredmethods="6"/>
       <file name="index.ts" path="/workspaces/santorini/packages/core/concurrency/index.ts">
@@ -32,6 +32,19 @@
         <line num="83" count="10" type="stmt"/>
         <line num="92" count="1" type="stmt"/>
         <line num="95" count="23" type="cond" truecount="2" falsecount="0"/>
+      </file>
+    </package>
+    <package name="core.lifecycle">
+      <metrics statements="7" coveredstatements="0" conditionals="0" coveredconditionals="0" methods="3" coveredmethods="0"/>
+      <file name="index.ts" path="/workspaces/santorini/packages/core/lifecycle/index.ts">
+        <metrics statements="7" coveredstatements="0" conditionals="0" coveredconditionals="0" methods="3" coveredmethods="0"/>
+        <line num="36" count="0" type="stmt"/>
+        <line num="37" count="0" type="stmt"/>
+        <line num="41" count="0" type="stmt"/>
+        <line num="44" count="0" type="stmt"/>
+        <line num="46" count="0" type="stmt"/>
+        <line num="50" count="0" type="stmt"/>
+        <line num="53" count="0" type="stmt"/>
       </file>
     </package>
     <package name="http">
@@ -65,18 +78,18 @@
         <line num="5" count="1" type="stmt"/>
         <line num="6" count="1" type="stmt"/>
         <line num="7" count="1" type="stmt"/>
-        <line num="137" count="1" type="stmt"/>
-        <line num="138" count="1" type="stmt"/>
-        <line num="146" count="1" type="stmt"/>
-        <line num="147" count="1" type="stmt"/>
-        <line num="151" count="0" type="stmt"/>
+        <line num="133" count="1" type="stmt"/>
+        <line num="134" count="1" type="stmt"/>
+        <line num="142" count="1" type="stmt"/>
+        <line num="143" count="1" type="stmt"/>
+        <line num="147" count="0" type="stmt"/>
+        <line num="152" count="0" type="stmt"/>
         <line num="156" count="0" type="stmt"/>
-        <line num="160" count="0" type="stmt"/>
-        <line num="162" count="0" type="stmt"/>
-        <line num="166" count="1" type="stmt"/>
+        <line num="158" count="0" type="stmt"/>
+        <line num="162" count="1" type="stmt"/>
+        <line num="174" count="1" type="stmt"/>
         <line num="178" count="1" type="stmt"/>
-        <line num="182" count="1" type="stmt"/>
-        <line num="190" count="0" type="stmt"/>
+        <line num="186" count="0" type="stmt"/>
       </file>
     </package>
   </project>
