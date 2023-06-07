@@ -1,0 +1,17 @@
+{
+  "name": "@telefrek/http",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "dependencies": {
+    "@telefrek/core": "*"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "compile": "rm -rf dist/* && tsc -p tsconfig.pkg.json"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

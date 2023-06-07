@@ -1,4 +1,4 @@
-import {HttpHandler, HttpMethod, HttpServer, emptyHeaders, getDefaultBuilder} from "./index"
+import {HttpHandler, HttpMethod, emptyHeaders, getDefaultBuilder} from "./index"
 
 
 describe('testing', () => {
@@ -10,6 +10,7 @@ describe('testing', () => {
             hasBody: false,
             body: ()=>Promise.reject(new Error("invalid"))
         })
+
         const response = await h({
             path: "/",
             method: HttpMethod.GET,
@@ -17,7 +18,8 @@ describe('testing', () => {
             hasBody: false,
             body: ()=>Promise.reject(new Error("invalid"))
         })
-        expect(response.status).toBe(404);
+
+        expect(response.status).toBe(404)
     })
 
     test('A server should be buildable', () => {
