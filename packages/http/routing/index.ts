@@ -2,6 +2,7 @@
  * Package containing all of the routing information for associating a given path/method combination with a handler
  */
 
+import { ChildProcess } from "child_process"
 import { HttpBodyContent, HttpHandler, HttpMethod, HttpRequest } from "../core"
 
 /**
@@ -56,6 +57,8 @@ type RouteHandler = Record<HttpMethod, HttpHandler | undefined>
  * Default {@link Router} implementation that uses a tree structure to hold the mapping information
  */
 class RouterImpl implements Router {
+
+    private root: RouteSegment = new RouteSegment()
     
     lookup<T extends HttpBodyContent = any>(request: HttpRequest<T>): HttpHandler | undefined {
         return undefined
@@ -73,12 +76,47 @@ class RouterImpl implements Router {
             throw new RoutingError("No valid segments found!")
         }
 
+        // Check the segments for valid contents
         for(const segment of segments){
             if(WILDCARD === segment || TERMINATOR === segment ||
                 URI_SEGMENT_REGEX.test(segment) || PARAMETER_REGEX.test(segment)){
                 continue
             }
             throw new RoutingError(`Invalid segment: ${segment}`)
+        }
+
+        // It feels silly to loop through twice but this only happens once and we don't want to pollute
+        // the tree with invalid data
+        let current: RouteSegment = this.root
+        for(const segment of segments){
+            let info: RouteSegmentInfo = RouteSegmentInfo.None
+            let parameter: string | undefined
+
+            if(WILDCARD === segment){
+                info &= RouteSegmentInfo.Wildcard
+            } else if(TERMINATOR === segment){
+                info &= RouteSegmentInfo.Terminal
+            } else if(PARAMETER_REGEX.test(segment)){
+                info &= RouteSegmentInfo.Parameter
+                parameter = segment.slice(1, -1) // Remove the {} characters
+            }
+
+            // There is no path through here yet, safe to add
+            if(current.children === undefined){
+                current.children = []
+                const child = <RouteSegment>{
+                    info,
+                    parameter,
+                    parent: current,
+                }
+
+                current.children.push(child)
+                current = child
+            } else {
+                for(const child of current.children){
+                    
+                }
+            }
         }
     }
 }
@@ -96,7 +134,7 @@ enum RouteSegmentInfo {
     None = 0x0,
     Terminal = 0x1,
     Wildcard = 0x2,
-    Property = 0x4
+    Parameter = 0x4
 }
 
 /**
@@ -105,5 +143,14 @@ enum RouteSegmentInfo {
 class RouteSegment {
     parent?: RouteSegment
     children?: RouteSegment[]
+    parameter?: string
     info: RouteSegmentInfo = RouteSegmentInfo.None
+    handlers: RouteHandler = {
+        GET: undefined,
+        PUT: undefined,
+        POST: undefined,
+        PATCH: undefined,
+        DELETE: undefined,
+        OPTIONS: undefined
+    }
 }
