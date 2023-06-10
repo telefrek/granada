@@ -9,7 +9,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "@opentelemetry/api": "^1.4.1",
     "@opentelemetry/sdk-trace-base": "^1.14.0"

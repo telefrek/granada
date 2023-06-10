@@ -14,6 +14,14 @@ export enum HttpMethod {
     OPTIONS = "OPTIONS"
 }
 
+/**
+ * Supported HTTP Versions
+ */
+export enum HttpVersion {
+    HTTP1_1 = "HTTP1.1",
+    HTTP_2 = "HTTP2"
+}
+
 export type HttpBodyContent = any | any[] | undefined
 
 /**

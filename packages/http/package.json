@@ -7,9 +7,9 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "compile": "rm -rf dist/* && tsc -p tsconfig.pkg.json"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": ["granada", "framework", "http"],
+  "author": "nathan@telefrek.com",
+  "license": "MIT",
   "dependencies": {
     "@telefrek/core": "^1.0.0"
   }
