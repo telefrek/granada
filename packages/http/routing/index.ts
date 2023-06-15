@@ -140,26 +140,23 @@ class RouterImpl implements Router {
             let parameter: string | undefined
 
             if (WILDCARD === segment) {
-                console.log("wildcard!")
-                info &= RouteSegmentInfo.Wildcard
+                info |= RouteSegmentInfo.Wildcard
             } else if (TERMINATOR === segment) {
-                info &= RouteSegmentInfo.Terminal
+                info |= RouteSegmentInfo.Terminal
             } else if (PARAMETER_REGEX.test(segment)) {
-                console.log("parameter")
-                info &= RouteSegmentInfo.Parameter
+                info |= RouteSegmentInfo.Parameter
                 parameter = segment.slice(1, -1) // Remove the {} characters
             }
-
-            console.log("info", info)
 
             // There is no path through here yet, safe to add
             if (current.children === undefined) {
                 current.children = []
                 const child = <RouteSegment>{
+                    parent: current,
                     info,
                     parameter,
-                    parent: current,
-                    handlers: noHandlers()
+                    segment: info === RouteSegmentInfo.None ? segment : undefined,
+                    handlers: noHandlers(),
                 }
 
                 current.children.push(child)
@@ -172,8 +169,6 @@ class RouterImpl implements Router {
 
                     // If this is non-zero there 
                     if (child.info & info) {
-
-                        console.log("match", child.info, info)
 
                         // Verify there is no conflicting data
                         if (child.info & RouteSegmentInfo.Parameter) {
@@ -194,8 +189,6 @@ class RouterImpl implements Router {
                     } else if ((child.info & RouteSegmentInfo.Wildcard && info & RouteSegmentInfo.Parameter) ||
                         (child.info & RouteSegmentInfo.Parameter && info & RouteSegmentInfo.Wildcard)) {
                         throw new RoutingError("Indeterminate wildcard and parameter collision")
-                    } else {
-                        console.log("child != info", child.info, info)
                     }
                 }
 
@@ -203,10 +196,11 @@ class RouterImpl implements Router {
                     current = match
                 } else {
                     const child = <RouteSegment>{
+                        parent: current,
                         info,
                         parameter,
-                        parent: current,
-                        handlers: noHandlers()
+                        segment: info === RouteSegmentInfo.None ? segment : undefined,
+                        handlers: noHandlers(),
                     }
 
                     current.children.push(child)
