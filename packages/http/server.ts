@@ -2,7 +2,7 @@
  * HTTP Server implementation
  */
 
-import { LifecycleEvents } from "@telefrek/core/lifecycle"
+import { LifecycleEvents, registerShutdown } from "@telefrek/core/lifecycle"
 import EventEmitter from "events"
 import * as http2 from "http2"
 import { HttpBodyContent, HttpBodyProvider, HttpHeaders, HttpMethod, HttpRequest, HttpResponse, NO_BODY, emptyHeaders } from "./core"
@@ -184,6 +184,11 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
         // TODO: Start looking at options for more configurations.  If no TLS, HTTP 1.1, etc.
         this.server = http2.createServer(options)
 
+        // Register the shutdown hook
+        registerShutdown(async () => {
+            await this.close()
+        })
+
         // Hook lifecycle events
         this.server.on('stream', async (stream, headers, _flags) => {
             const request = new Http2Request(stream, headers)
@@ -208,11 +213,11 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
                         'content-type': 'text/html; charset=utf-8'
                     }, { endStream: true })
                 }
+            } else {
+                stream.respond({ ':status': 404 }, { endStream: true })
             }
 
         })
-
-        // Setup default request handling
     }
 
     listen(port: number): void {
@@ -221,13 +226,17 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
 
     close(): Promise<void> {
         return new Promise((resolve, reject) => {
-            this.server.close((err) => {
-                if (err) {
-                    reject(err)
-                } else {
-                    resolve()
-                }
-            })
+            if (this.server.listening) {
+                this.server.close((err) => {
+                    if (err) {
+                        reject(err)
+                    } else {
+                        resolve()
+                    }
+                })
+            } else {
+                resolve()
+            }
         })
     }
 }
