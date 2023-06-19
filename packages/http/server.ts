@@ -6,25 +6,26 @@ import EventEmitter from "events"
 import * as http2 from "http2"
 import { Router, createRouter } from "./routing"
 import { LifecycleEvents } from "@telefrek/core/lifecycle"
+import { HttpBodyContent, HttpBodyProvider, HttpHeaders, HttpMethod, HttpRequest, HttpResponse, NO_BODY, emptyHeaders } from "./core"
 
 /**
  * Set of supported events on an {@link HttpServer}
  */
 interface HttpServerEvents extends LifecycleEvents {
 
-	/**
-	 * Fired when the {@link HttpServer} is started
+    /**
+     * Fired when the {@link HttpServer} is started
      * 
      * @param port The port that was opened
-	 */
-	listening: (port: number) => void
+     */
+    listening: (port: number) => void
 
-	/**
-	 * Fired when there is an error with the underlying {@link HttpServer}
+    /**
+     * Fired when there is an error with the underlying {@link HttpServer}
      * 
      * @param error The error that was encountered
-	 */
-	error: (error: Error) => void
+     */
+    error: (error: Error) => void
 }
 
 /**
@@ -39,49 +40,54 @@ export interface HttpServer {
      */
     listen(port: number): void
 
-	/**
-	 * Match all EventEmitter.on functionality
-	 *
-	 * @param event The event that was raised
-	 * @param listener The listener to add
-	 */
-	on<T extends keyof HttpServerEvents>(
-		event: T,
-		listener: HttpServerEvents[T]
-	): this
+    /**
+     * Closes the server, rejecting any further calls
+     */
+    close(): Promise<void>
 
-	/**
-	 * Match all EventEmitter.on functionality
-	 *
-	 * @param event The event that was raised
-	 * @param listener The listener to add to the next invocation only
-	 */
-	once<T extends keyof HttpServerEvents>(
-		event: T,
-		listener: HttpServerEvents[T]
-	): this
+    /**
+     * Match all EventEmitter.on functionality
+     *
+     * @param event The event that was raised
+     * @param listener The listener to add
+     */
+    on<T extends keyof HttpServerEvents>(
+        event: T,
+        listener: HttpServerEvents[T]
+    ): this
 
-	/**
-	 * Match all EventEmitter.off functionality
-	 *
-	 * @param event The event that was raised
-	 * @param listener The listener to remove
-	 */
-	off<T extends keyof HttpServerEvents>(
-		event: T,
-		listener: HttpServerEvents[T]
-	): this
+    /**
+     * Match all EventEmitter.on functionality
+     *
+     * @param event The event that was raised
+     * @param listener The listener to add to the next invocation only
+     */
+    once<T extends keyof HttpServerEvents>(
+        event: T,
+        listener: HttpServerEvents[T]
+    ): this
 
-	/**
-	 * Match all EventEmitter.emit functionality
-	 *
-	 * @param event The event that was raised
-	 * @param args  The parameters for the function to invoke
-	 */
-	emit<T extends keyof HttpServerEvents>(
-		event: T,
-		...args: Parameters<HttpServerEvents[T]>
-	): boolean
+    /**
+     * Match all EventEmitter.off functionality
+     *
+     * @param event The event that was raised
+     * @param listener The listener to remove
+     */
+    off<T extends keyof HttpServerEvents>(
+        event: T,
+        listener: HttpServerEvents[T]
+    ): this
+
+    /**
+     * Match all EventEmitter.emit functionality
+     *
+     * @param event The event that was raised
+     * @param args  The parameters for the function to invoke
+     */
+    emit<T extends keyof HttpServerEvents>(
+        event: T,
+        ...args: Parameters<HttpServerEvents[T]>
+    ): boolean
 }
 
 /**
@@ -107,7 +113,7 @@ export interface HttpServerBuilder {
         caFile?: string,
         /** Flag to indicate if mutual authentication should be used to validate client certificates */
         mutualAuth?: boolean
-    }) : HttpServerBuilder
+    }): HttpServerBuilder
 
     /**
      * Associate the given router to the requests
@@ -123,14 +129,14 @@ export interface HttpServerBuilder {
      * 
      * @returns A fully initialized {@link HttpServer}
      */
-	build(): HttpServer
+    build(): HttpServer
 }
 
 /**
  * Default {@link HttpServerBuilder} that utilizes the underlying node `http2` package
  * @returns The default {@link HttpServerBuilder} in the framework
  */
-export function getDefaultBuilder() : HttpServerBuilder {
+export function getDefaultBuilder(): HttpServerBuilder {
     return new HttpServerBuilderImpl()
 }
 
@@ -154,7 +160,7 @@ class HttpServerBuilderImpl implements HttpServerBuilder {
 
     withRouter(router: Router): HttpServerBuilder {
         this.router = router
-        
+
         return this
     }
 
@@ -170,7 +176,7 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
 
     server: http2.Http2Server
 
-    constructor(options: http2.SecureServerOptions, router: Router){
+    constructor(options: http2.SecureServerOptions, router: Router) {
         super()
 
 
@@ -185,4 +191,92 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
     listen(port: number): void {
         this.server.listen(port)
     }
+
+    close(): Promise<void> {
+        return new Promise((resolve, reject) => {
+            this.server.close((err) => {
+                if (err) {
+                    reject(err)
+                } else {
+                    resolve()
+                }
+            })
+        })
+    }
+}
+
+class Http2Request<T extends HttpBodyContent> implements HttpRequest<T> {
+
+    private stream: http2.Http2Stream
+
+    path: string
+    method: HttpMethod
+    headers: HttpHeaders
+    hasBody: boolean
+    parameters?: Map<string, string | string[]> | undefined
+    body: HttpBodyProvider<T>
+    respond: <U extends HttpBodyContent>(status: number, bodyProvider?: HttpBodyProvider<U>) => HttpResponse<U>
+
+    constructor(stream: http2.Http2Stream, headers: http2.IncomingHttpHeaders) {
+        this.stream = stream
+        this.path = <string>headers[http2.constants.HTTP2_HEADER_PATH]
+        this.method = <HttpMethod>headers[http2.constants.HTTP2_HEADER_METHOD]
+        this.headers = emptyHeaders()
+
+        for (const key in headers) {
+            this.headers.set(key, headers[key]!)
+        }
+
+        if (!stream.readableEnded) {
+            this.hasBody = true
+            this.body = () => {
+                if (this.stream.closed) {
+                    throw new Error("Underlying stream was closed")
+                }
+
+                // TODO: Replace this with content type parsing
+                return new Promise((resolve, reject) => {
+
+                    let data = ""
+
+                    this.stream.on('data', (chunk) => {
+                        if (typeof chunk === "string") {
+                            data += chunk
+                        } else {
+                            data += chunk.toString("utf-8")
+                        }
+                    }).once('end', () => {
+                        try {
+                            resolve(JSON.parse(data))
+                        } catch (err) {
+                            reject(err)
+                        }
+                    })
+
+                })
+            }
+        } else {
+            this.hasBody = false
+            this.body = NO_BODY
+        }
+
+        this.respond = (status: number, bodyProvider?: HttpBodyProvider<HttpBodyContent>) => new Http2Response(this.stream, status, bodyProvider)
+    }
+}
+
+class Http2Response<T extends HttpBodyContent> implements HttpResponse<T> {
+    private stream: http2.Http2Stream
+    status: number
+    headers: HttpHeaders
+    hasBody: boolean
+    body: HttpBodyProvider<T>
+
+    constructor(stream: http2.Http2Stream, status: number, bodyProvider?: HttpBodyProvider<T>) {
+        this.stream = stream
+        this.status = status
+        this.headers = emptyHeaders()
+        this.hasBody = bodyProvider !== undefined
+        this.body = bodyProvider ?? NO_BODY
+    }
+
 }

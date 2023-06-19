@@ -1,29 +1,19 @@
-import {HttpHandler, HttpMethod, emptyHeaders, getDefaultBuilder} from "./index"
+import { HttpHandler, HttpMethod, HttpRequest, createRouter, emptyHeaders, getDefaultBuilder } from "./index"
 
 
-describe('testing', () => {
-    test('A test should run', async () => {
+describe('HttpServer functionality should work as expected', () => {
 
-        const h: HttpHandler = (_request)=>Promise.resolve({
-            status: 404,
-            headers: emptyHeaders(),
-            hasBody: false,
-            body: ()=>Promise.reject(new Error("invalid"))
+    test('A server should be buildable', async () => {
+        const router = createRouter()
+        router.register("/**", (request: HttpRequest<any>) => {
+            return Promise.resolve(request.respond(200, () => Promise.resolve("Hello World")))
         })
 
-        const response = await h({
-            path: "/",
-            method: HttpMethod.GET,
-            headers: emptyHeaders(),
-            hasBody: false,
-            body: ()=>Promise.reject(new Error("invalid"))
-        })
-
-        expect(response.status).toBe(404)
-    })
-
-    test('A server should be buildable', () => {
-        const server = getDefaultBuilder().build()
+        const server = getDefaultBuilder().withRouter(router).build()
         expect.any(server)
+
+        server.listen(8080)
+
+        await server.close()
     })
 });

@@ -41,8 +41,20 @@ export interface Router {
      * @throws A {@link RoutingError} when there is an issue with the template syntax or overlapping routes
      */
     register(template: string, handler: HttpHandler, method?: HttpMethod): void
+
+    /**
+     * Binds the object to the {@link HttpHandler} objects defined in the route tree
+     * 
+     * @param obj The object to bind the underlying {@link HttpHandler} to
+     */
+    bind(obj: any): void
 }
 
+/**
+ * Create a new router
+ * 
+ * @returns A newly initialized {@link Router}
+ */
 export function createRouter(): Router {
     return new RouterImpl()
 }
@@ -68,7 +80,7 @@ class RouterImpl implements Router {
                     let match: boolean = false
                     for (const child of current.children) {
                         if (child.info & RouteSegmentInfo.Terminal) {
-                            return child.handlers[request.method]
+                            return child.handlers![request.method]
                         } else if (child.info & RouteSegmentInfo.Wildcard) {
                             current = child
                         } else if (child.info & RouteSegmentInfo.Parameter) {
@@ -100,7 +112,7 @@ class RouterImpl implements Router {
                 }
             }
 
-            return current.handlers[request.method]
+            return current.handlers![request.method]
         }
     }
 
@@ -209,6 +221,11 @@ class RouterImpl implements Router {
             }
         }
 
+        // Setup the handlers if not already present
+        if (current.handlers === undefined) {
+            current.handlers = noHandlers()
+        }
+
         // Current at this point is located with our target
         if (method !== undefined) {
             if (current.handlers[method]) {
@@ -224,13 +241,34 @@ class RouterImpl implements Router {
             }
         }
     }
+
+    bind(obj: any): void {
+        const routes: RouteSegment[] = [this.root]
+        let current: RouteSegment
+
+        while (routes.length > 0) {
+            current = routes.shift()!
+            if (current.handlers) {
+                for (const value of HTTP_METHODS) {
+                    const h = current.handlers[value]
+                    if (h) {
+                        current.handlers[value] = h.bind(obj)
+                    }
+                }
+            }
+
+            if (current.children) {
+                routes.push(...current.children)
+            }
+        }
+    }
 }
 
 const WILDCARD: string = "*"
 const TERMINATOR: string = "**"
 const URI_SEGMENT_REGEX: RegExp = /^[a-zA-Z0-9-]+$/
 const PARAMETER_REGEX: RegExp = /^\{[a-zA-Z_$][0-9a-zA-Z_$]*\}$/
-const TEMPLATE_REGEX: RegExp = /(?:\/(?:[a-zA-Z0-9-]+|\{[a-zA-Z_$][0-9a-zA-Z_$]*\})+)+/
+const TEMPLATE_REGEX: RegExp = /(?:\/(?:[a-zA-Z0-9-]+|\{[a-zA-Z_$][0-9a-zA-Z_$]*\}|\*+)+)+/
 
 /**
  * Internal enum to track {@link RouteSegment} state information
@@ -251,9 +289,14 @@ class RouteSegment {
     parameter?: string
     segment?: string
     info: RouteSegmentInfo = RouteSegmentInfo.None
-    handlers: RouteHandler = noHandlers()
+    handlers?: RouteHandler
 }
 
+/**
+ * Utility method to create empty route handlers
+ * 
+ * @returns An empty {@link RouteHandler}
+ */
 const noHandlers = (): RouteHandler =>
     <RouteHandler>{
         GET: undefined,
