@@ -2,11 +2,11 @@
  * HTTP Server implementation
  */
 
+import { LifecycleEvents } from "@telefrek/core/lifecycle"
 import EventEmitter from "events"
 import * as http2 from "http2"
-import { Router, createRouter } from "./routing"
-import { LifecycleEvents } from "@telefrek/core/lifecycle"
 import { HttpBodyContent, HttpBodyProvider, HttpHeaders, HttpMethod, HttpRequest, HttpResponse, NO_BODY, emptyHeaders } from "./core"
+import { Router, createRouter } from "./routing"
 
 /**
  * Set of supported events on an {@link HttpServer}
@@ -175,15 +175,42 @@ class HttpServerBuilderImpl implements HttpServerBuilder {
 class HttpServerImpl extends EventEmitter implements HttpServer {
 
     server: http2.Http2Server
+    router: Router
 
     constructor(options: http2.SecureServerOptions, router: Router) {
         super()
-
+        this.router = router
 
         // TODO: Start looking at options for more configurations.  If no TLS, HTTP 1.1, etc.
         this.server = http2.createServer(options)
 
         // Hook lifecycle events
+        this.server.on('stream', async (stream, headers, _flags) => {
+            const request = new Http2Request(stream, headers)
+
+            const handler = router.lookup(request)
+            if (handler) {
+                try {
+                    const response = await handler(request)
+                    const headers = <http2.OutgoingHttpHeaders>{
+                        ':status': response.status
+                    }
+                    if (response.hasBody) {
+                        headers[http2.constants.HTTP2_HEADER_CONTENT_TYPE] = 'text/html'
+                        stream.respond(headers)
+                        stream.end(await response.body())
+                    } else {
+                        stream.respond(headers, { endStream: true })
+                    }
+                } catch (err) {
+                    stream.respond({
+                        ':status': 503,
+                        'content-type': 'text/html; charset=utf-8'
+                    }, { endStream: true })
+                }
+            }
+
+        })
 
         // Setup default request handling
     }

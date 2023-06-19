@@ -1,26 +1,34 @@
 import * as http2 from 'http2';
-import { HttpRequest, createRouter, getDefaultBuilder } from "./index";
+import { HttpRequest, HttpServer, createRouter, getDefaultBuilder } from "./index";
 
 describe('HttpServer functionality should work as expected', () => {
+    let server: HttpServer
 
-    test('A server should be buildable', async () => {
+    beforeAll(() => {
         const router = createRouter()
         router.register("/**", (request: HttpRequest<any>) => {
             return Promise.resolve(request.respond(200, () => Promise.resolve("Hello World")))
         })
 
-        const server = getDefaultBuilder().withRouter(router).build()
+        server = getDefaultBuilder().withRouter(router).build()
         expect.any(server)
 
         server.listen(8080)
+    })
+
+    afterAll(async () => {
+        await server.close()
+    })
+
+    test('A server should be able to respond to simple calls', async () => {
 
         expect(await new Promise((resolve, reject) => {
             const client = http2.connect('http://localhost:8080')
             const req = client.request({ ':path': '/hello' })
 
             req.on('response', (headers) => {
-                if (headers[http2.constants.HTTP2_HEADER_STATUS] !== "200") {
-                    reject(new Error(`Invalid status ${headers[http2.constants.HTTP2_HEADER_STATUS]}`))
+                if (200 !== headers[http2.constants.HTTP2_HEADER_STATUS] as any) {
+                    reject(new Error(`Invalid status ${headers[http2.constants.HTTP2_HEADER_STATUS]} (${typeof headers[http2.constants.HTTP2_HEADER_STATUS]})`))
                 }
             })
 
@@ -33,6 +41,5 @@ describe('HttpServer functionality should work as expected', () => {
             req.end()
 
         })).toEqual("Hello World")
-        await server.close()
     })
 });

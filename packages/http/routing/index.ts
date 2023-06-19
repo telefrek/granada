@@ -77,12 +77,14 @@ class RouterImpl implements Router {
             let current = this.root
             for (const segment of segments) {
                 if (current.children !== undefined) {
-                    let match: boolean = false
+                    let match = false
                     for (const child of current.children) {
                         if (child.info & RouteSegmentInfo.Terminal) {
                             return child.handlers![request.method]
                         } else if (child.info & RouteSegmentInfo.Wildcard) {
                             current = child
+                            match = true
+                            break
                         } else if (child.info & RouteSegmentInfo.Parameter) {
                             current = child
                             if (request.parameters === undefined) {
@@ -99,8 +101,12 @@ class RouterImpl implements Router {
                             } else {
                                 request.parameters.set(parameterName, segment)
                             }
+                            match = true
+                            break
                         } else if (segment === child.segment) {
                             current = child
+                            match = true
+                            break
                         }
                     }
 
@@ -112,6 +118,9 @@ class RouterImpl implements Router {
                 }
             }
 
+            if (current.handlers === undefined) {
+                console.log("bad handlers on ", request.path, current)
+            }
             return current.handlers![request.method]
         }
     }
@@ -168,7 +177,6 @@ class RouterImpl implements Router {
                     info,
                     parameter,
                     segment: info === RouteSegmentInfo.None ? segment : undefined,
-                    handlers: noHandlers(),
                 }
 
                 current.children.push(child)
@@ -212,7 +220,6 @@ class RouterImpl implements Router {
                         info,
                         parameter,
                         segment: info === RouteSegmentInfo.None ? segment : undefined,
-                        handlers: noHandlers(),
                     }
 
                     current.children.push(child)
