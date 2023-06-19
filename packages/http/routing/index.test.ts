@@ -1,5 +1,5 @@
-import { createRouter } from "./index"
 import { HttpHandler, HttpMethod, HttpResponse, emptyHeaders } from "../core";
+import { createRouter } from "./index";
 
 
 describe('verify router', () => {
@@ -56,6 +56,5 @@ describe('verify router', () => {
 
         expect(router.lookup({ path: "/bar/baz", method: HttpMethod.GET, headers: emptyHeaders(), hasBody: false, body: () => Promise.reject("no"), respond: () => <HttpResponse<any>>{} })).toBeUndefined()
         expect(router.lookup({ path: "/bar", method: HttpMethod.GET, headers: emptyHeaders(), hasBody: false, body: () => Promise.reject("no"), respond: () => <HttpResponse<any>>{} })).not.toBeUndefined()
-
     })
 });
