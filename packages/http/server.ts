@@ -221,7 +221,11 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
     }
 
     listen(port: number): void {
-        this.server.listen(port)
+        if (!this.server.listening) {
+            this.server.listen(port)
+        } else {
+            throw new Error('Server is already listening on another port')
+        }
     }
 
     close(): Promise<void> {
