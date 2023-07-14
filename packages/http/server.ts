@@ -2,6 +2,7 @@
  * HTTP Server implementation
  */
 
+import { Emitter } from "@telefrek/core/events"
 import { LifecycleEvents, registerShutdown } from "@telefrek/core/lifecycle"
 import EventEmitter from "events"
 import * as http2 from "http2"
@@ -31,7 +32,7 @@ interface HttpServerEvents extends LifecycleEvents {
 /**
  * The interface representing an HTTP Server
  */
-export interface HttpServer {
+export interface HttpServer extends Emitter<HttpServerEvents> {
 
     /**
      * Starts the server accepting connections on the given port
@@ -44,50 +45,6 @@ export interface HttpServer {
      * Closes the server, rejecting any further calls
      */
     close(): Promise<void>
-
-    /**
-     * Match all EventEmitter.on functionality
-     *
-     * @param event The event that was raised
-     * @param listener The listener to add
-     */
-    on<T extends keyof HttpServerEvents>(
-        event: T,
-        listener: HttpServerEvents[T]
-    ): this
-
-    /**
-     * Match all EventEmitter.on functionality
-     *
-     * @param event The event that was raised
-     * @param listener The listener to add to the next invocation only
-     */
-    once<T extends keyof HttpServerEvents>(
-        event: T,
-        listener: HttpServerEvents[T]
-    ): this
-
-    /**
-     * Match all EventEmitter.off functionality
-     *
-     * @param event The event that was raised
-     * @param listener The listener to remove
-     */
-    off<T extends keyof HttpServerEvents>(
-        event: T,
-        listener: HttpServerEvents[T]
-    ): this
-
-    /**
-     * Match all EventEmitter.emit functionality
-     *
-     * @param event The event that was raised
-     * @param args  The parameters for the function to invoke
-     */
-    emit<T extends keyof HttpServerEvents>(
-        event: T,
-        ...args: Parameters<HttpServerEvents[T]>
-    ): boolean
 }
 
 /**

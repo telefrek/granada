@@ -104,28 +104,68 @@ export class Semaphore {
     private callbacks: MutexCallback[] = []
 
     /**
-     * 
      * @param concurrency The desired concurrency
      */
     constructor(concurrency: number) {
         this.concurrency = concurrency
     }
 
-    async run<T>(fn: () => Promise<T>): Promise<T> {
+    /**
+     * Helper method that can be used to do the acquire/release process
+     * 
+     * @param fn Function to run
+     */
+    async run<T>(fn: () => Promise<T> | T): Promise<T> {
+        await this.acquire()
 
+        return await fn()
     }
 
-    private acquire(): Promise<void> | undefined {
+    /**
+     * Quick method to try to acquire the semaphore without blocking
+     * 
+     * @returns True if the semaphore was acquired
+     */
+    public tryAcquire(): boolean {
+        if (this.running < this.concurrency) {
+            this.running++
+            return true
+        }
+
+        return false
+    }
+
+    /**
+     * 
+     * @returns A promise for tracking the aquisition of the semaphore
+     */
+    public acquire(): Promise<void> | undefined {
 
         // Go ahead and run
-        if(this.running < this.concurrency){
+        if (this.running < this.concurrency) {
             this.running++
             return
         }
 
-        const p = new Promise(resolve=>{
-            
+        // Queue the promise fulfillment as a mutex callback
+        return new Promise<void>(resolve => {
+            this.callbacks.push(resolve)
         })
+    }
+
+    /**
+     * Release the semaphore
+     * 
+     * NOTE: This is not checked so repeated calling may corrupt the state
+     */
+    public release() {
+        if (this.callbacks.length > 0 && this.running < this.concurrency) {
+            // Fire the mutex to release another unit of work
+            this.callbacks.shift()!()
+        } else {
+            // Decrement the current running count
+            this.running--
+        }
     }
 
     /**
