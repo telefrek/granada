@@ -7,7 +7,7 @@
  */
 export class Timer {
 
-    running: boolean
+    running: boolean = false
     started: bigint = 0n
     stopped: bigint = 0n
 
@@ -30,7 +30,13 @@ export class Timer {
         if (this.running) {
             this.stopped = process.hrtime.bigint()
             this.running = false
-            return Duration.fromNano(this.stopped - this.started)
+            try {
+                return Duration.fromNano(this.stopped - this.started)
+            } finally {
+                // Clear the timings
+                this.started = 0n
+                this.stopped = 0n
+            }
         }
 
         return Duration.ZERO
@@ -48,10 +54,7 @@ export class Timer {
 
 /** Factors for translating nanoseconds -> microseconds */
 const NANO_PER_SECOND = 1_000_000_000n
-
-const NANO_TO_MICRO = 1_000_000n / NANO_PER_SECOND
 const MICRO_PER_SECOND = 1_000_000
-
 const MICRO_PER_MILLI = 1_000
 
 /**
@@ -61,7 +64,7 @@ export class Duration {
     #microseconds: number
 
     private constructor(nanoseconds: bigint) {
-        this.#microseconds = Number(nanoseconds * NANO_TO_MICRO)
+        this.#microseconds = Number(nanoseconds * 1_000_000n / NANO_PER_SECOND)
     }
 
     /**
