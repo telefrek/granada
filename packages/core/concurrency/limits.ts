@@ -94,8 +94,8 @@ abstract class AbstractLimitAlgorithm extends EventEmitter implements LimitAlgor
     #limit: number
 
     constructor(initialLimit: number) {
-        if (initialLimit < 0) {
-            throw new Error(`Invalid limit ${initialLimit}`)
+        if (initialLimit <= 0) {
+            throw new Error(`Invalid initialLimit: ${initialLimit}`)
         }
 
         super()
@@ -123,7 +123,6 @@ abstract class AbstractLimitAlgorithm extends EventEmitter implements LimitAlgor
         // Check if the limit is updated and fire the event if so
         if (newLimit !== this.#limit) {
             this.#limit = newLimit
-
             this.emit('changed', newLimit)
         }
     }
@@ -158,7 +157,18 @@ abstract class AbstractLimiter implements Limiter {
     #limit: number
     #inFlight: number
 
+    /**
+     * Base constructor for all {@link Limiter} abstractions built from this class
+     * 
+     * @param limitAlgorithm The {@link LimitAlgorithm} to utilize
+     * @param initialLimit The initial limit
+     */
     constructor(limitAlgorithm: LimitAlgorithm, initialLimit: number) {
+
+        if (initialLimit <= 0) {
+            throw new Error(`Invalid initialLimit: ${initialLimit}`)
+        }
+
         this.#limitAlgorithm = limitAlgorithm
         this.#limit = initialLimit
         this.#inFlight = 0
@@ -196,7 +206,7 @@ abstract class AbstractLimiter implements Limiter {
     }
 
     /**
-     * Base class that can mainpulate
+     * Base {@link LimitedOperation} that handles state tracking and mainpulation of the underlying {@link AbstractLimiter}
      */
     AbstractLimitOperation = class implements LimitedOperation {
 
@@ -205,6 +215,11 @@ abstract class AbstractLimiter implements Limiter {
         #timer: Timer
         #running: number
 
+        /**
+         * Requires the base {@link AbstractLimiter} which can be updated
+         * 
+         * @param limiter The {@link AbstractLimiter} to update
+         */
         constructor(limiter: AbstractLimiter) {
             this.#limiter = limiter
             this.#finished = false
@@ -231,6 +246,7 @@ abstract class AbstractLimiter implements Limiter {
          * Private method to update the finished state and limiter inFlight value
          */
         #update(): void {
+            // Ensure we only finish this once for any state
             if (!this.#finished) {
                 this.#finished = true
                 this.#limiter.#inFlight--
@@ -248,6 +264,12 @@ class SimpleLimiter extends AbstractLimiter {
 
     #semaphore: Semaphore
 
+    /**
+     * SimpleLimiter requires at least a {@link LimitAlgorithm} and optional limit (default is 1)
+     * 
+     * @param limitAlgorithm The {@link LimitAlgorithm} to use
+     * @param initialLimit The optional initial limit (default is 1)
+     */
     constructor(limitAlgorithm: LimitAlgorithm, initialLimit: number = 1) {
         super(limitAlgorithm, initialLimit)
 
