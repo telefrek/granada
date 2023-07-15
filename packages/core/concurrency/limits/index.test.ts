@@ -1,11 +1,11 @@
-import { simpleLimiter } from "./limits"
+import { createSimpleLimiter } from "."
 
 describe('Limits should function correctly per their design', () => {
 
     test('A simple limit should behave like a semaphore', async () => {
 
         // Create a default limiter with defaults of 1 and no concurrency updates
-        const limiter = simpleLimiter()
+        const limiter = createSimpleLimiter()
 
         // Verify current limit is default
         expect(limiter.getLimit()).toBe(1)

@@ -3,15 +3,15 @@
 <html lang="en">
 
 <head>
-    <title>Code coverage report for core/concurrency/primitives.ts</title>
+    <title>Code coverage report for core/concurrency/limits/limiters.ts</title>
     <meta charset="utf-8" />
-    <link rel="stylesheet" href="../../prettify.css" />
-    <link rel="stylesheet" href="../../base.css" />
-    <link rel="shortcut icon" type="image/x-icon" href="../../favicon.png" />
+    <link rel="stylesheet" href="../../../prettify.css" />
+    <link rel="stylesheet" href="../../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../../favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style type='text/css'>
         .coverage-summary .sorter {
-            background-image: url(../../sort-arrow-sprite.png);
+            background-image: url(../../../sort-arrow-sprite.png);
         }
     </style>
 </head>
@@ -19,34 +19,34 @@
 <body>
 <div class='wrapper'>
     <div class='pad1'>
-        <h1><a href="../../index.html">All files</a> / <a href="index.html">core/concurrency</a> primitives.ts</h1>
+        <h1><a href="../../../index.html">All files</a> / <a href="index.html">core/concurrency/limits</a> limiters.ts</h1>
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">98% </span>
+                <span class="strong">86.36% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>49/50</span>
+                <span class='fraction'>38/44</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">92.85% </span>
+                <span class="strong">33.33% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>13/14</span>
+                <span class='fraction'>2/6</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">100% </span>
+                <span class="strong">82.35% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>16/16</span>
+                <span class='fraction'>14/17</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">98% </span>
+                <span class="strong">86.36% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>49/50</span>
+                <span class='fraction'>38/44</span>
             </div>
         
             
@@ -257,126 +257,7 @@
 <a name='L192'></a><a href='#L192'>192</a>
 <a name='L193'></a><a href='#L193'>193</a>
 <a name='L194'></a><a href='#L194'>194</a>
-<a name='L195'></a><a href='#L195'>195</a>
-<a name='L196'></a><a href='#L196'>196</a>
-<a name='L197'></a><a href='#L197'>197</a>
-<a name='L198'></a><a href='#L198'>198</a>
-<a name='L199'></a><a href='#L199'>199</a>
-<a name='L200'></a><a href='#L200'>200</a>
-<a name='L201'></a><a href='#L201'>201</a>
-<a name='L202'></a><a href='#L202'>202</a>
-<a name='L203'></a><a href='#L203'>203</a>
-<a name='L204'></a><a href='#L204'>204</a>
-<a name='L205'></a><a href='#L205'>205</a>
-<a name='L206'></a><a href='#L206'>206</a>
-<a name='L207'></a><a href='#L207'>207</a>
-<a name='L208'></a><a href='#L208'>208</a>
-<a name='L209'></a><a href='#L209'>209</a>
-<a name='L210'></a><a href='#L210'>210</a>
-<a name='L211'></a><a href='#L211'>211</a>
-<a name='L212'></a><a href='#L212'>212</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">4x</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">11x</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">9x</span>
-<span class="cline-any cline-yes">9x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">13x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">13x</span>
-<span class="cline-any cline-yes">9x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">10x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">10x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">23x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L195'></a><a href='#L195'>195</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -384,68 +265,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1000x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1000x</span>
-<span class="cline-any cline-yes">1000x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1000x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">13x</span>
-<span class="cline-any cline-yes">9x</span>
-<span class="cline-any cline-yes">9x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">4x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1010x</span>
-<span class="cline-any cline-yes">8x</span>
-<span class="cline-any cline-yes">8x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1002x</span>
-<span class="cline-any cline-yes">1002x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1019x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">982x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">37x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -457,26 +276,17 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">20x</span>
-<span class="cline-any cline-yes">20x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -485,217 +295,356 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
- * Concurrency primitives
- */
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { LimitAlgorithm, LimitedOperation, Limiter } from "."
+import { Timer } from "../../time"
+import { Semaphore } from "../primitives"
 &nbsp;
 /**
- * Simple type definition for a monitor callback that mirrors what a {@link Promise} will provide
+ * Base class for all implementations of the {@link Limiter}
  */
-type MutexCallback = (value: void | PromiseLike&lt;void&gt;) =&gt; void
+abstract class AbstractLimiter implements Limiter {
 &nbsp;
-/**
- * Class representing a simple mutex
- */
-export class Mutex {
-&nbsp;
-    #locked: boolean = false
-    #callbacks: MutexCallback[] = []
+    #limitAlgorithm: LimitAlgorithm
+    #limit: number
+    #inFlight: number
 &nbsp;
     /**
-     * Tries to acquire the {@link Mutex} but will not block if unavailable
+     * Base constructor for all {@link Limiter} abstractions built from this class
      * 
-     * @returns True if the mutex was acquired
+     * @param limitAlgorithm The {@link LimitAlgorithm} to utilize
+     * @param initialLimit The initial limit
      */
-    tryAcquire(): boolean {
-        if (!this.#locked) {
-            this.#locked = true
-            return true
+    constructor(limitAlgorithm: LimitAlgorithm, initialLimit: number) {
+&nbsp;
+        <span class="missing-if-branch" title="if path not taken" >I</span>if (initialLimit &lt;= 0) {
+<span class="cstat-no" title="statement not covered" >            throw new Error(`Invalid initialLimit: ${initialLimit}`)</span>
         }
 &nbsp;
-        return false
+        this.#limitAlgorithm = limitAlgorithm
+        this.#limit = initialLimit
+        this.#inFlight = 0
+&nbsp;
+        this.#limitAlgorithm.on('changed', this.onChange.bind(this))
     }
 &nbsp;
     /**
-     * Acquires the {@link Mutex}, waiting if necessary
-     * 
-     * @returns A {@link PromiseLike} value for tracking when the mutex is acquired
+     * @returns The current limit
      */
-    acquire(): PromiseLike&lt;void&gt; | undefined {
-        if (!this.#locked) {
-            this.#locked = true
-            return
-        }
+    getLimit(): number {
+        return this.#limit
+    }
 &nbsp;
-        return new Promise(resolve =&gt; {
-            this.#callbacks.push(resolve)
-        })
+<span class="fstat-no" title="function not covered" >    tryAcquire(</span>): LimitedOperation | undefined {
+<span class="cstat-no" title="statement not covered" >        return</span>
     }
 &nbsp;
     /**
-     * Releases the {@link Mutex} to another waiting caller
+     * Handler for the {@link LimitAlgorithm} `changed` event
+     * 
+     * @param newLimit The new limit to use
      */
-    release(): void {
-        this.#locked = false
+    protected <span class="fstat-no" title="function not covered" >onChange(</span>newLimit: number) {
+<span class="cstat-no" title="statement not covered" >        this.#limit = newLimit</span>
+    }
 &nbsp;
-        if (this.#callbacks.length &gt; 0) {
-            setImmediate(this.#callbacks.shift()!)
+    /**
+     * Create a {@link LimitedOperation} to manipulate the state of the current {@link Limiter}
+     * 
+     * @returns A basic {@link LimitedOperation}
+     */
+    protected createOperation(): LimitedOperation {
+        return new this.AbstractLimitOperation(this)
+    }
+&nbsp;
+    /**
+     * Base {@link LimitedOperation} that handles state tracking and mainpulation of the underlying {@link AbstractLimiter}
+     */
+    AbstractLimitOperation = class implements LimitedOperation {
+&nbsp;
+        #limiter: AbstractLimiter
+        #finished: boolean
+        #timer: Timer
+        #running: number
+&nbsp;
+        /**
+         * Requires the base {@link AbstractLimiter} which can be updated
+         * 
+         * @param limiter The {@link AbstractLimiter} to update
+         */
+        constructor(limiter: AbstractLimiter) {
+            this.#limiter = limiter
+            this.#finished = false
+            this.#running = limiter.#inFlight
+            this.#timer = new Timer()
+            this.#timer.start()
+        }
+&nbsp;
+        success(): void {
+            this.#update()
+            this.#limiter.#limitAlgorithm.update(this.#timer.stop(), this.#running, false)
+        }
+&nbsp;
+        ignore(): void {
+            this.#update()
+        }
+&nbsp;
+        dropped(): void {
+            this.#update()
+            this.#limiter.#limitAlgorithm.update(this.#timer.stop(), this.#running, true)
+        }
+&nbsp;
+        /**
+         * Private method to update the finished state and limiter inFlight value
+         */
+        #update(): void {
+            // Ensure we only finish this once for any state
+            if (!this.#finished) {
+                this.#finished = true
+                this.#limiter.#inFlight--
+            } else <span class="missing-if-branch" title="else path not taken" >E</span>{
+<span class="cstat-no" title="statement not covered" >                throw new Error('This operation has already been finished!')</span>
+            }
         }
     }
 }
 &nbsp;
-/** Internal symbol for tracking monitors on objects */
-const MONITOR_SYMBOL = Symbol('_monitor_')
-&nbsp;
 /**
- * Simple implementation of a monitor
+ * Simple {@link Limiter} that uses a {@link Semaphore} to gate access
  */
-export class Monitor {
+class SimpleLimiter extends AbstractLimiter {
 &nbsp;
-    #mutex: Mutex = new Mutex()
+    #semaphore: Semaphore
 &nbsp;
     /**
-     * Wait for the given {@link Monitor} to become available
+     * SimpleLimiter requires at least a {@link LimitAlgorithm} and optional limit (default is 1)
      * 
-     * @returns A {@link PromiseLike} value that can be used to `await` the underly resource being available
+     * @param limitAlgorithm The {@link LimitAlgorithm} to use
+     * @param initialLimit The optional initial limit (default is 1)
      */
-    wait(): PromiseLike&lt;void&gt; | undefined {
-        return this.#mutex.acquire()
+    constructor(limitAlgorithm: LimitAlgorithm, initialLimit: number = <span class="branch-0 cbranch-no" title="branch not covered" >1)</span> {
+        super(limitAlgorithm, initialLimit)
+&nbsp;
+        this.#semaphore = new Semaphore(initialLimit)
+    }
+&nbsp;
+    override tryAcquire(): LimitedOperation | undefined {
+&nbsp;
+        // Use the non-blocking version
+        if (this.#semaphore.tryAcquire()) {
+            return new this.SimpleLimitedOperation(this.#semaphore, this.createOperation())
+        }
+    }
+&nbsp;
+    protected override <span class="fstat-no" title="function not covered" >onChange(</span>newLimit: number): void {
+&nbsp;
+        // Resize the semaphore
+<span class="cstat-no" title="statement not covered" >        this.#semaphore.resize(newLimit)</span>
+&nbsp;
+        // Propogate the change
+<span class="cstat-no" title="statement not covered" >        super.onChange(newLimit)</span>
     }
 &nbsp;
     /**
-     * Notify the next waiter that the {@link Monitor} has become available
+     * Wrapped {@link LimitedOperation} for releasing the internal {@link Semaphore}
      */
-    pulse(): void {
-        this.#mutex.release()
+    SimpleLimitedOperation = class implements LimitedOperation {
+        #delegate: LimitedOperation
+        #semaphore: Semaphore
+&nbsp;
+        /**
+         * Requires the objects to manage as internal state
+         * 
+         * @param semaphore The {@link Semaphore} to release
+         * @param delegate The {@link LimitedOperation} to delegate to
+         */
+        constructor(semaphore: Semaphore, delegate: LimitedOperation) {
+            this.#delegate = delegate
+            this.#semaphore = semaphore
+        }
+&nbsp;
+        success(): void {
+            this.#semaphore.release()
+            this.#delegate.success()
+        }
+&nbsp;
+        ignore(): void {
+            this.#semaphore.release()
+            this.#delegate.ignore()
+        }
+&nbsp;
+        dropped(): void {
+            this.#semaphore.release()
+            this.#delegate.dropped()
+        }
+&nbsp;
     }
 }
 &nbsp;
 /**
- * Retrieve the {@link Monitor} for the object
+ * Create a simple {@link Limiter} using a {@link Semaphore} as the backing limit
  * 
- * @param obj The object to get a monitor for
- * @returns The {@link Monitor} associated with the object
+ * @param limitAlgorithm The {@link LimitAlgorithm} to use
+ * @param initialLimit The initial limit value to use (default is 1)
+ * @returns A newly initialized {@link Limiter}
  */
-export function getMonitor(obj: any): Monitor {
-&nbsp;
-    // Get the monitor or inject it
-    return obj[MONITOR_SYMBOL] === undefined ? (obj[MONITOR_SYMBOL] = new Monitor()) : obj[MONITOR_SYMBOL] as Monitor
-}
-&nbsp;
-/**
- * Represents a semaphore that can be used to control concurrent actions
- */
-export class Semaphore {
-    #concurrency: number
-    #running: number = 0
-    #callbacks: MutexCallback[] = []
-&nbsp;
-    /**
-     * @param concurrency The desired concurrency
-     */
-    constructor(concurrency: number) {
-        this.#concurrency = concurrency
-    }
-&nbsp;
-    /**
-     * Helper method that can be used to do the acquire/release process
-     * 
-     * @param fn Function to run
-     */
-    async run&lt;T&gt;(fn: () =&gt; Promise&lt;T&gt; | T): Promise&lt;T&gt; {
-        await this.acquire()
-&nbsp;
-        try {
-            return await fn()
-        } finally {
-            this.release()
-        }
-    }
-&nbsp;
-    /**
-     * Quick method to try to acquire the semaphore without blocking
-     * 
-     * @returns True if the semaphore was acquired
-     */
-    public tryAcquire(): boolean {
-        if (this.#running &lt; this.#concurrency) {
-            this.#running++
-            return true
-        }
-&nbsp;
-        return false
-    }
-&nbsp;
-    /**
-     * 
-     * @returns A promise for tracking the aquisition of the semaphore
-     */
-    public acquire(): Promise&lt;void&gt; | undefined {
-&nbsp;
-        // Go ahead and run
-        if (this.#running &lt; this.#concurrency) {
-            this.#running++
-            return
-        }
-&nbsp;
-        // Queue the promise fulfillment as a mutex callback
-        return new Promise&lt;void&gt;(resolve =&gt; {
-            this.#callbacks.push(resolve)
-        })
-    }
-&nbsp;
-    /**
-     * Release the semaphore
-     * 
-     * NOTE: This is not checked so repeated calling may corrupt the state
-     */
-    public release() {
-        if (this.#callbacks.length &gt; 0 &amp;&amp; this.#running &lt; this.#concurrency) {
-            // Fire the mutex to release another unit of work
-            this.#callbacks.shift()!()
-        } else {
-            // Decrement the current running count
-            this.#running--
-        }
-    }
-&nbsp;
-    /**
-     * Change the size of the semaphore
-     * 
-     * @param newLimit The new limit
-     */
-    public resize(newLimit: number): void {
-&nbsp;
-        // Verify we don't get a silly value
-        <span class="missing-if-branch" title="if path not taken" >I</span>if (newLimit &lt;= 0) {
-<span class="cstat-no" title="statement not covered" >            throw new Error(`Invalid newLimit: ${newLimit}`)</span>
-        }
-&nbsp;
-        // Update the concurrency
-        this.#concurrency = newLimit
-&nbsp;
-        // We only need to signal more work during an increase, the decrease will happen automatically during the release cycle
-        while (this.#concurrency &gt;= this.#running &amp;&amp; this.#callbacks.length &gt; 0) {
-            // Increase the running count and release one of the waiting callbacks
-            this.#running++
-            this.#callbacks.shift()!()
-        }
-    }
-&nbsp;
-    /**
-     * @returns The number of available slots in the semaphore
-     */
-    available(): number {
-        return this.#concurrency - this.#running
-    }
-&nbsp;
-    /**
-     * @returns The current concurrency limit
-     */
-    limit(): number {
-        return this.#concurrency
-    }
+export function simpleLimiter(limitAlgorithm: LimitAlgorithm, initialLimit: number = <span class="branch-0 cbranch-no" title="branch not covered" >1)</span> {
+    return new SimpleLimiter(limitAlgorithm, initialLimit)
 }</pre></td></tr></table></pre>
 
                 <div class='push'></div><!-- for sticky footer -->
@@ -705,14 +654,14 @@ export class Semaphore {
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
                 at 2023-07-15T15:02:42.157Z
             </div>
-        <script src="../../prettify.js"></script>
+        <script src="../../../prettify.js"></script>
         <script>
             window.onload = function () {
                 prettyPrint();
             };
         </script>
-        <script src="../../sorter.js"></script>
-        <script src="../../block-navigation.js"></script>
+        <script src="../../../sorter.js"></script>
+        <script src="../../../block-navigation.js"></script>
     </body>
 </html>
     
