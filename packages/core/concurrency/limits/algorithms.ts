@@ -1,3 +1,4 @@
+import { randomInt } from "crypto"
 import EventEmitter from "events"
 import { LimitAlgorithm } from "."
 import { Duration } from "../../time"
@@ -75,8 +76,75 @@ class VegasLimitAlgorithm extends AbstractLimitAlgorithm {
     #increase: (estimate: number) => number
     #decrease: (estimate: number) => number
 
+    #smoothing: number = 1.0
+
+    #estimatedLimit: number
+    #probeCount: number = 0
+    #probeJitter: number
+    #probeMultiplier: number = 30
+    #rttNoLoad: number = 0
+    #maxLimit: number
+
+    constructor(initialLimit: number, maxLimit: number = 100) {
+        super(initialLimit)
+        this.#estimatedLimit = initialLimit
+        this.#maxLimit = maxLimit
+
+        this._resetJitter()
+    }
+
+    private _resetJitter(): void {
+        this.#probeJitter = randomInt(5_000_000, 10_000_000) / 10_000_000
+    }
+
     protected _update(duration: Duration, inFlight: number, dropped: boolean): number {
-        throw new Error("Method not implemented.")
+        const rtt = duration.microseconds()
+
+        // Check probe count barrier
+        if (this.#estimatedLimit * this.#probeJitter * this.#probeMultiplier <= ++this.#probeCount) {
+            this._resetJitter()
+            this.#probeCount = 0
+            this.#rttNoLoad = rtt
+            return ~~this.#estimatedLimit
+        }
+
+        // Check new rtt min
+        if (this.#rttNoLoad === 0 || rtt < this.#rttNoLoad) {
+            this.#rttNoLoad = rtt
+            return ~~this.#estimatedLimit
+        }
+
+        // Update the actual estimate
+        const size = ~~Math.ceil(this.#estimatedLimit * (1 - this.#rttNoLoad / rtt))
+        let newLimit: number
+
+        if (dropped) {
+            newLimit = this.#decrease(this.#estimatedLimit)
+        } else if (inFlight * 2 < this.#estimatedLimit) {
+            return ~~this.#estimatedLimit
+        } else {
+            const alpha = this.#alpha(this.#estimatedLimit)
+            const beta = this.#beta(this.#estimatedLimit)
+            const threshold = this.#threshold(this.#estimatedLimit)
+
+            // Check threshold values against alpha/beta to detect increase or decrease
+            if (size <= threshold) {
+                newLimit = this.#estimatedLimit + beta
+            } else if (size < alpha) {
+                newLimit = this.#increase(this.#estimatedLimit)
+            } else if (size > beta) {
+                newLimit = this.#decrease(this.#estimatedLimit)
+            } else {
+                return ~~this.#estimatedLimit
+            }
+        }
+
+        // Cap the new limit
+        newLimit = Math.max(1, Math.min(this.#maxLimit, newLimit))
+
+        // Update the estimate and return it
+        this.#estimatedLimit = (1 - this.#smoothing) * this.#estimatedLimit + this.#smoothing * newLimit
+        return ~~this.#estimatedLimit
     }
 
 }
