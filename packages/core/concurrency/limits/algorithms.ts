@@ -324,8 +324,6 @@ class VegasLimitAlgorithm extends AbstractLimitAlgorithm {
         const size = ~~Math.ceil(this.#estimatedLimit * (1 - this.#rttNoLoad / rtt))
         let newLimit: number
 
-        console.log(`size: ${size}, inFlight: ${inFlight}`)
-
         if (dropped) {
             newLimit = this.#decrease(this.#estimatedLimit)
         } else if (inFlight * 2 < this.#estimatedLimit) {

@@ -1,3 +1,4 @@
+import { randomInt } from "crypto"
 import { createSimpleLimiter } from "."
 import { delay } from "../../time"
 import { vegasBuilder } from "./algorithms"
@@ -59,7 +60,8 @@ describe('Limits should function correctly per their design', () => {
     })
 
     test('A simple limit with a Vegas limiter should change based on the runtime conditions', async () => {
-        const limiter = createSimpleLimiter(vegasBuilder(2).withMax(12).build())
+        const algorithm = vegasBuilder(2).withMax(12).build()
+        const limiter = createSimpleLimiter(algorithm)
 
         // Verify limits before starting
         expect(limiter.getLimit()).toBeGreaterThanOrEqual(1)
@@ -70,17 +72,50 @@ describe('Limits should function correctly per their design', () => {
         expect(operation).not.toBeUndefined()
         operation?.success()
 
-        // Test that the limit increases as we send more requests through the system at a fast rate
+        // Track the changes from the starting limit
         let previousLimit = limiter.getLimit()
 
-        // Simulate 500 iterations
-        for (let n = 0; n < 100; ++n) {
-            const operation = limiter.tryAcquire()
-            await delay(5)
-            operation?.success()
+        // Total changes as well as increase/decreases
+        let changes = 0
+        let increase = 0
+        let decrease = 0
+
+        // Track changes
+        algorithm.on('changed', (limit) => {
+            changes++
+            if (limit < previousLimit) {
+                decrease++
+            } else {
+                increase++
+            }
+            previousLimit = limit
+        })
+
+        // Simulate enough iterations to see movement in the limits
+        for (let n = 0; n < 250; ++n) {
+
+            // Randomly spin up some amount of work
+            await Promise.all(Array.from(new Array(randomInt(2, 25)).keys()).map(async _ => {
+
+                // Try to get access via the limiter
+                const operation = limiter.tryAcquire()
+
+                // Delay to simulate some work
+                if (operation) {
+                    await delay(randomInt(2, 10))
+                    operation.success()
+                }
+            }))
         }
 
         // The limit should have changed
-        expect(limiter.getLimit()).toBeGreaterThan(previousLimit)
+        expect(changes).toBeGreaterThanOrEqual(2)
+        expect(increase).toBeGreaterThanOrEqual(1)
+
+        // This should get fired at least once during the setup
+        expect(decrease).toBeGreaterThan(0)
+
+        // This should match the last change
+        expect(limiter.getLimit()).toEqual(previousLimit)
     })
 })

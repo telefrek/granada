@@ -77,7 +77,7 @@ abstract class AbstractLimiter implements Limiter {
         constructor(limiter: AbstractLimiter) {
             this.#limiter = limiter
             this.#finished = false
-            this.#running = limiter.#inFlight
+            this.#running = ++limiter.#inFlight
             this.#timer = new Timer()
             this.#timer.start()
         }
