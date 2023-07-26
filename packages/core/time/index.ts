@@ -3,6 +3,17 @@
  */
 
 /**
+ * Wait for a period of time
+ * 
+ * @param milliseconds The amount of time to delay
+ * @returns A {@link Promise} that will be scheduled after at least that many milliseconds
+ */
+export function delay(milliseconds: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, milliseconds))
+}
+
+
+/**
  * Custom class that tracks elapsed {@link Duration}
  */
 export class Timer {

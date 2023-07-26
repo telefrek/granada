@@ -1,4 +1,6 @@
 import { createSimpleLimiter } from "."
+import { delay } from "../../time"
+import { vegasBuilder } from "./algorithms"
 
 describe('Limits should function correctly per their design', () => {
 
@@ -54,5 +56,31 @@ describe('Limits should function correctly per their design', () => {
         expect(operation2).toBeUndefined()
 
         operation?.success()
+    })
+
+    test('A simple limit with a Vegas limiter should change based on the runtime conditions', async () => {
+        const limiter = createSimpleLimiter(vegasBuilder(2).withMax(12).build())
+
+        // Verify limits before starting
+        expect(limiter.getLimit()).toBeGreaterThanOrEqual(1)
+        expect(limiter.getLimit()).toBeLessThanOrEqual(12)
+
+        // Get an operation and verify it was provided, then mark it as successful
+        let operation = limiter.tryAcquire()
+        expect(operation).not.toBeUndefined()
+        operation?.success()
+
+        // Test that the limit increases as we send more requests through the system at a fast rate
+        let previousLimit = limiter.getLimit()
+
+        // Simulate 500 iterations
+        for (let n = 0; n < 100; ++n) {
+            const operation = limiter.tryAcquire()
+            await delay(5)
+            operation?.success()
+        }
+
+        // The limit should have changed
+        expect(limiter.getLimit()).toBeGreaterThan(previousLimit)
     })
 })

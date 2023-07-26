@@ -3,6 +3,19 @@ import EventEmitter from "events"
 import { LimitAlgorithm } from "."
 import { Duration } from "../../time"
 
+// Memoize the lookup for the first 1000 values
+const _LOG_10_LOOKUP: number[] = Array.from(Array(1000).keys()).map(k => Math.max(1, Math.log10(k)))
+
+/**
+ * Memoized Log10 function for the first 1000 values
+ * 
+ * @param n The value to calculate the log of 10 for
+ * @returns The value of log10(n)
+ */
+function LOG10(n: number): number {
+    return n < 1000 ? _LOG_10_LOOKUP[n] : Math.log10(n)
+}
+
 /**
  * Base class for all implementations of the {@link LimitAlgorithm}
  */
@@ -66,29 +79,222 @@ class FixedLimitAlgorithm extends AbstractLimitAlgorithm {
 }
 
 /**
+ * Definition for the estimate function
+ */
+export type VegasEstimate = (estimate: number) => number
+
+/**
+ * Builder class to help create Vegas {@link LimitAlgorithm} instances
+ */
+export class VegasLimitBuilder {
+
+    #limit: number
+    #limitMax: number
+    #alpha: VegasEstimate
+    #beta: VegasEstimate
+    #threshold: VegasEstimate
+    #increase: VegasEstimate
+    #decrease: VegasEstimate
+
+    #smoothing: number
+    #probeMultiplier: number
+
+    constructor(limit: number) {
+        this.#limit = limit
+        this.#limitMax = 512
+        this.#alpha = e => 3 * LOG10(e)
+        this.#beta = e => 6 * LOG10(e)
+        this.#threshold = LOG10
+        this.#increase = e => e + LOG10(e)
+        this.#decrease = e => e - LOG10(e)
+        this.#probeMultiplier = 30
+        this.#smoothing = 1.0
+    }
+
+    /**
+     * The current limit
+     */
+    public get limit(): number {
+        return this.#limit
+    }
+
+    /** 
+     * The max value for the limit
+     */
+    public get max(): number {
+        return this.#limitMax
+    }
+
+    /**
+     * The smoothing value for changing limits
+     */
+    public get smoothing(): number {
+        return this.#smoothing
+    }
+
+    /**
+     * The multiplier for probes in level changes
+     */
+    public get probeMultiplier(): number {
+        return this.#probeMultiplier
+    }
+
+    /**
+     * The alpha estimate
+     */
+    public get alpha(): VegasEstimate {
+        return this.#alpha
+    }
+
+    /**
+     * The beta estimate
+     */
+    public get beta(): VegasEstimate {
+        return this.#beta
+    }
+
+    /**
+     * The threshold estimate
+     */
+    public get threshold(): VegasEstimate {
+        return this.#threshold
+    }
+
+    /**
+     * The limit increase function
+     */
+    public get increase(): VegasEstimate {
+        return this.#increase
+    }
+
+    /**
+     * The limit decrease function
+     */
+    public get decrease(): VegasEstimate {
+        return this.#decrease
+    }
+
+    /**
+     * Update the maximum limit
+     * @param max The maximum limit amount
+     * @returns An updated {@link VegasLimitBuilder}
+     */
+    public withMax(max: number): VegasLimitBuilder {
+        this.#limitMax = max
+        return this
+    }
+
+    /**
+     * Update the smoothing ratio
+     * @param smoothing The smoothing ratio
+     * @returns An updated {@link VegasLimitBuilder}
+     */
+    public withSmoothing(smoothing: number): VegasLimitBuilder {
+        this.#smoothing = smoothing
+        return this
+    }
+
+    /**
+     * Update the probe multiplier
+     * @param multiplier The frequency of probe checks
+     * @returns An updated {@link VegasLimitBuilder}
+     */
+    public withProbeMultiplier(multiplier: number): VegasLimitBuilder {
+        this.#probeMultiplier = multiplier
+        return this
+    }
+
+    /**
+     * Estimate using the alpha function
+     * @param alpha The alpha estimate
+     * @returns An updated {@link VegasLimitBuilder}
+     */
+    public withAlpha(alpha: VegasEstimate): VegasLimitBuilder {
+        this.#alpha = alpha
+        return this
+    }
+
+    /**
+     * Estimate using the beta function
+     * @param beta The beta estimate
+     * @returns An updated {@link VegasLimitBuilder}
+     */
+    public withBeta(beta: VegasEstimate): VegasLimitBuilder {
+        this.#beta = beta
+        return this
+    }
+
+    /**
+     * Checks the limit thresholds for change
+     * @param threshold The limit threshold function
+     * @returns An updated {@link VegasLimitBuilder}
+     */
+    public withThreshold(threshold: VegasEstimate): VegasLimitBuilder {
+        this.#threshold = threshold
+        return this
+    }
+
+    /**
+     * Function to increase the limit
+     * @param increase The limit increase function
+     * @returns An updated {@link VegasLimitBuilder}
+     */
+    public withIncrease(increase: VegasEstimate): VegasLimitBuilder {
+        this.#increase = increase
+        return this
+    }
+
+    /**
+     * Function to decrease the limit
+     * @param decrease The limit decrease function
+     * @returns An updated {@link VegasLimitBuilder}
+     */
+    public withDecrease(decrease: VegasEstimate): VegasLimitBuilder {
+        this.#decrease = decrease
+        return this
+    }
+
+    /**
+     * Builds the limit algorithm
+     * @returns A new {@link LimitAlgorithm}
+     */
+    build(): LimitAlgorithm {
+        return new VegasLimitAlgorithm(this)
+    }
+}
+
+/**
  * Uses a variant of the Vegas TCP congestion algorithm ({@link https://en.wikipedia.org/wiki/TCP_Vegas})
  */
 class VegasLimitAlgorithm extends AbstractLimitAlgorithm {
 
-    #alpha: (estimate: number) => number
-    #beta: (estimate: number) => number
-    #threshold: (estimate: number) => number
-    #increase: (estimate: number) => number
-    #decrease: (estimate: number) => number
+    readonly #alpha: VegasEstimate
+    readonly #beta: VegasEstimate
+    readonly #threshold: VegasEstimate
+    readonly #increase: VegasEstimate
+    readonly #decrease: VegasEstimate
+    readonly #maxLimit: number
 
-    #smoothing: number = 1.0
+    readonly #smoothing: number
+    readonly #probeMultiplier: number
 
-    #estimatedLimit: number
+    #estimatedLimit: number = 0
     #probeCount: number = 0
-    #probeJitter: number
-    #probeMultiplier: number = 30
+    #probeJitter: number = 0
     #rttNoLoad: number = 0
-    #maxLimit: number
 
-    constructor(initialLimit: number, maxLimit: number = 100) {
-        super(initialLimit)
-        this.#estimatedLimit = initialLimit
-        this.#maxLimit = maxLimit
+    constructor(builder: VegasLimitBuilder) {
+        super(builder.limit)
+
+        this.#estimatedLimit = builder.limit
+        this.#maxLimit = builder.max
+        this.#alpha = builder.alpha
+        this.#beta = builder.beta
+        this.#threshold = builder.threshold
+        this.#increase = builder.increase
+        this.#decrease = builder.decrease
+        this.#smoothing = builder.smoothing
+        this.#probeMultiplier = builder.probeMultiplier
 
         this._resetJitter()
     }
@@ -117,6 +323,8 @@ class VegasLimitAlgorithm extends AbstractLimitAlgorithm {
         // Update the actual estimate
         const size = ~~Math.ceil(this.#estimatedLimit * (1 - this.#rttNoLoad / rtt))
         let newLimit: number
+
+        console.log(`size: ${size}, inFlight: ${inFlight}`)
 
         if (dropped) {
             newLimit = this.#decrease(this.#estimatedLimit)
@@ -157,4 +365,14 @@ class VegasLimitAlgorithm extends AbstractLimitAlgorithm {
  */
 export function fixedLimit(limit: number): LimitAlgorithm {
     return new FixedLimitAlgorithm(limit)
+}
+
+/**
+ * Creates a new {@link VegasLimitBuilder} for building the Vegas {@link LimitAlgorithm}
+ * 
+ * @param limit The concurrency limit
+ * @returns A new {@link VegasLimitBuilder} for building the {@link LimitAlgorithm}
+ */
+export function vegasBuilder(limit: number): VegasLimitBuilder {
+    return new VegasLimitBuilder(limit)
 }
