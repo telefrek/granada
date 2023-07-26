@@ -311,13 +311,13 @@ class VegasLimitAlgorithm extends AbstractLimitAlgorithm {
             this._resetJitter()
             this.#probeCount = 0
             this.#rttNoLoad = rtt
-            return ~~this.#estimatedLimit
+            return this.#estimatedLimit
         }
 
         // Check new rtt min
         if (this.#rttNoLoad === 0 || rtt < this.#rttNoLoad) {
             this.#rttNoLoad = rtt
-            return ~~this.#estimatedLimit
+            return this.#estimatedLimit
         }
 
         // Update the actual estimate
@@ -327,7 +327,7 @@ class VegasLimitAlgorithm extends AbstractLimitAlgorithm {
         if (dropped) {
             newLimit = this.#decrease(this.#estimatedLimit)
         } else if (inFlight * 2 < this.#estimatedLimit) {
-            return ~~this.#estimatedLimit
+            return this.#estimatedLimit
         } else {
             const alpha = this.#alpha(this.#estimatedLimit)
             const beta = this.#beta(this.#estimatedLimit)
@@ -341,7 +341,7 @@ class VegasLimitAlgorithm extends AbstractLimitAlgorithm {
             } else if (size > beta) {
                 newLimit = this.#decrease(this.#estimatedLimit)
             } else {
-                return ~~this.#estimatedLimit
+                return this.#estimatedLimit
             }
         }
 
@@ -349,8 +349,8 @@ class VegasLimitAlgorithm extends AbstractLimitAlgorithm {
         newLimit = Math.max(1, Math.min(this.#maxLimit, newLimit))
 
         // Update the estimate and return it
-        this.#estimatedLimit = (1 - this.#smoothing) * this.#estimatedLimit + this.#smoothing * newLimit
-        return ~~this.#estimatedLimit
+        this.#estimatedLimit = ~~((1 - this.#smoothing) * this.#estimatedLimit + this.#smoothing * newLimit)
+        return this.#estimatedLimit
     }
 
 }

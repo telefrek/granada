@@ -79,9 +79,11 @@ describe('Limits should function correctly per their design', () => {
         let changes = 0
         let increase = 0
         let decrease = 0
+        let maxLimit = previousLimit
 
         // Track changes
         algorithm.on('changed', (limit) => {
+            maxLimit = Math.max(limit, maxLimit)
             changes++
             if (limit < previousLimit) {
                 decrease++
@@ -94,16 +96,29 @@ describe('Limits should function correctly per their design', () => {
         // Simulate enough iterations to see movement in the limits
         for (let n = 0; n < 250; ++n) {
 
+            let concurrency = 0
+
             // Randomly spin up some amount of work
             await Promise.all(Array.from(new Array(randomInt(2, 25)).keys()).map(async _ => {
 
                 // Try to get access via the limiter
                 const operation = limiter.tryAcquire()
 
-                // Delay to simulate some work
+                // Delay to simulate some work if we got a lease
                 if (operation) {
-                    await delay(randomInt(2, 10))
-                    operation.success()
+                    // Start dropping concurrency at values above 10
+                    const bad = ++concurrency >= 10
+                    await delay(bad ? 10 : 2)
+
+                    // Check for drop
+                    if (bad) {
+                        operation.dropped()
+                    } else {
+                        operation.success()
+                    }
+
+                    // Reduce the concurrency
+                    concurrency--
                 }
             }))
         }
@@ -117,5 +132,6 @@ describe('Limits should function correctly per their design', () => {
 
         // This should match the last change
         expect(limiter.getLimit()).toEqual(previousLimit)
+        expect(maxLimit).toEqual(12) // Based on defaults it shouldn't make it past here
     })
 })
