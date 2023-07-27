@@ -74,6 +74,6 @@ export interface Limiter {
  * @param initialLimit The initial limit value to use (default is 1)
  * @returns A newly initialized {@link Limiter}
  */
-export function createSimpleLimiter(limitAlgorithm: LimitAlgorithm = fixedLimit(1), initialLimit: number = 1) {
+export function createSimpleLimiter(limitAlgorithm: LimitAlgorithm = fixedLimit(1), initialLimit: number = 1): Limiter {
     return simpleLimiter(limitAlgorithm, initialLimit)
 }

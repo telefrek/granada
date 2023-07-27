@@ -2,7 +2,7 @@
  * Package containing all of the routing information for associating a given path/method combination with a handler
  */
 
-import { HTTP_METHODS, HttpBodyContent, HttpHandler, HttpMethod, HttpRequest } from "../core"
+import { HTTP_METHODS, HttpBodyContent, HttpHandler, HttpMethod, HttpMiddleware, HttpRequest, HttpResponse, httpError } from "../core"
 
 /**
  * Custom {@link Error} raised for routing issues
@@ -57,6 +57,43 @@ export interface Router {
  */
 export function createRouter(): Router {
     return new RouterImpl()
+}
+
+export function routingMiddleware(router: Router): HttpMiddleware {
+    return new RoutingMiddleware(router)
+}
+
+class RoutingMiddleware implements HttpMiddleware {
+
+    readonly #router: Router
+    #next: HttpMiddleware | undefined = undefined
+
+    constructor(router: Router) {
+        this.#router = router
+    }
+
+    get name(): string {
+        return "http.routing"
+    }
+
+    set next(next: HttpMiddleware | undefined) {
+        this.#next = next
+    }
+
+    async handle(request: HttpRequest<HttpBodyContent>): Promise<HttpResponse<HttpBodyContent>> {
+
+        // Check the route and invoke the handler if found
+        const handler = this.#router.lookup(request)
+        if (handler) {
+            return await handler(request)
+        } else if (this.#next) {
+            return this.#next.handle(request)
+        }
+
+        // Not found
+        return httpError(404)
+    }
+
 }
 
 /**

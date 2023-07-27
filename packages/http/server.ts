@@ -6,8 +6,8 @@ import { Emitter } from "@telefrek/core/events"
 import { LifecycleEvents, registerShutdown } from "@telefrek/core/lifecycle"
 import EventEmitter from "events"
 import * as http2 from "http2"
-import { HttpBodyContent, HttpBodyProvider, HttpHeaders, HttpMethod, HttpRequest, HttpResponse, NO_BODY, emptyHeaders } from "./core"
-import { Router, createRouter } from "./routing"
+import { HttpBodyContent, HttpBodyProvider, HttpHeaders, HttpMethod, HttpMiddleware, HttpRequest, HttpResponse, NO_BODY, emptyHeaders } from "./core"
+import { Router, createRouter, routingMiddleware } from "./routing"
 
 /**
  * Set of supported events on an {@link HttpServer}
@@ -45,6 +45,16 @@ export interface HttpServer extends Emitter<HttpServerEvents> {
      * Closes the server, rejecting any further calls
      */
     close(): Promise<void>
+
+    /**
+     * @returns The current {@link HttpMiddleware} objects
+     */
+    get middleware(): HttpMiddleware[]
+
+    /**
+     * @param middleware The new {@link HttpMiddleware} to use
+     */
+    set middleware(middleware: HttpMiddleware[])
 }
 
 /**
@@ -131,15 +141,17 @@ class HttpServerBuilderImpl implements HttpServerBuilder {
  */
 class HttpServerImpl extends EventEmitter implements HttpServer {
 
-    server: http2.Http2Server
-    router: Router
+    #server: http2.Http2Server
+    #routerMiddleware: HttpMiddleware
+    #middleware: HttpMiddleware[] = []
 
     constructor(options: http2.SecureServerOptions, router: Router) {
         super()
-        this.router = router
+        this.#routerMiddleware = routingMiddleware(router)
+        this.#middleware.push(this.#routerMiddleware)
 
         // TODO: Start looking at options for more configurations.  If no TLS, HTTP 1.1, etc.
-        this.server = http2.createServer(options)
+        this.#server = http2.createServer(options)
 
         // Register the shutdown hook
         registerShutdown(async () => {
@@ -147,39 +159,34 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
         })
 
         // Hook lifecycle events
-        this.server.on('stream', async (stream, headers, _flags) => {
+        this.#server.on('stream', async (stream, headers, _flags) => {
             const request = new Http2Request(stream, headers)
 
-            const handler = router.lookup(request)
-            if (handler) {
-                try {
-                    const response = await handler(request)
-                    const headers = <http2.OutgoingHttpHeaders>{
-                        ':status': response.status
-                    }
-                    if (response.hasBody) {
-                        headers[http2.constants.HTTP2_HEADER_CONTENT_TYPE] = 'text/html'
-                        stream.respond(headers)
-                        stream.end(await response.body())
-                    } else {
-                        stream.respond(headers, { endStream: true })
-                    }
-                } catch (err) {
-                    stream.respond({
-                        ':status': 503,
-                        'content-type': 'text/html; charset=utf-8'
-                    }, { endStream: true })
+            // Fire middleware chains
+            try {
+                const response = await this.#middleware[0].handle(request)
+                const headers = <http2.OutgoingHttpHeaders>{
+                    ':status': response.status
                 }
-            } else {
-                stream.respond({ ':status': 404 }, { endStream: true })
+                if (response.hasBody) {
+                    headers[http2.constants.HTTP2_HEADER_CONTENT_TYPE] = 'text/html; charset=utf-8'
+                    stream.respond(headers)
+                    stream.end(await response.body())
+                } else {
+                    stream.respond(headers, { endStream: true })
+                }
+            } catch (err) {
+                stream.respond({
+                    ':status': 503,
+                    'content-type': 'text/html; charset=utf-8'
+                }, { endStream: true })
             }
-
         })
     }
 
     listen(port: number): void {
-        if (!this.server.listening) {
-            this.server.listen(port)
+        if (!this.#server.listening) {
+            this.#server.listen(port)
         } else {
             throw new Error('Server is already listening on another port')
         }
@@ -187,8 +194,8 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
 
     close(): Promise<void> {
         return new Promise((resolve, reject) => {
-            if (this.server.listening) {
-                this.server.close((err) => {
+            if (this.#server.listening) {
+                this.#server.close((err) => {
                     if (err) {
                         reject(err)
                     } else {
@@ -199,6 +206,33 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
                 resolve()
             }
         })
+    }
+
+    get middleware(): HttpMiddleware[] {
+        return this.#middleware
+    }
+
+    set middleware(middleware: HttpMiddleware[]) {
+        // Clear the references and their next pointers
+        while (this.#middleware.length > 0) {
+            this.#middleware.pop()!.next = undefined
+        }
+
+        // Make sure we aren't clearing it out
+        if (middleware.length > 0) {
+
+            // Push the objects into the array
+            for (let n = 1; n < middleware.length; ++n) {
+
+                // Update the pointers and assign
+                middleware[n - 1].next = middleware[n]
+                this.#middleware.push(middleware[n])
+            }
+
+            middleware[middleware.length - 1].next = this.#routerMiddleware
+        } else {
+            this.#middleware.push(this.#routerMiddleware)
+        }
     }
 }
 

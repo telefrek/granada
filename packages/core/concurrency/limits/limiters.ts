@@ -190,6 +190,6 @@ class SimpleLimiter extends AbstractLimiter {
  * @param initialLimit The initial limit value to use (default is 1)
  * @returns A newly initialized {@link Limiter}
  */
-export function simpleLimiter(limitAlgorithm: LimitAlgorithm, initialLimit: number = 1) {
+export function simpleLimiter(limitAlgorithm: LimitAlgorithm, initialLimit: number = 1): Limiter {
     return new SimpleLimiter(limitAlgorithm, initialLimit)
 }

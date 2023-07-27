@@ -3,6 +3,24 @@
  */
 
 /**
+ * Create an error {@link HttpResponse} to return
+ * 
+ * @param status The optional status code (default is 503)
+ * @returns A new {@link HttpResponse} for that error type
+ */
+export function httpError(status: number = 503): HttpResponse<HttpBodyContent> {
+    return new ErrorResponse(status)
+}
+/**
+ * Create an empty {@link HttpResponse} to return
+ * 
+ * @returns A new {@link HttpResponse} for no content responses
+ */
+export function noContent(): HttpResponse<HttpBodyContent> {
+    return new NoContentResponse()
+}
+
+/**
  * Supported methods for HTTP operations
  */
 export enum HttpMethod {
@@ -101,7 +119,53 @@ export interface HttpResponse<T extends HttpBodyContent> {
     body: HttpBodyProvider<T>
 }
 
+
 /**
  * Simple type for contracting the async model for an HTTP request/response operation
  */
 export type HttpHandler = (request: HttpRequest<HttpBodyContent>) => Promise<HttpResponse<HttpBodyContent>>
+
+/**
+ * Simple interface for defining middleware operation
+ */
+export interface HttpMiddleware {
+
+    /**
+     * Get the name of the middleware
+     */
+    get name(): string
+
+    /**
+     * Set the next middleware
+     */
+    set next(next: HttpMiddleware | undefined)
+
+    /**
+     * Handle the request
+     * 
+     * @param request The {@link httpRequest} being processed
+     * @param next The next {@link HttpMiddleware} in the chain if present
+     */
+    handle: HttpHandler
+}
+
+class NoContentResponse implements HttpResponse<HttpBodyContent> {
+    readonly status: number = 204
+    readonly headers: HttpHeaders = emptyHeaders()
+    readonly hasBody: boolean = false
+    readonly body: HttpBodyProvider<any> = NO_BODY
+}
+
+/**
+ * Internal error response
+ */
+class ErrorResponse implements HttpResponse<HttpBodyContent> {
+    readonly status: number
+    readonly headers: HttpHeaders = emptyHeaders()
+    readonly hasBody: boolean = false
+    readonly body: HttpBodyProvider<any> = NO_BODY
+
+    constructor(status: number) {
+        this.status = status
+    }
+}

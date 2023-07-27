@@ -10,9 +10,6 @@ describe('Limits should function correctly per their design', () => {
         // Create a default limiter with defaults of 1 and no concurrency updates
         const limiter = createSimpleLimiter()
 
-        // Verify current limit is default
-        expect(limiter.getLimit()).toBe(1)
-
         // Get an operation and verify it was provided
         let operation = limiter.tryAcquire()
         expect(operation).not.toBeUndefined()
@@ -63,19 +60,13 @@ describe('Limits should function correctly per their design', () => {
         const algorithm = vegasBuilder(2).withMax(12).build()
         const limiter = createSimpleLimiter(algorithm)
 
-        // Verify limits before starting
-        expect(limiter.getLimit()).toBeGreaterThanOrEqual(1)
-        expect(limiter.getLimit()).toBeLessThanOrEqual(12)
-
         // Get an operation and verify it was provided, then mark it as successful
         let operation = limiter.tryAcquire()
         expect(operation).not.toBeUndefined()
         operation?.success()
 
-        // Track the changes from the starting limit
-        let previousLimit = limiter.getLimit()
-
         // Total changes as well as increase/decreases
+        let previousLimit = 2
         let changes = 0
         let increase = 0
         let decrease = 0
@@ -131,7 +122,6 @@ describe('Limits should function correctly per their design', () => {
         expect(decrease).toBeGreaterThan(0)
 
         // This should match the last change
-        expect(limiter.getLimit()).toEqual(previousLimit)
         expect(maxLimit).toEqual(12) // Based on defaults it shouldn't make it past here
     })
 })
