@@ -2,12 +2,14 @@
  * HTTP Server implementation
  */
 
-import { Emitter } from "@telefrek/core/events"
-import { LifecycleEvents, registerShutdown } from "@telefrek/core/lifecycle"
-import EventEmitter from "events"
-import * as http2 from "http2"
-import { HttpBodyContent, HttpBodyProvider, HttpHeaders, HttpMethod, HttpMiddleware, HttpRequest, HttpResponse, NO_BODY, emptyHeaders } from "./core"
-import { Router, createRouter, routingMiddleware } from "./routing"
+import { SpanKind, Tracer, context, trace } from '@opentelemetry/api';
+import { SemanticAttributes } from '@opentelemetry/semantic-conventions';
+import { Emitter } from "@telefrek/core/events";
+import { LifecycleEvents, registerShutdown } from "@telefrek/core/lifecycle";
+import EventEmitter from "events";
+import * as http2 from "http2";
+import { HttpBodyContent, HttpBodyProvider, HttpHeaders, HttpMethod, HttpMiddleware, HttpRequest, HttpResponse, NO_BODY, emptyHeaders } from "./core";
+import { Router, createRouter, routingMiddleware } from "./routing";
 
 /**
  * Set of supported events on an {@link HttpServer}
@@ -144,6 +146,7 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
     #server: http2.Http2Server
     #routerMiddleware: HttpMiddleware
     #middleware: HttpMiddleware[] = []
+    #tracer = trace.getTracer('Granada.HttpServer')
 
     constructor(options: http2.SecureServerOptions, router: Router) {
         super()
@@ -160,7 +163,8 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
 
         // Hook lifecycle events
         this.#server.on('stream', async (stream, headers, _flags) => {
-            const request = new Http2Request(stream, headers)
+
+            const request = new Http2Request(stream, headers, this.#tracer)
 
             // Fire middleware chains
             try {
@@ -238,7 +242,8 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
 
 class Http2Request<T extends HttpBodyContent> implements HttpRequest<T> {
 
-    private stream: http2.Http2Stream
+    private stream: http2.ServerHttp2Stream
+    private tracer: Tracer
 
     path: string
     method: HttpMethod
@@ -248,43 +253,79 @@ class Http2Request<T extends HttpBodyContent> implements HttpRequest<T> {
     body: HttpBodyProvider<T>
     respond: <U extends HttpBodyContent>(status: number, bodyProvider?: HttpBodyProvider<U>) => HttpResponse<U>
 
-    constructor(stream: http2.Http2Stream, headers: http2.IncomingHttpHeaders) {
+    constructor(stream: http2.ServerHttp2Stream, headers: http2.IncomingHttpHeaders, tracer: Tracer) {
         this.stream = stream
         this.path = <string>headers[http2.constants.HTTP2_HEADER_PATH]
         this.method = <HttpMethod>headers[http2.constants.HTTP2_HEADER_METHOD]
         this.headers = emptyHeaders()
+        this.tracer = tracer
+        const addr = stream.session.socket.localAddress
+        const remoteAddr = stream.session.socket.remoteAddress
+        const remotePort = stream.session.socket.remotePort
+
+        const spanContext = context.active()
+
+        // Create the root span or this operation
+        const rootSpan = tracer.startSpan('newStream', {
+            kind: SpanKind.SERVER,
+            attributes: {
+                [SemanticAttributes.HTTP_METHOD]: this.method,
+                [SemanticAttributes.NET_PEER_IP]: remoteAddr,
+                [SemanticAttributes.NET_PEER_PORT]: remotePort,
+                [SemanticAttributes.NET_HOST_IP]: addr
+            }
+        }, spanContext)
 
         for (const key in headers) {
             this.headers.set(key, headers[key]!)
+            rootSpan.setAttribute(`http.header.${key}`, headers[key]!)
         }
 
         if (!stream.readableEnded) {
             this.hasBody = true
-            this.body = () => {
-                if (this.stream.closed) {
-                    throw new Error("Underlying stream was closed")
+            this.body = async () => {
+                // Get the previous span
+                const previousContext = context.active()
+                const previousSpan = trace.getSpan(previousContext)
+
+                try {
+                    return await context.with(spanContext, () => {
+
+                        trace.setSpan(spanContext, rootSpan);
+
+                        if (this.stream.closed) {
+                            // TODO: Handle errors in trace
+                            throw new Error("Underlying stream was closed");
+                        }
+
+                        // TODO: Replace this with content type parsing
+                        return new Promise<T>((resolve, reject) => {
+
+                            let data = "";
+
+                            this.stream.on('data', (chunk) => {
+                                if (typeof chunk === "string") {
+                                    data += chunk;
+                                } else {
+                                    data += chunk.toString("utf-8");
+                                }
+                            }).once('end', () => {
+                                try {
+                                    resolve(JSON.parse(data));
+                                } catch (err) {
+                                    reject(err);
+                                } finally {
+                                }
+                            });
+
+                        });
+                    });
+                } finally {
+                    // Restore context as needed
+                    if (previousContext && previousSpan) {
+                        trace.setSpan(previousContext, previousSpan);
+                    }
                 }
-
-                // TODO: Replace this with content type parsing
-                return new Promise((resolve, reject) => {
-
-                    let data = ""
-
-                    this.stream.on('data', (chunk) => {
-                        if (typeof chunk === "string") {
-                            data += chunk
-                        } else {
-                            data += chunk.toString("utf-8")
-                        }
-                    }).once('end', () => {
-                        try {
-                            resolve(JSON.parse(data))
-                        } catch (err) {
-                            reject(err)
-                        }
-                    })
-
-                })
             }
         } else {
             this.hasBody = false
