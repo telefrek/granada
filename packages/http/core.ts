@@ -8,7 +8,7 @@
  * @param status The optional status code (default is 503)
  * @returns A new {@link HttpResponse} for that error type
  */
-export function httpError(status: number = 503): HttpResponse<HttpBodyContent> {
+export function httpError(status: number = 503): HttpResponse<undefined> {
     return new ErrorResponse(status)
 }
 /**
@@ -16,7 +16,7 @@ export function httpError(status: number = 503): HttpResponse<HttpBodyContent> {
  * 
  * @returns A new {@link HttpResponse} for no content responses
  */
-export function noContent(): HttpResponse<HttpBodyContent> {
+export function noContent(): HttpResponse<undefined> {
     return new NoContentResponse()
 }
 
@@ -46,11 +46,6 @@ export enum HttpVersion {
 }
 
 /**
- * Represents valid body shapes
- */
-export type HttpBodyContent = any | any[] | undefined
-
-/**
  * HttpHeaders are collections of key, value pairs where the value can be singular or an array
  */
 export interface HttpHeaders extends Map<string, string | string[]> {
@@ -67,19 +62,19 @@ export function emptyHeaders(): HttpHeaders {
 /**
  * Helper definition for 
  */
-export type HttpBodyProvider<T extends HttpBodyContent> = () => Promise<T>
+export type HttpBodyProvider<T> = () => Promise<T | T[] | undefined>
 
 /**
  * Default {@link HttpBodyProvider} that returns a rejected promise if called
  * 
  * @returns A failed promise
  */
-export const NO_BODY: HttpBodyProvider<HttpBodyContent> = () => Promise.reject(new Error("No Body Available"))
+export const NO_BODY: HttpBodyProvider<any> = () => Promise.reject(new Error("No Body Available"))
 
 /**
  * An interface defining the behavior of an HTTP Request
  */
-export interface HttpRequest<T extends HttpBodyContent> {
+export interface HttpRequest<T> {
     path: string
     method: HttpMethod
     headers: HttpHeaders
@@ -101,13 +96,13 @@ export interface HttpRequest<T extends HttpBodyContent> {
      * 
      * @returns An initialized {@link HttpResponse}
      */
-    respond: <U extends HttpBodyContent>(status: number, bodyProvider?: HttpBodyProvider<U>) => HttpResponse<U>
+    respond: <U>(status: number, bodyProvider?: HttpBodyProvider<T>) => HttpResponse<U>
 }
 
 /**
  * An interface defining the shape of an HTTP Response
  */
-export interface HttpResponse<T extends HttpBodyContent> {
+export interface HttpResponse<T> {
     status: number
     headers: HttpHeaders
     hasBody: boolean
@@ -123,7 +118,7 @@ export interface HttpResponse<T extends HttpBodyContent> {
 /**
  * Simple type for contracting the async model for an HTTP request/response operation
  */
-export type HttpHandler = (request: HttpRequest<HttpBodyContent>) => Promise<HttpResponse<HttpBodyContent>>
+export type HttpHandler<T, U> = (request: HttpRequest<T>) => Promise<HttpResponse<U>>
 
 /**
  * Simple interface for defining middleware operation
@@ -146,10 +141,10 @@ export interface HttpMiddleware {
      * @param request The {@link httpRequest} being processed
      * @param next The next {@link HttpMiddleware} in the chain if present
      */
-    handle: HttpHandler
+    handle: HttpHandler<any | any[] | undefined, any | any[] | undefined>
 }
 
-class NoContentResponse implements HttpResponse<HttpBodyContent> {
+class NoContentResponse implements HttpResponse<undefined> {
     readonly status: number = 204
     readonly headers: HttpHeaders = emptyHeaders()
     readonly hasBody: boolean = false
@@ -159,11 +154,11 @@ class NoContentResponse implements HttpResponse<HttpBodyContent> {
 /**
  * Internal error response
  */
-class ErrorResponse implements HttpResponse<HttpBodyContent> {
+class ErrorResponse implements HttpResponse<undefined> {
     readonly status: number
     readonly headers: HttpHeaders = emptyHeaders()
     readonly hasBody: boolean = false
-    readonly body: HttpBodyProvider<any> = NO_BODY
+    readonly body: HttpBodyProvider<undefined> = NO_BODY
 
     constructor(status: number) {
         this.status = status

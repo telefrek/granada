@@ -7,11 +7,6 @@ The structure of the packages is intended to encapsulate specific domains of fun
 title: Package Relationships
 ---
 classDiagram
-    note for core "observability\nconcurrency\neventing\ntime"
-    core <|-- http
-    note for http "hosting\nrouting\nthrottling"
-    class core{
-    }
-    class http{
-    }
+    note "All packages leverage core"
+    Core <|-- HTTP
 ```

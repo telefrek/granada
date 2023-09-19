@@ -3,7 +3,7 @@
  */
 
 import { Limiter } from "@telefrek/core/concurrency/limits";
-import { HttpBodyContent, HttpMiddleware, HttpRequest, HttpResponse, httpError, noContent } from "../core";
+import { HttpMiddleware, HttpRequest, HttpResponse, httpError, noContent } from "../core";
 
 /**
  * Custom {@link HttpMiddleware} that leverages {@link Limiter} objects
@@ -31,9 +31,9 @@ export abstract class RateLimitingMiddleware implements HttpMiddleware {
      * 
      * @returns An optional {@link Limiter} that can be used to gate access beyond this middleware
      */
-    protected abstract _getLimit(request: HttpRequest<HttpBodyContent>): Limiter | undefined
+    protected abstract _getLimit(request: HttpRequest<any>): Limiter | undefined
 
-    async handle(request: HttpRequest<HttpBodyContent>, next?: HttpMiddleware | undefined): Promise<HttpResponse<HttpBodyContent>> {
+    async handle(request: HttpRequest<any>, next?: HttpMiddleware | undefined): Promise<HttpResponse<any>> {
 
         // Check if we have a limit
         const limit = this._getLimit(request)

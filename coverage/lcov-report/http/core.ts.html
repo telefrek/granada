@@ -228,12 +228,7 @@
 <a name='L163'></a><a href='#L163'>163</a>
 <a name='L164'></a><a href='#L164'>164</a>
 <a name='L165'></a><a href='#L165'>165</a>
-<a name='L166'></a><a href='#L166'>166</a>
-<a name='L167'></a><a href='#L167'>167</a>
-<a name='L168'></a><a href='#L168'>168</a>
-<a name='L169'></a><a href='#L169'>169</a>
-<a name='L170'></a><a href='#L170'>170</a>
-<a name='L171'></a><a href='#L171'>171</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L166'></a><a href='#L166'>166</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -278,11 +273,6 @@
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -413,7 +403,7 @@
  * @param status The optional status code (default is 503)
  * @returns A new {@link HttpResponse} for that error type
  */
-export function httpError(status: number = <span class="branch-0 cbranch-no" title="branch not covered" >503)</span>: HttpResponse&lt;HttpBodyContent&gt; {
+export function httpError(status: number = <span class="branch-0 cbranch-no" title="branch not covered" >503)</span>: HttpResponse&lt;undefined&gt; {
     return new ErrorResponse(status)
 }
 /**
@@ -421,7 +411,7 @@ export function httpError(status: number = <span class="branch-0 cbranch-no" tit
  * 
  * @returns A new {@link HttpResponse} for no content responses
  */
-export function <span class="fstat-no" title="function not covered" >noContent(</span>): HttpResponse&lt;HttpBodyContent&gt; {
+export function <span class="fstat-no" title="function not covered" >noContent(</span>): HttpResponse&lt;undefined&gt; {
 <span class="cstat-no" title="statement not covered" >    return new NoContentResponse()</span>
 }
 &nbsp;
@@ -451,11 +441,6 @@ export enum HttpVersion {
 }
 &nbsp;
 /**
- * Represents valid body shapes
- */
-export type HttpBodyContent = any | any[] | undefined
-&nbsp;
-/**
  * HttpHeaders are collections of key, value pairs where the value can be singular or an array
  */
 export interface HttpHeaders extends Map&lt;string, string | string[]&gt; {
@@ -472,19 +457,19 @@ export function emptyHeaders(): HttpHeaders {
 /**
  * Helper definition for 
  */
-export type HttpBodyProvider&lt;T extends HttpBodyContent&gt; = () =&gt; Promise&lt;T&gt;
+export type HttpBodyProvider&lt;T&gt; = () =&gt; Promise&lt;T | T[] | undefined&gt;
 &nbsp;
 /**
  * Default {@link HttpBodyProvider} that returns a rejected promise if called
  * 
  * @returns A failed promise
  */
-export const NO_BODY: HttpBodyProvider&lt;HttpBodyContent&gt; = <span class="fstat-no" title="function not covered" >() =</span>&gt; <span class="cstat-no" title="statement not covered" >Promise.reject(new Error("No Body Available"))</span>
+export const NO_BODY: HttpBodyProvider&lt;any&gt; = <span class="fstat-no" title="function not covered" >() =</span>&gt; <span class="cstat-no" title="statement not covered" >Promise.reject(new Error("No Body Available"))</span>
 &nbsp;
 /**
  * An interface defining the behavior of an HTTP Request
  */
-export interface HttpRequest&lt;T extends HttpBodyContent&gt; {
+export interface HttpRequest&lt;T&gt; {
     path: string
     method: HttpMethod
     headers: HttpHeaders
@@ -506,13 +491,13 @@ export interface HttpRequest&lt;T extends HttpBodyContent&gt; {
      * 
      * @returns An initialized {@link HttpResponse}
      */
-    respond: &lt;U extends HttpBodyContent&gt;(status: number, bodyProvider?: HttpBodyProvider&lt;U&gt;) =&gt; HttpResponse&lt;U&gt;
+    respond: &lt;U&gt;(status: number, bodyProvider?: HttpBodyProvider&lt;T&gt;) =&gt; HttpResponse&lt;U&gt;
 }
 &nbsp;
 /**
  * An interface defining the shape of an HTTP Response
  */
-export interface HttpResponse&lt;T extends HttpBodyContent&gt; {
+export interface HttpResponse&lt;T&gt; {
     status: number
     headers: HttpHeaders
     hasBody: boolean
@@ -528,7 +513,7 @@ export interface HttpResponse&lt;T extends HttpBodyContent&gt; {
 /**
  * Simple type for contracting the async model for an HTTP request/response operation
  */
-export type HttpHandler = (request: HttpRequest&lt;HttpBodyContent&gt;) =&gt; Promise&lt;HttpResponse&lt;HttpBodyContent&gt;&gt;
+export type HttpHandler&lt;T, U&gt; = (request: HttpRequest&lt;T&gt;) =&gt; Promise&lt;HttpResponse&lt;U&gt;&gt;
 &nbsp;
 /**
  * Simple interface for defining middleware operation
@@ -551,10 +536,10 @@ export interface HttpMiddleware {
      * @param request The {@link httpRequest} being processed
      * @param next The next {@link HttpMiddleware} in the chain if present
      */
-    handle: HttpHandler
+    handle: HttpHandler&lt;any | any[] | undefined, any | any[] | undefined&gt;
 }
 &nbsp;
-class NoContentResponse implements HttpResponse&lt;HttpBodyContent&gt; {
+class NoContentResponse implements HttpResponse&lt;undefined&gt; {
     readonly status: number = <span class="cstat-no" title="statement not covered" >204</span>
     readonly headers: HttpHeaders = <span class="cstat-no" title="statement not covered" >emptyHeaders()</span>
     readonly hasBody: boolean = <span class="cstat-no" title="statement not covered" >false</span>
@@ -564,11 +549,11 @@ class NoContentResponse implements HttpResponse&lt;HttpBodyContent&gt; {
 /**
  * Internal error response
  */
-class ErrorResponse implements HttpResponse&lt;HttpBodyContent&gt; {
+class ErrorResponse implements HttpResponse&lt;undefined&gt; {
     readonly status: number
     readonly headers: HttpHeaders = emptyHeaders()
     readonly hasBody: boolean = false
-    readonly body: HttpBodyProvider&lt;any&gt; = NO_BODY
+    readonly body: HttpBodyProvider&lt;undefined&gt; = NO_BODY
 &nbsp;
     constructor(status: number) {
         this.status = status
@@ -580,7 +565,7 @@ class ErrorResponse implements HttpResponse&lt;HttpBodyContent&gt; {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2023-08-09T03:27:54.886Z
+                at 2023-09-19T03:31:09.285Z
             </div>
         <script src="../prettify.js"></script>
         <script>

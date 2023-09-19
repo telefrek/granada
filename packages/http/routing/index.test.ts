@@ -5,7 +5,7 @@ import { createRouter } from "./index";
 describe('verify router', () => {
     test('A router should not accept invalid templates', () => {
         const router = createRouter()
-        const handler: HttpHandler = (_request) => Promise.reject("invalid")
+        const handler: HttpHandler<any, any> = (_request) => Promise.reject("invalid")
 
         expect(() => router.register("/", handler)).toThrowError()
         expect(() => router.register("/...", handler)).toThrowError()
@@ -24,7 +24,7 @@ describe('verify router', () => {
 
     test('A router should accept valid templates', () => {
         const router = createRouter()
-        const handler: HttpHandler = (_request) => Promise.reject("invalid")
+        const handler: HttpHandler<any, any> = (_request) => Promise.reject("invalid")
 
         router.register("/valid", handler)
         router.register("/this/is/a/valid/handler/", handler)
@@ -38,7 +38,7 @@ describe('verify router', () => {
 
     test('A router should accept a top level terminal', () => {
         const router = createRouter()
-        const handler: HttpHandler = (_request) => Promise.reject("invalid")
+        const handler: HttpHandler<any, any> = (_request) => Promise.reject("invalid")
 
         router.register("/**", handler)
 
@@ -50,7 +50,7 @@ describe('verify router', () => {
 
     test('A router should accept a top level wildcard', () => {
         const router = createRouter()
-        const handler: HttpHandler = (_request) => Promise.reject("invalid")
+        const handler: HttpHandler<any, any> = (_request) => Promise.reject("invalid")
 
         router.register("/*", handler)
 

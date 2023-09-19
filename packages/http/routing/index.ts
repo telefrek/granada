@@ -2,7 +2,7 @@
  * Package containing all of the routing information for associating a given path/method combination with a handler
  */
 
-import { HTTP_METHODS, HttpBodyContent, HttpHandler, HttpMethod, HttpMiddleware, HttpRequest, HttpResponse, httpError } from "../core"
+import { HTTP_METHODS, HttpHandler, HttpMethod, HttpMiddleware, HttpRequest, HttpResponse, httpError } from "../core"
 
 /**
  * Custom {@link Error} raised for routing issues
@@ -27,7 +27,7 @@ export interface Router {
      * 
      * @returns A {@link HttpHandler} associtaed with the request or `undefined`
      */
-    lookup<T extends HttpBodyContent = any>(request: HttpRequest<T>): HttpHandler | undefined
+    lookup<T extends any | any[] | undefined>(request: HttpRequest<T>): HttpHandler<T, any> | undefined
 
     /**
      * Register the given {@link HttpHandler} with the template and optionally {@link HttpMethod}.
@@ -40,7 +40,7 @@ export interface Router {
      * 
      * @throws A {@link RoutingError} when there is an issue with the template syntax or overlapping routes
      */
-    register(template: string, handler: HttpHandler, method?: HttpMethod): void
+    register(template: string, handler: HttpHandler<any, any>, method?: HttpMethod): void
 
     /**
      * Binds the object to the {@link HttpHandler} objects defined in the route tree
@@ -80,7 +80,7 @@ class RoutingMiddleware implements HttpMiddleware {
         this.#next = next
     }
 
-    async handle(request: HttpRequest<HttpBodyContent>): Promise<HttpResponse<HttpBodyContent>> {
+    async handle(request: HttpRequest<any | any[] | undefined>): Promise<HttpResponse<any | any[] | undefined>> {
 
         // Check the route and invoke the handler if found
         const handler = this.#router.lookup(request)
@@ -99,7 +99,7 @@ class RoutingMiddleware implements HttpMiddleware {
 /**
  * Represents the route handler information for a given request
  */
-type RouteHandler = Record<HttpMethod, HttpHandler | undefined>
+type RouteHandler = Record<HttpMethod, HttpHandler<any, any> | undefined>
 
 /**
  * Default {@link Router} implementation that uses a tree structure to hold the mapping information
@@ -108,7 +108,7 @@ class RouterImpl implements Router {
 
     private root: RouteSegment = new RouteSegment()
 
-    lookup<T extends HttpBodyContent = any>(request: HttpRequest<T>): HttpHandler | undefined {
+    lookup<T extends any | any[] | undefined>(request: HttpRequest<T>): HttpHandler<T, any> | undefined {
         const segments = request.path.replace(/^\//, "").replace(/\/$/, "").split("/")
         if (segments.length > 0) {
             let current = this.root
@@ -162,7 +162,7 @@ class RouterImpl implements Router {
         }
     }
 
-    register(template: string, handler: HttpHandler, method?: HttpMethod): void {
+    register(template: string, handler: HttpHandler<any, any>, method?: HttpMethod): void {
         // verify the template matches
         if (!TEMPLATE_REGEX.test(template)) {
             throw new RoutingError("Template is not valid")
