@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">66.66% </span>
+                <span class="strong">75% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>10/15</span>
+                <span class='fraction'>12/16</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>6/6</span>
+                <span class='fraction'>8/8</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>3/3</span>
+                <span class='fraction'>4/4</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">64.28% </span>
+                <span class="strong">71.42% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>9/14</span>
+                <span class='fraction'>10/14</span>
             </div>
         
             
@@ -127,7 +127,14 @@
 <a name='L62'></a><a href='#L62'>62</a>
 <a name='L63'></a><a href='#L63'>63</a>
 <a name='L64'></a><a href='#L64'>64</a>
-<a name='L65'></a><a href='#L65'>65</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -149,22 +156,29 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -195,7 +209,7 @@
 /**
  * Represents valid MediaType values including parameters
  */
-export const MEDIA_TYPE_REGEX = /^(application|text|image|audio|video|multipart|message)\/([-\w.]+)(\+[-\w.]+)?((;\s*[-\w]+=[-\w.]+)*)?$/
+export const MEDIA_TYPE_REGEX = /^(application|text|image|audio|video|model|font|multipart|message)\/(vnd\.|prs\.|x\.)?([-\w.]+)(\+[-\w]+)?((;\s*[-\w.]+\s*=\s*(\"[-\w:./]+\"|[-\w:./]+)\s*)*)?$/
 &nbsp;
 /**
  * The official composite types
@@ -205,7 +219,12 @@ export type CompositeMediaTypes = "multipart" | "message"
 /**
  * The simple and composite type set for all top level MediaTypes
  */
-export type TopLevelMediaTypes = "application" | "text" | "image" | "audio" | "video" | CompositeMediaTypes
+export type TopLevelMediaTypes = "application" | "text" | "image" | "audio" | "video" | "model" | "font" | CompositeMediaTypes
+&nbsp;
+/**
+ * Supported media tree types
+ */
+export type MediaTreeTypes = "vnd" | "prs" | "x"
 &nbsp;
 /**
  * Attempts to validate and parse the media type
@@ -222,13 +241,14 @@ export function parseMediaType(mediaType: string): MediaType | undefined {
         if (typeInfo) {
             return {
                 type: typeInfo[1] as TopLevelMediaTypes,
-                subType: typeInfo[2],
-                suffix: typeInfo[3] ? typeInfo[3].slice(1) : undefined,
-                parameters: new Map((typeInfo[4] ?? "").split(';').filter(p =&gt; p).map(p =&gt; &lt;[string, string]&gt;p.trim().split('=')))
+                tree: typeInfo[2] ? typeInfo[2].slice(0, -1) as MediaTreeTypes : undefined,
+                subType: typeInfo[3],
+                suffix: typeInfo[4] ? typeInfo[4].slice(1) : undefined,
+                parameters: new Map((typeInfo[5] ?? "").split(';').filter(p =&gt; p).map(p =&gt; &lt;[string, string]&gt;p.trim().split('=').map(s =&gt; s.trim())))
             }
         }
     }
-<span class="cstat-no" title="statement not covered" >    return</span>
+    return
 }
 &nbsp;
 /**
@@ -238,6 +258,7 @@ export function parseMediaType(mediaType: string): MediaType | undefined {
  */
 export interface MediaType {
     type: TopLevelMediaTypes
+    tree?: MediaTreeTypes
     subType?: string
     suffix?: string
     parameters: Map&lt;string, string&gt;
@@ -262,7 +283,7 @@ export class MessageMediaType implements CompositeMediaType {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2023-09-22T04:41:21.851Z
+                at 2023-09-22T15:14:39.421Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

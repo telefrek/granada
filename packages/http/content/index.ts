@@ -2,7 +2,7 @@
 /**
  * Represents valid MediaType values including parameters
  */
-export const MEDIA_TYPE_REGEX = /^(application|text|image|audio|video|multipart|message)\/([-\w.]+)(\+[-\w.]+)?((;\s*[-\w]+=[-\w.]+)*)?$/
+export const MEDIA_TYPE_REGEX = /^(application|text|image|audio|video|model|font|multipart|message)\/(vnd\.|prs\.|x\.)?([-\w.]+)(\+[-\w]+)?((;\s*[-\w.]+\s*=\s*(\"[-\w:./]+\"|[-\w:./]+)\s*)*)?$/
 
 /**
  * The official composite types
@@ -12,7 +12,12 @@ export type CompositeMediaTypes = "multipart" | "message"
 /**
  * The simple and composite type set for all top level MediaTypes
  */
-export type TopLevelMediaTypes = "application" | "text" | "image" | "audio" | "video" | CompositeMediaTypes
+export type TopLevelMediaTypes = "application" | "text" | "image" | "audio" | "video" | "model" | "font" | CompositeMediaTypes
+
+/**
+ * Supported media tree types
+ */
+export type MediaTreeTypes = "vnd" | "prs" | "x"
 
 /**
  * Attempts to validate and parse the media type
@@ -29,9 +34,10 @@ export function parseMediaType(mediaType: string): MediaType | undefined {
         if (typeInfo) {
             return {
                 type: typeInfo[1] as TopLevelMediaTypes,
-                subType: typeInfo[2],
-                suffix: typeInfo[3] ? typeInfo[3].slice(1) : undefined,
-                parameters: new Map((typeInfo[4] ?? "").split(';').filter(p => p).map(p => <[string, string]>p.trim().split('=')))
+                tree: typeInfo[2] ? typeInfo[2].slice(0, -1) as MediaTreeTypes : undefined,
+                subType: typeInfo[3],
+                suffix: typeInfo[4] ? typeInfo[4].slice(1) : undefined,
+                parameters: new Map((typeInfo[5] ?? "").split(';').filter(p => p).map(p => <[string, string]>p.trim().split('=').map(s => s.trim())))
             }
         }
     }
@@ -45,6 +51,7 @@ export function parseMediaType(mediaType: string): MediaType | undefined {
  */
 export interface MediaType {
     type: TopLevelMediaTypes
+    tree?: MediaTreeTypes
     subType?: string
     suffix?: string
     parameters: Map<string, string>
