@@ -1,6 +1,16 @@
-import { HttpHandler, HttpMethod, HttpResponse, emptyHeaders } from "../core";
+import { HttpHandler, HttpMethod, HttpRequest, HttpResponse, emptyHeaders } from "../core";
 import { createRouter } from "./index";
 
+function request<T>(path: string, method: HttpMethod = HttpMethod.GET): HttpRequest<T>{
+    return { path, 
+        method: method, 
+        headers: emptyHeaders(), 
+        hasBody: false, 
+        body: () => Promise.reject("no"), 
+        readable: () => undefined,
+        respond: <U>() => <HttpResponse<U>>{} 
+    }
+}
 
 describe('verify router', () => {
     test('A router should not accept invalid templates', () => {
@@ -33,7 +43,7 @@ describe('verify router', () => {
         router.register("/terminal/**", handler)
         router.register("/wildcards/*/should/be/{accepted}/**", handler)
 
-        expect(router.lookup({ path: "/valid", method: HttpMethod.GET, headers: emptyHeaders(), hasBody: false, body: () => Promise.reject("no"), respond: () => <HttpResponse<any>>{} })).not.toBeUndefined()
+        expect(router.lookup(request("/valid"))).not.toBeUndefined()
     })
 
     test('A router should accept a top level terminal', () => {
@@ -42,9 +52,9 @@ describe('verify router', () => {
 
         router.register("/**", handler)
 
-        expect(router.lookup({ path: "/foo", method: HttpMethod.GET, headers: emptyHeaders(), hasBody: false, body: () => Promise.reject("no"), respond: () => <HttpResponse<any>>{} })).not.toBeUndefined()
-        expect(router.lookup({ path: "/foo/bar", method: HttpMethod.GET, headers: emptyHeaders(), hasBody: false, body: () => Promise.reject("no"), respond: () => <HttpResponse<any>>{} })).not.toBeUndefined()
-        expect(router.lookup({ path: "/foo/bar/baz", method: HttpMethod.GET, headers: emptyHeaders(), hasBody: false, body: () => Promise.reject("no"), respond: () => <HttpResponse<any>>{} })).not.toBeUndefined()
+        expect(router.lookup(request("/foo"))).not.toBeUndefined()
+        expect(router.lookup(request("/foo/bar"))).not.toBeUndefined()
+        expect(router.lookup(request("/foo/bar/baz"))).not.toBeUndefined()
 
     })
 
@@ -54,7 +64,7 @@ describe('verify router', () => {
 
         router.register("/*", handler)
 
-        expect(router.lookup({ path: "/bar/baz", method: HttpMethod.GET, headers: emptyHeaders(), hasBody: false, body: () => Promise.reject("no"), respond: () => <HttpResponse<any>>{} })).toBeUndefined()
-        expect(router.lookup({ path: "/bar", method: HttpMethod.GET, headers: emptyHeaders(), hasBody: false, body: () => Promise.reject("no"), respond: () => <HttpResponse<any>>{} })).not.toBeUndefined()
+        expect(router.lookup(request("/bar/baz"))).toBeUndefined()
+        expect(router.lookup(request("/bar"))).not.toBeUndefined()
     })
 });

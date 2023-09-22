@@ -37,16 +37,16 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">71.42% </span>
+                <span class="strong">75% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>5/7</span>
+                <span class='fraction'>6/8</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">80.76% </span>
+                <span class="strong">81.48% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>21/26</span>
+                <span class='fraction'>22/27</span>
             </div>
         
             
@@ -228,7 +228,20 @@
 <a name='L163'></a><a href='#L163'>163</a>
 <a name='L164'></a><a href='#L164'>164</a>
 <a name='L165'></a><a href='#L165'>165</a>
-<a name='L166'></a><a href='#L166'>166</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L166'></a><a href='#L166'>166</a>
+<a name='L167'></a><a href='#L167'>167</a>
+<a name='L168'></a><a href='#L168'>168</a>
+<a name='L169'></a><a href='#L169'>169</a>
+<a name='L170'></a><a href='#L170'>170</a>
+<a name='L171'></a><a href='#L171'>171</a>
+<a name='L172'></a><a href='#L172'>172</a>
+<a name='L173'></a><a href='#L173'>173</a>
+<a name='L174'></a><a href='#L174'>174</a>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a>
+<a name='L177'></a><a href='#L177'>177</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -300,6 +313,15 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -397,13 +419,15 @@
  * Core package definitions and interfaces
  */
 &nbsp;
+import { Readable } from "stream"
+&nbsp;
 /**
  * Create an error {@link HttpResponse} to return
  * 
  * @param status The optional status code (default is 503)
  * @returns A new {@link HttpResponse} for that error type
  */
-export function httpError(status: number = <span class="branch-0 cbranch-no" title="branch not covered" >503)</span>: HttpResponse&lt;undefined&gt; {
+export function httpError&lt;T&gt;(status: number = <span class="branch-0 cbranch-no" title="branch not covered" >503)</span>: HttpResponse&lt;T&gt; {
     return new ErrorResponse(status)
 }
 /**
@@ -411,7 +435,7 @@ export function httpError(status: number = <span class="branch-0 cbranch-no" tit
  * 
  * @returns A new {@link HttpResponse} for no content responses
  */
-export function <span class="fstat-no" title="function not covered" >noContent(</span>): HttpResponse&lt;undefined&gt; {
+export function <span class="fstat-no" title="function not covered" >noContent&lt;</span>T&gt;(): HttpResponse&lt;T&gt; {
 <span class="cstat-no" title="statement not covered" >    return new NoContentResponse()</span>
 }
 &nbsp;
@@ -455,7 +479,7 @@ export function emptyHeaders(): HttpHeaders {
 }
 &nbsp;
 /**
- * Helper definition for 
+ * Helper definition for a method that provides the contents of the http body
  */
 export type HttpBodyProvider&lt;T&gt; = () =&gt; Promise&lt;T | T[] | undefined&gt;
 &nbsp;
@@ -464,7 +488,9 @@ export type HttpBodyProvider&lt;T&gt; = () =&gt; Promise&lt;T | T[] | undefined&
  * 
  * @returns A failed promise
  */
-export const NO_BODY: HttpBodyProvider&lt;any&gt; = <span class="fstat-no" title="function not covered" >() =</span>&gt; <span class="cstat-no" title="statement not covered" >Promise.reject(new Error("No Body Available"))</span>
+export function NO_BODY&lt;T&gt;(): HttpBodyProvider&lt;T&gt; {
+    return <span class="fstat-no" title="function not covered" >() =</span>&gt; <span class="cstat-no" title="statement not covered" >Promise.reject&lt;T&gt;(new Error("No Body Available"))</span>
+} 
 &nbsp;
 /**
  * An interface defining the behavior of an HTTP Request
@@ -475,6 +501,13 @@ export interface HttpRequest&lt;T&gt; {
     headers: HttpHeaders
     hasBody: boolean
     parameters?: Map&lt;string, string | string[]&gt;
+&nbsp;
+    /**
+     * Get the underlying readable stream if available
+     * 
+     * @returns The {@link Readable } object or undefined if not available
+     */
+    readable: () =&gt; Readable | undefined
 &nbsp;
     /**
      * Get the body of the request
@@ -491,7 +524,7 @@ export interface HttpRequest&lt;T&gt; {
      * 
      * @returns An initialized {@link HttpResponse}
      */
-    respond: &lt;U&gt;(status: number, bodyProvider?: HttpBodyProvider&lt;T&gt;) =&gt; HttpResponse&lt;U&gt;
+    respond: &lt;U&gt;(status: number, bodyProvider?: HttpBodyProvider&lt;U&gt;) =&gt; HttpResponse&lt;U&gt;
 }
 &nbsp;
 /**
@@ -536,24 +569,24 @@ export interface HttpMiddleware {
      * @param request The {@link httpRequest} being processed
      * @param next The next {@link HttpMiddleware} in the chain if present
      */
-    handle: HttpHandler&lt;any | any[] | undefined, any | any[] | undefined&gt;
+    handle: HttpHandler&lt;unknown, unknown&gt;
 }
 &nbsp;
-class NoContentResponse implements HttpResponse&lt;undefined&gt; {
+class NoContentResponse implements HttpResponse&lt;unknown&gt; {
     readonly status: number = <span class="cstat-no" title="statement not covered" >204</span>
     readonly headers: HttpHeaders = <span class="cstat-no" title="statement not covered" >emptyHeaders()</span>
     readonly hasBody: boolean = <span class="cstat-no" title="statement not covered" >false</span>
-    readonly body: HttpBodyProvider&lt;any&gt; = <span class="cstat-no" title="statement not covered" >NO_BODY</span>
+    readonly body: HttpBodyProvider&lt;any&gt; = <span class="cstat-no" title="statement not covered" >NO_BODY()</span>
 }
 &nbsp;
 /**
  * Internal error response
  */
-class ErrorResponse implements HttpResponse&lt;undefined&gt; {
+class ErrorResponse&lt;T&gt; implements HttpResponse&lt;T&gt; {
     readonly status: number
     readonly headers: HttpHeaders = emptyHeaders()
     readonly hasBody: boolean = false
-    readonly body: HttpBodyProvider&lt;undefined&gt; = NO_BODY
+    readonly body: HttpBodyProvider&lt;T&gt; = NO_BODY()
 &nbsp;
     constructor(status: number) {
         this.status = status
@@ -565,7 +598,7 @@ class ErrorResponse implements HttpResponse&lt;undefined&gt; {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2023-09-19T03:31:09.285Z
+                at 2023-09-22T02:44:00.833Z
             </div>
         <script src="../prettify.js"></script>
         <script>

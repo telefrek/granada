@@ -10,6 +10,7 @@ import EventEmitter from "events";
 import * as http2 from "http2";
 import { HttpBodyProvider, HttpHeaders, HttpMethod, HttpMiddleware, HttpRequest, HttpResponse, NO_BODY, emptyHeaders } from "./core";
 import { Router, createRouter, routingMiddleware } from "./routing";
+import { Readable } from 'stream';
 
 /**
  * Set of supported events on an {@link HttpServer}
@@ -186,6 +187,10 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
                 }, { endStream: true })
             }
         })
+
+        this.#server.on('request', (request, response) => {
+
+        })
     }
 
     listen(port: number): void {
@@ -240,7 +245,7 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
     }
 }
 
-class Http2Request<T extends any | any[]  |undefined> implements HttpRequest<T> {
+class Http2Request<T> implements HttpRequest<T> {
 
     private stream: http2.ServerHttp2Stream
     private tracer: Tracer
@@ -251,7 +256,8 @@ class Http2Request<T extends any | any[]  |undefined> implements HttpRequest<T> 
     hasBody: boolean
     parameters?: Map<string, string | string[]> | undefined
     body: HttpBodyProvider<T>
-    respond: (status: number, bodyProvider?: HttpBodyProvider<T>) => HttpResponse<any>
+    readable: () => Readable | undefined
+    respond: <U>(status: number, bodyProvider?: HttpBodyProvider<U>) => HttpResponse<U>
 
     constructor(stream: http2.ServerHttp2Stream, headers: http2.IncomingHttpHeaders, tracer: Tracer) {
         this.stream = stream
@@ -329,10 +335,11 @@ class Http2Request<T extends any | any[]  |undefined> implements HttpRequest<T> 
             }
         } else {
             this.hasBody = false
-            this.body = NO_BODY
+            this.body = NO_BODY()
         }
 
-        this.respond = (status: number, bodyProvider?: HttpBodyProvider<T>) => new Http2Response(this.stream, status, bodyProvider)
+        this.respond = <U>(status: number, bodyProvider?: HttpBodyProvider<U>) => new Http2Response<U>(this.stream, status, bodyProvider)
+        this.readable = () => this.stream.readableEnded ? undefined : this.stream
     }
 }
 
@@ -348,7 +355,7 @@ class Http2Response<T> implements HttpResponse<T> {
         this.status = status
         this.headers = emptyHeaders()
         this.hasBody = bodyProvider !== undefined
-        this.body = bodyProvider ?? NO_BODY
+        this.body = bodyProvider ?? NO_BODY()
     }
 
 }

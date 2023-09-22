@@ -2,13 +2,15 @@
  * Core package definitions and interfaces
  */
 
+import { Readable } from "stream"
+
 /**
  * Create an error {@link HttpResponse} to return
  * 
  * @param status The optional status code (default is 503)
  * @returns A new {@link HttpResponse} for that error type
  */
-export function httpError(status: number = 503): HttpResponse<undefined> {
+export function httpError<T>(status: number = 503): HttpResponse<T> {
     return new ErrorResponse(status)
 }
 /**
@@ -16,7 +18,7 @@ export function httpError(status: number = 503): HttpResponse<undefined> {
  * 
  * @returns A new {@link HttpResponse} for no content responses
  */
-export function noContent(): HttpResponse<undefined> {
+export function noContent<T>(): HttpResponse<T> {
     return new NoContentResponse()
 }
 
@@ -60,7 +62,7 @@ export function emptyHeaders(): HttpHeaders {
 }
 
 /**
- * Helper definition for 
+ * Helper definition for a method that provides the contents of the http body
  */
 export type HttpBodyProvider<T> = () => Promise<T | T[] | undefined>
 
@@ -69,7 +71,9 @@ export type HttpBodyProvider<T> = () => Promise<T | T[] | undefined>
  * 
  * @returns A failed promise
  */
-export const NO_BODY: HttpBodyProvider<any> = () => Promise.reject(new Error("No Body Available"))
+export function NO_BODY<T>(): HttpBodyProvider<T> {
+    return () => Promise.reject<T>(new Error("No Body Available"))
+} 
 
 /**
  * An interface defining the behavior of an HTTP Request
@@ -80,6 +84,13 @@ export interface HttpRequest<T> {
     headers: HttpHeaders
     hasBody: boolean
     parameters?: Map<string, string | string[]>
+
+    /**
+     * Get the underlying readable stream if available
+     * 
+     * @returns The {@link Readable } object or undefined if not available
+     */
+    readable: () => Readable | undefined
 
     /**
      * Get the body of the request
@@ -96,7 +107,7 @@ export interface HttpRequest<T> {
      * 
      * @returns An initialized {@link HttpResponse}
      */
-    respond: <U>(status: number, bodyProvider?: HttpBodyProvider<T>) => HttpResponse<U>
+    respond: <U>(status: number, bodyProvider?: HttpBodyProvider<U>) => HttpResponse<U>
 }
 
 /**
@@ -141,24 +152,24 @@ export interface HttpMiddleware {
      * @param request The {@link httpRequest} being processed
      * @param next The next {@link HttpMiddleware} in the chain if present
      */
-    handle: HttpHandler<any | any[] | undefined, any | any[] | undefined>
+    handle: HttpHandler<unknown, unknown>
 }
 
-class NoContentResponse implements HttpResponse<undefined> {
+class NoContentResponse implements HttpResponse<unknown> {
     readonly status: number = 204
     readonly headers: HttpHeaders = emptyHeaders()
     readonly hasBody: boolean = false
-    readonly body: HttpBodyProvider<any> = NO_BODY
+    readonly body: HttpBodyProvider<any> = NO_BODY()
 }
 
 /**
  * Internal error response
  */
-class ErrorResponse implements HttpResponse<undefined> {
+class ErrorResponse<T> implements HttpResponse<T> {
     readonly status: number
     readonly headers: HttpHeaders = emptyHeaders()
     readonly hasBody: boolean = false
-    readonly body: HttpBodyProvider<undefined> = NO_BODY
+    readonly body: HttpBodyProvider<T> = NO_BODY()
 
     constructor(status: number) {
         this.status = status

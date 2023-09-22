@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">62.24% </span>
+                <span class="strong">62.37% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>61/98</span>
+                <span class='fraction'>63/101</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">35% </span>
+                <span class="strong">31.81% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>7/20</span>
+                <span class='fraction'>7/22</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">57.14% </span>
+                <span class="strong">56.52% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>12/21</span>
+                <span class='fraction'>13/23</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">62.5% </span>
+                <span class="strong">63.26% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>60/96</span>
+                <span class='fraction'>62/98</span>
             </div>
         
             
@@ -416,7 +416,14 @@
 <a name='L351'></a><a href='#L351'>351</a>
 <a name='L352'></a><a href='#L352'>352</a>
 <a name='L353'></a><a href='#L353'>353</a>
-<a name='L354'></a><a href='#L354'>354</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L354'></a><a href='#L354'>354</a>
+<a name='L355'></a><a href='#L355'>355</a>
+<a name='L356'></a><a href='#L356'>356</a>
+<a name='L357'></a><a href='#L357'>357</a>
+<a name='L358'></a><a href='#L358'>358</a>
+<a name='L359'></a><a href='#L359'>359</a>
+<a name='L360'></a><a href='#L360'>360</a>
+<a name='L361'></a><a href='#L361'>361</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -428,6 +435,7 @@
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -605,6 +613,10 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
@@ -654,6 +666,7 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -750,6 +763,7 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -781,6 +795,7 @@ import EventEmitter from "events";
 import * as http2 from "http2";
 import { HttpBodyProvider, HttpHeaders, HttpMethod, HttpMiddleware, HttpRequest, HttpResponse, NO_BODY, emptyHeaders } from "./core";
 import { Router, createRouter, routingMiddleware } from "./routing";
+import { Readable } from 'stream';
 &nbsp;
 /**
  * Set of supported events on an {@link HttpServer}
@@ -957,6 +972,10 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
                 }, { endStream: true })
             }
         })
+&nbsp;
+        this.#server.on('request', (request, response) =&gt; {
+&nbsp;
+        })
     }
 &nbsp;
     listen(port: number): void {
@@ -1011,7 +1030,7 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
     }
 }
 &nbsp;
-class Http2Request&lt;T extends any | any[]  |undefined&gt; implements HttpRequest&lt;T&gt; {
+class Http2Request&lt;T&gt; implements HttpRequest&lt;T&gt; {
 &nbsp;
     private stream: http2.ServerHttp2Stream
     private tracer: Tracer
@@ -1022,7 +1041,8 @@ class Http2Request&lt;T extends any | any[]  |undefined&gt; implements HttpReque
     hasBody: boolean
     parameters?: Map&lt;string, string | string[]&gt; | undefined
     body: HttpBodyProvider&lt;T&gt;
-    respond: (status: number, bodyProvider?: HttpBodyProvider&lt;T&gt;) =&gt; HttpResponse&lt;any&gt;
+    readable: () =&gt; Readable | undefined
+    respond: &lt;U&gt;(status: number, bodyProvider?: HttpBodyProvider&lt;U&gt;) =&gt; HttpResponse&lt;U&gt;
 &nbsp;
     constructor(stream: http2.ServerHttp2Stream, headers: http2.IncomingHttpHeaders, tracer: Tracer) {
         this.stream = stream
@@ -1100,10 +1120,11 @@ class Http2Request&lt;T extends any | any[]  |undefined&gt; implements HttpReque
             }
         } else <span class="missing-if-branch" title="else path not taken" >E</span>{
 <span class="cstat-no" title="statement not covered" >            this.hasBody = false</span>
-<span class="cstat-no" title="statement not covered" >            this.body = NO_BODY</span>
+<span class="cstat-no" title="statement not covered" >            this.body = NO_BODY()</span>
         }
 &nbsp;
-        this.respond = (status: number, bodyProvider?: HttpBodyProvider&lt;T&gt;) =&gt; new Http2Response(this.stream, status, bodyProvider)
+        this.respond = &lt;U&gt;(status: number, bodyProvider?: HttpBodyProvider&lt;U&gt;) =&gt; new Http2Response&lt;U&gt;(this.stream, status, bodyProvider)
+        this.readable = <span class="fstat-no" title="function not covered" >() =</span>&gt; <span class="cstat-no" title="statement not covered" >this.stream.readableEnded ? undefined : this.stream</span>
     }
 }
 &nbsp;
@@ -1119,7 +1140,7 @@ class Http2Response&lt;T&gt; implements HttpResponse&lt;T&gt; {
         this.status = status
         this.headers = emptyHeaders()
         this.hasBody = bodyProvider !== undefined
-        this.body = bodyProvider ?? <span class="branch-1 cbranch-no" title="branch not covered" >NO_BODY</span>
+        this.body = bodyProvider ?? <span class="branch-1 cbranch-no" title="branch not covered" >NO_BODY()</span>
     }
 &nbsp;
 }</pre></td></tr></table></pre>
@@ -1129,7 +1150,7 @@ class Http2Response&lt;T&gt; implements HttpResponse&lt;T&gt; {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2023-09-19T03:31:09.285Z
+                at 2023-09-22T02:44:00.833Z
             </div>
         <script src="../prettify.js"></script>
         <script>
