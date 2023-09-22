@@ -73,7 +73,7 @@ export type HttpBodyProvider<T> = () => Promise<T | T[] | undefined>
  */
 export function NO_BODY<T>(): HttpBodyProvider<T> {
     return () => Promise.reject<T>(new Error("No Body Available"))
-} 
+}
 
 /**
  * An interface defining the behavior of an HTTP Request

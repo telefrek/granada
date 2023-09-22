@@ -14,7 +14,9 @@
         "forceConsistentCasingInFileNames": true,
         "declaration": true,
         "paths": {
-            "@telefrek/*": ["./packages/*/"]
+            "@telefrek/*": [
+                "./packages/*/"
+            ]
         }
     }
 }

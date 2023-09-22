@@ -1,14 +1,15 @@
 import { HttpHandler, HttpMethod, HttpRequest, HttpResponse, emptyHeaders } from "../core";
 import { createRouter } from "./index";
 
-function request<T>(path: string, method: HttpMethod = HttpMethod.GET): HttpRequest<T>{
-    return { path, 
-        method: method, 
-        headers: emptyHeaders(), 
-        hasBody: false, 
-        body: () => Promise.reject("no"), 
+function request<T>(path: string, method: HttpMethod = HttpMethod.GET): HttpRequest<T> {
+    return {
+        path,
+        method: method,
+        headers: emptyHeaders(),
+        hasBody: false,
+        body: () => Promise.reject("no"),
         readable: () => undefined,
-        respond: <U>() => <HttpResponse<U>>{} 
+        respond: <U>() => <HttpResponse<U>>{}
     }
 }
 

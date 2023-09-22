@@ -1,7 +1,7 @@
 /**
  * Helper interface for defining structured events that will be emitted
  */
-export interface Emitter<E extends any> {
+export interface Emitter<E> {
 
     /**
      * Match all EventEmitter.on functionality
