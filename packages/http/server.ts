@@ -11,6 +11,7 @@ import * as http2 from "http2";
 import { HttpBodyProvider, HttpHeaders, HttpMethod, HttpMiddleware, HttpRequest, HttpResponse, NO_BODY, emptyHeaders } from "./core";
 import { Router, createRouter, routingMiddleware } from "./routing";
 import { Readable } from 'stream';
+import { MediaType, parseContents, parseMediaType } from './content';
 
 /**
  * Set of supported events on an {@link HttpServer}
@@ -287,7 +288,14 @@ class Http2Request<T> implements HttpRequest<T> {
             rootSpan.setAttribute(`http.header.${key}`, headers[key]!)
         }
 
-        if (!stream.readableEnded) {
+        let mediaType: MediaType | undefined
+
+        // Check for Conntent-Type
+        if (headers['content-type']) {
+            mediaType = parseMediaType(headers['content-type'])
+        }
+
+        if (!stream.readableEnded && mediaType) {
             this.hasBody = true
             this.body = async () => {
                 // Get the previous span
@@ -304,27 +312,7 @@ class Http2Request<T> implements HttpRequest<T> {
                             throw new Error("Underlying stream was closed");
                         }
 
-                        // TODO: Replace this with content type parsing
-                        return new Promise<T>((resolve, reject) => {
-
-                            let data = "";
-
-                            this.stream.on('data', (chunk) => {
-                                if (typeof chunk === "string") {
-                                    data += chunk;
-                                } else {
-                                    data += chunk.toString("utf-8");
-                                }
-                            }).once('end', () => {
-                                try {
-                                    resolve(JSON.parse(data));
-                                } catch (err) {
-                                    reject(err);
-                                } finally {
-                                }
-                            });
-
-                        });
+                        return parseContents<T>(mediaType!, stream)()
                     });
                 } finally {
                     // Restore context as needed
