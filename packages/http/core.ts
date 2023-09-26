@@ -85,6 +85,7 @@ export interface HttpRequest<T> {
     hasBody: boolean
     parameters?: Map<string, string | string[]>
 
+
     /**
      * Get the underlying readable stream if available
      * 
@@ -123,6 +124,11 @@ export interface HttpResponse<T> {
      * @returns A deferred method for reading the body
      */
     body: HttpBodyProvider<T>
+
+    /**
+     * Method that should be called when the system is done modifying the response and it's ready to send
+     */
+    finish: () => void
 }
 
 
@@ -160,6 +166,8 @@ class NoContentResponse implements HttpResponse<unknown> {
     readonly headers: HttpHeaders = emptyHeaders()
     readonly hasBody: boolean = false
     readonly body: HttpBodyProvider<any> = NO_BODY()
+
+    finish: () => void = () => { }
 }
 
 /**
@@ -173,5 +181,9 @@ class ErrorResponse<T> implements HttpResponse<T> {
 
     constructor(status: number) {
         this.status = status
+    }
+
+    finish(): void {
+
     }
 }

@@ -2,7 +2,7 @@
  * HTTP Server implementation
  */
 
-import { SpanKind, Tracer, context, trace } from '@opentelemetry/api';
+import { SpanKind, Tracer, Span, context, trace } from '@opentelemetry/api';
 import { SemanticAttributes } from '@opentelemetry/semantic-conventions';
 import { Emitter } from "@telefrek/core/events";
 import { LifecycleEvents, registerShutdown } from "@telefrek/core/lifecycle";
@@ -181,6 +181,8 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
                 } else {
                     stream.respond(headers, { endStream: true })
                 }
+
+                response.finish()
             } catch (err) {
                 stream.respond({
                     ':status': 503,
@@ -320,34 +322,37 @@ class Http2Request<T> implements HttpRequest<T> {
                     if (previousContext && previousSpan) {
                         trace.setSpan(previousContext, previousSpan);
                     }
-
-                    rootSpan.end()
                 }
             }
         } else {
             this.hasBody = false
             this.body = NO_BODY()
-            rootSpan.end()
         }
 
-        this.respond = <U>(status: number, bodyProvider?: HttpBodyProvider<U>) => new Http2Response<U>(this.stream, status, bodyProvider)
+        this.respond = <U>(status: number, bodyProvider?: HttpBodyProvider<U>) => new Http2Response<U>(this.stream, status, bodyProvider, rootSpan)
         this.readable = () => this.stream.readableEnded ? undefined : this.stream
     }
 }
 
 class Http2Response<T> implements HttpResponse<T> {
-    private stream: http2.Http2Stream
+    #stream: http2.Http2Stream
+    #span?: Span
     status: number
     headers: HttpHeaders
     hasBody: boolean
     body: HttpBodyProvider<T>
 
-    constructor(stream: http2.Http2Stream, status: number, bodyProvider?: HttpBodyProvider<T>) {
-        this.stream = stream
+    constructor(stream: http2.Http2Stream, status: number, bodyProvider?: HttpBodyProvider<T>, span?: Span) {
+        this.#stream = stream
         this.status = status
         this.headers = emptyHeaders()
         this.hasBody = bodyProvider !== undefined
         this.body = bodyProvider ?? NO_BODY()
+        this.#span = span
     }
 
+    finish(): void {
+        // TODO: Move all the write stuff here...
+        this.#span?.end()
+    }
 }
