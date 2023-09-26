@@ -279,8 +279,9 @@ class Http2Request<T> implements HttpRequest<T> {
                 [SemanticAttributes.HTTP_METHOD]: this.method,
                 [SemanticAttributes.NET_PEER_IP]: remoteAddr,
                 [SemanticAttributes.NET_PEER_PORT]: remotePort,
-                [SemanticAttributes.NET_HOST_IP]: addr
-            }
+                [SemanticAttributes.NET_HOST_IP]: addr,
+                [SemanticAttributes.HTTP_FLAVOR]: "2.0"
+            },
         }, spanContext)
 
         for (const key in headers) {
@@ -319,11 +320,14 @@ class Http2Request<T> implements HttpRequest<T> {
                     if (previousContext && previousSpan) {
                         trace.setSpan(previousContext, previousSpan);
                     }
+
+                    rootSpan.end()
                 }
             }
         } else {
             this.hasBody = false
             this.body = NO_BODY()
+            rootSpan.end()
         }
 
         this.respond = <U>(status: number, bodyProvider?: HttpBodyProvider<U>) => new Http2Response<U>(this.stream, status, bodyProvider)

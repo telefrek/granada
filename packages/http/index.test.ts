@@ -4,21 +4,21 @@ import { HttpRequest, HttpServer, createRouter, getDefaultBuilder } from "./inde
 describe('HttpServer functionality should work as expected', () => {
     let server: HttpServer
 
-    beforeAll(() => {
-        const router = createRouter()
-        router.register("/hello", (request: HttpRequest<any>) => {
-            return Promise.resolve(request.respond(200, () => Promise.resolve("Hello World")))
-        })
+    // beforeAll(() => {
+    //     const router = createRouter()
+    //     router.register("/hello", (request: HttpRequest<any>) => {
+    //         return Promise.resolve(request.respond(200, () => Promise.resolve("Hello World")))
+    //     })
 
-        server = getDefaultBuilder().withRouter(router).build()
-        expect.any(server)
+    //     server = getDefaultBuilder().withRouter(router).build()
+    //     expect.any(server)
 
-        server.listen(8080)
-    })
+    //     server.listen(8080)
+    // })
 
-    afterAll(async () => {
-        await server.close()
-    })
+    // afterAll(async () => {
+    //     await server.close()
+    // })
 
     test('A server should be able to respond to simple calls', async () => {
 

@@ -1,0 +1,27 @@
+{
+    "name": "@examples/simple-tracing",
+    "version": "1.0.0",
+    "description": "This is a simple test for tracing integration",
+    "main": "index.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "compile": "rm -rf dist/* && tsc -p tsconfig.pkg.json"
+    },
+    "keywords": [],
+    "author": "nathan@telefrek.com",
+    "license": "MIT",
+    "dependencies": {
+        "@telefrek/http": "^1.0.0",
+        "@opentelemetry/sdk-trace-node": "^1.17.0",
+        "@opentelemetry/auto-instrumentations-node": "^0.39.2",
+        "@opentelemetry/exporter-trace-otlp-proto": "^0.43.0",
+        "@opentelemetry/exporter-metrics-otlp-proto": "^0.43.0",
+        "@opentelemetry/sdk-node": "^0.43.0",
+        "@opentelemetry/sdk-metrics": "^1.17.0"
+    },
+    "devDependencies": {
+        "@types/node": "^20.2.5",
+        "ts-node": "^10.9.1",
+        "typescript": "^5.1.3"
+    }
+}
