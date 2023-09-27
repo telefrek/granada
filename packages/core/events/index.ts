@@ -44,6 +44,6 @@ export interface Emitter<E> {
      */
     emit<T extends keyof E>(
         event: T,
-        ...args: Parameters<E[T]>
+        ...args: Parameters<any>
     ): boolean
 }

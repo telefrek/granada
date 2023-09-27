@@ -24,11 +24,11 @@ abstract class AbstractLimitAlgorithm extends EventEmitter implements LimitAlgor
     #limit: number
 
     constructor(initialLimit: number) {
+        super()
         if (initialLimit <= 0) {
             throw new Error(`Invalid initialLimit: ${initialLimit}`)
         }
 
-        super()
         this.#limit = initialLimit
     }
 
