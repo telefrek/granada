@@ -18,9 +18,9 @@ export function delay(milliseconds: number): Promise<void> {
  */
 export class Timer {
 
-    running: boolean = false
-    started: bigint = 0n
-    stopped: bigint = 0n
+    running = false
+    started = 0n
+    stopped = 0n
 
     /**
      * Starts the timer

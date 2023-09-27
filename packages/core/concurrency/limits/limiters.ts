@@ -124,7 +124,7 @@ class SimpleLimiter extends AbstractLimiter {
      * @param limitAlgorithm The {@link LimitAlgorithm} to use
      * @param initialLimit The optional initial limit (default is 1)
      */
-    constructor(limitAlgorithm: LimitAlgorithm, initialLimit: number = 1) {
+    constructor(limitAlgorithm: LimitAlgorithm, initialLimit = 1) {
         super(limitAlgorithm, initialLimit)
 
         this.#semaphore = new Semaphore(initialLimit)
@@ -190,6 +190,6 @@ class SimpleLimiter extends AbstractLimiter {
  * @param initialLimit The initial limit value to use (default is 1)
  * @returns A newly initialized {@link Limiter}
  */
-export function simpleLimiter(limitAlgorithm: LimitAlgorithm, initialLimit: number = 1): Limiter {
+export function simpleLimiter(limitAlgorithm: LimitAlgorithm, initialLimit = 1): Limiter {
     return new SimpleLimiter(limitAlgorithm, initialLimit)
 }

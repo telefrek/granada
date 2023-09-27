@@ -73,6 +73,7 @@ abstract class AbstractLimitAlgorithm extends EventEmitter implements LimitAlgor
  * Fixed limit that never changes
  */
 class FixedLimitAlgorithm extends AbstractLimitAlgorithm {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     protected _update(_duration: Duration, _inFlight: number, _dropped: boolean): number {
         return this.getLimit()
     }
@@ -278,10 +279,10 @@ class VegasLimitAlgorithm extends AbstractLimitAlgorithm {
     readonly #smoothing: number
     readonly #probeMultiplier: number
 
-    #estimatedLimit: number = 0
-    #probeCount: number = 0
-    #probeJitter: number = 0
-    #rttNoLoad: number = 0
+    #estimatedLimit = 0
+    #probeCount = 0
+    #probeJitter = 0
+    #rttNoLoad = 0
 
     constructor(builder: VegasLimitBuilder) {
         super(builder.limit)

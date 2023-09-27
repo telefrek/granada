@@ -159,21 +159,20 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
         this.#server = http2.createServer(options)
 
         // Register the shutdown hook
-        registerShutdown(async () => {
-            await this.close()
-        })
+        registerShutdown(() => this.close())
 
         // Hook lifecycle events
-        this.#server.on('stream', async (stream, headers, _flags) => {
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises
+        this.#server.on('stream', async (stream, headers) => {
 
             const request = new Http2Request(stream, headers, this.#tracer)
 
             // Fire middleware chains
             try {
                 const response = await this.#middleware[0].handle(request)
-                const headers = <http2.OutgoingHttpHeaders>{
+                const headers = {
                     ':status': response.status
-                }
+                } as http2.OutgoingHttpHeaders
                 if (response.hasBody) {
                     headers[http2.constants.HTTP2_HEADER_CONTENT_TYPE] = 'text/html; charset=utf-8'
                     stream.respond(headers)
@@ -191,8 +190,9 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
             }
         })
 
-        this.#server.on('request', (request, response) => {
-
+        this.#server.on('request', (_, response) => {
+            response.statusCode = 200
+            response.end("nope")
         })
     }
 
@@ -264,8 +264,8 @@ class Http2Request<T> implements HttpRequest<T> {
 
     constructor(stream: http2.ServerHttp2Stream, headers: http2.IncomingHttpHeaders, tracer: Tracer) {
         this.stream = stream
-        this.path = <string>headers[http2.constants.HTTP2_HEADER_PATH]
-        this.method = <HttpMethod>headers[http2.constants.HTTP2_HEADER_METHOD]
+        this.path = headers[http2.constants.HTTP2_HEADER_PATH] as string
+        this.method = headers[http2.constants.HTTP2_HEADER_METHOD] as HttpMethod
         this.headers = emptyHeaders()
         this.tracer = tracer
         const addr = stream.session.socket.localAddress

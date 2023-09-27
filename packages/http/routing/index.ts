@@ -27,7 +27,7 @@ export interface Router {
      * 
      * @returns A {@link HttpHandler} associtaed with the request or `undefined`
      */
-    lookup<T extends any | any[] | undefined>(request: HttpRequest<T>): HttpHandler<T, any> | undefined
+    lookup<T>(request: HttpRequest<T>): HttpHandler<T, unknown> | undefined
 
     /**
      * Register the given {@link HttpHandler} with the template and optionally {@link HttpMethod}.
@@ -40,14 +40,14 @@ export interface Router {
      * 
      * @throws A {@link RoutingError} when there is an issue with the template syntax or overlapping routes
      */
-    register(template: string, handler: HttpHandler<any, any>, method?: HttpMethod): void
+    register(template: string, handler: HttpHandler<unknown, unknown>, method?: HttpMethod): void
 
     /**
      * Binds the object to the {@link HttpHandler} objects defined in the route tree
      * 
      * @param obj The object to bind the underlying {@link HttpHandler} to
      */
-    bind(obj: any): void
+    bind(obj: unknown): void
 }
 
 /**
@@ -72,15 +72,13 @@ class RoutingMiddleware implements HttpMiddleware {
         this.#router = router
     }
 
-    get name(): string {
-        return "http.routing"
-    }
+    readonly name = "http.routing";
 
     set next(next: HttpMiddleware | undefined) {
         this.#next = next
     }
 
-    async handle(request: HttpRequest<any | any[] | undefined>): Promise<HttpResponse<any | any[] | undefined>> {
+    async handle(request: HttpRequest<unknown>): Promise<HttpResponse<unknown>> {
 
         // Check the route and invoke the handler if found
         const handler = this.#router.lookup(request)
@@ -99,7 +97,7 @@ class RoutingMiddleware implements HttpMiddleware {
 /**
  * Represents the route handler information for a given request
  */
-type RouteHandler = Record<HttpMethod, HttpHandler<any, any> | undefined>
+type RouteHandler = Record<HttpMethod, HttpHandler<unknown, unknown> | undefined>
 
 /**
  * Default {@link Router} implementation that uses a tree structure to hold the mapping information
@@ -108,7 +106,7 @@ class RouterImpl implements Router {
 
     private root: RouteSegment = new RouteSegment()
 
-    lookup<T extends any | any[] | undefined>(request: HttpRequest<T>): HttpHandler<T, any> | undefined {
+    lookup<T>(request: HttpRequest<T>): HttpHandler<T, unknown> | undefined {
         const segments = request.path.replace(/^\//, "").replace(/\/$/, "").split("/")
         if (segments.length > 0) {
             let current = this.root
@@ -162,7 +160,7 @@ class RouterImpl implements Router {
         }
     }
 
-    register(template: string, handler: HttpHandler<any, any>, method?: HttpMethod): void {
+    register(template: string, handler: HttpHandler<unknown, unknown>, method?: HttpMethod): void {
         // verify the template matches
         if (!TEMPLATE_REGEX.test(template)) {
             throw new RoutingError("Template is not valid")
@@ -209,12 +207,12 @@ class RouterImpl implements Router {
             // There is no path through here yet, safe to add
             if (current.children === undefined) {
                 current.children = []
-                const child = <RouteSegment>{
+                const child = {
                     parent: current,
                     info,
                     parameter,
                     segment: info === RouteSegmentInfo.None ? segment : undefined,
-                }
+                } as RouteSegment
 
                 current.children.push(child)
                 current = child
@@ -252,12 +250,12 @@ class RouterImpl implements Router {
                 if (match) {
                     current = match
                 } else {
-                    const child = <RouteSegment>{
+                    const child = {
                         parent: current,
                         info,
                         parameter,
                         segment: info === RouteSegmentInfo.None ? segment : undefined,
-                    }
+                    } as RouteSegment
 
                     current.children.push(child)
                     current = child
@@ -286,7 +284,7 @@ class RouterImpl implements Router {
         }
     }
 
-    bind(obj: any): void {
+    bind(obj: unknown): void {
         const routes: RouteSegment[] = [this.root]
         let current: RouteSegment
 
@@ -308,11 +306,11 @@ class RouterImpl implements Router {
     }
 }
 
-const WILDCARD: string = "*"
-const TERMINATOR: string = "**"
-const URI_SEGMENT_REGEX: RegExp = /^[a-zA-Z0-9-]+$/
-const PARAMETER_REGEX: RegExp = /^\{[a-zA-Z_$][0-9a-zA-Z_$]*\}$/
-const TEMPLATE_REGEX: RegExp = /(?:\/(?:[a-zA-Z0-9-]+|\{[a-zA-Z_$][0-9a-zA-Z_$]*\}|\*+)+)+/
+const WILDCARD = "*"
+const TERMINATOR = "**"
+const URI_SEGMENT_REGEX = /^[a-zA-Z0-9-]+$/
+const PARAMETER_REGEX = /^\{[a-zA-Z_$][0-9a-zA-Z_$]*\}$/
+const TEMPLATE_REGEX = /(?:\/(?:[a-zA-Z0-9-]+|\{[a-zA-Z_$][0-9a-zA-Z_$]*\}|\*+)+)+/
 
 /**
  * Internal enum to track {@link RouteSegment} state information
@@ -342,11 +340,11 @@ class RouteSegment {
  * @returns An empty {@link RouteHandler}
  */
 const noHandlers = (): RouteHandler =>
-    <RouteHandler>{
-        GET: undefined,
-        PUT: undefined,
-        POST: undefined,
-        PATCH: undefined,
-        DELETE: undefined,
-        OPTIONS: undefined
-    }
+({
+    GET: undefined,
+    PUT: undefined,
+    POST: undefined,
+    PATCH: undefined,
+    DELETE: undefined,
+    OPTIONS: undefined
+} as RouteHandler)

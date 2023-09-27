@@ -48,7 +48,11 @@ export function parseContents<T>(type: MediaType, buffer: Readable): HttpBodyPro
             buffer.on('data', (data: string | Buffer) => {
                 str += typeof data === "string" ? data : data.toString(encoding)
             }).on('end', () => {
-                resolve(JSON.parse(str))
+                const j: unknown = JSON.parse(str)
+                if (typeof j === "undefined")
+                    resolve(undefined)
+                else if (typeof j === "object")
+                    resolve(Array.isArray(j) ? j as T[] : j as T)
             }).on('error', (err) => {
                 reject(err)
             })
@@ -57,7 +61,7 @@ export function parseContents<T>(type: MediaType, buffer: Readable): HttpBodyPro
 
     // Return a promise for unsupported media type handling
     return () => {
-        return Promise.reject(new Error(`Unsupported media type: ${type}`))
+        return Promise.reject(new Error(`Unsupported media type: ${type.type}`))
     }
 }
 
@@ -79,7 +83,7 @@ export function parseMediaType(mediaType: string): MediaType | undefined {
                 tree: typeInfo[2] ? typeInfo[2].slice(0, -1) as MediaTreeTypes : undefined,
                 subType: typeInfo[3],
                 suffix: typeInfo[4] ? typeInfo[4].slice(1) : undefined,
-                parameters: new Map((typeInfo[5] ?? "").split(';').filter(p => p).map(p => <[string, string]>p.trim().split('=').map(s => s.trim())))
+                parameters: new Map((typeInfo[5] ?? "").split(';').filter(p => p).map(p => (p.trim().split('=').map(s => s.trim()) as [string, string])))
             }
         }
     }
@@ -129,7 +133,7 @@ export interface CompositeMediaType extends MediaType {
  */
 export class MultipartMediaType implements CompositeMediaType {
     readonly type: CompositeMediaTypes = "multipart"
-    readonly parameters: Map<string, string> = new Map()
+    readonly parameters = new Map<string, string>()
 }
 
 /**
@@ -137,5 +141,5 @@ export class MultipartMediaType implements CompositeMediaType {
  */
 export class MessageMediaType implements CompositeMediaType {
     readonly type: CompositeMediaTypes = "message"
-    readonly parameters: Map<string, string> = new Map()
+    readonly parameters = new Map<string, string>()
 }

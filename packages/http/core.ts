@@ -10,8 +10,8 @@ import { Readable } from "stream"
  * @param status The optional status code (default is 503)
  * @returns A new {@link HttpResponse} for that error type
  */
-export function httpError<T>(status: number = 503): HttpResponse<T> {
-    return new ErrorResponse(status)
+export function httpError<T>(status = 503): HttpResponse<T> {
+    return new ErrorResponse<T>(status)
 }
 /**
  * Create an empty {@link HttpResponse} to return
@@ -37,7 +37,7 @@ export enum HttpMethod {
 /**
  * Valid {@link HttpMethod} values as an array
  */
-export const HTTP_METHODS = <HttpMethod[]>[HttpMethod.GET, HttpMethod.PUT, HttpMethod.POST, HttpMethod.PATCH, HttpMethod.DELETE, HttpMethod.OPTIONS]
+export const HTTP_METHODS = [HttpMethod.GET, HttpMethod.PUT, HttpMethod.POST, HttpMethod.PATCH, HttpMethod.DELETE, HttpMethod.OPTIONS] as HttpMethod[]
 
 /**
  * Supported HTTP Versions
@@ -50,8 +50,7 @@ export enum HttpVersion {
 /**
  * HttpHeaders are collections of key, value pairs where the value can be singular or an array
  */
-export interface HttpHeaders extends Map<string, string | string[]> {
-}
+export type HttpHeaders = Map<string, string | string[]>
 
 /**
  * Create an empty set of {@link HttpHeaders}
@@ -145,7 +144,7 @@ export interface HttpMiddleware {
     /**
      * Get the name of the middleware
      */
-    get name(): string
+    name: string
 
     /**
      * Set the next middleware
@@ -161,13 +160,15 @@ export interface HttpMiddleware {
     handle: HttpHandler<unknown, unknown>
 }
 
-class NoContentResponse implements HttpResponse<unknown> {
+class NoContentResponse<T> implements HttpResponse<T> {
     readonly status: number = 204
     readonly headers: HttpHeaders = emptyHeaders()
     readonly hasBody: boolean = false
-    readonly body: HttpBodyProvider<any> = NO_BODY()
+    readonly body: HttpBodyProvider<T> = NO_BODY()
 
-    finish: () => void = () => { }
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    finish(): void {
+    }
 }
 
 /**
@@ -183,7 +184,7 @@ class ErrorResponse<T> implements HttpResponse<T> {
         this.status = status
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
     finish(): void {
-
     }
 }

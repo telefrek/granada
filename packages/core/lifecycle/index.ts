@@ -33,17 +33,17 @@ export interface LifecycleEvents {
  * 
  * @param callback The callback to invoke on a shutdown
  */
-export function registerShutdown(callback: () => void) {
+export function registerShutdown(callback: () => void | PromiseLike<void>) {
     shutdownHooks.push(callback)
 }
 
 /** Set of shutdown hooks to fire on exit */
-const shutdownHooks: (() => void)[] = []
+const shutdownHooks: (() => void | PromiseLike<void>)[] = []
 
 /** Simple method to invoke shutdowns */
 const shutdown = () => {
     // Fire all the hooks and hope for the best...
-    shutdownHooks.map(s => s())
+    Promise.all(shutdownHooks.map(async (s) => await s())).then(() => console.log("shutdown finished"), err => { console.error(`error: ${err}`) })
 }
 
 // Local process kill (ctrl+c)

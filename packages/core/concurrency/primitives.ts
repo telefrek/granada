@@ -12,7 +12,7 @@ type MutexCallback = (value: void | PromiseLike<void>) => void
  */
 export class Mutex {
 
-    #locked: boolean = false
+    #locked = false
     #callbacks: MutexCallback[] = []
 
     /**
@@ -90,10 +90,13 @@ export class Monitor {
  * @param obj The object to get a monitor for
  * @returns The {@link Monitor} associated with the object
  */
-export function getMonitor(obj: any): Monitor {
+export function getMonitor(obj: unknown): Monitor {
+    if (typeof obj !== "object" || !obj)
+        throw new Error('Trying to obtain monitor on non-object')
 
     // Get the monitor or inject it
-    return obj[MONITOR_SYMBOL] === undefined ? (obj[MONITOR_SYMBOL] = new Monitor()) : obj[MONITOR_SYMBOL] as Monitor
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+    return obj[MONITOR_SYMBOL as keyof typeof obj] === undefined ? ((obj as any)[MONITOR_SYMBOL] = new Monitor()) : obj[MONITOR_SYMBOL as keyof typeof obj] as Monitor
 }
 
 /**
@@ -101,7 +104,7 @@ export function getMonitor(obj: any): Monitor {
  */
 export class Semaphore {
     #concurrency: number
-    #running: number = 0
+    #running = 0
     #callbacks: MutexCallback[] = []
 
     /**
