@@ -190,10 +190,24 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
             }
         })
 
-        this.#server.on('request', (_, response) => {
-            response.statusCode = 200
-            response.end("nope")
-        })
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises
+        // this.#server.on('request', async (request, response) => {
+        //     const req = new Http2PlainRequest(request, this.#tracer)
+
+        //     // Fire middleware chains
+        //     try {
+        //         const resp = await this.#middleware[0].handle(req)
+        //         response.statusCode = 200
+        //         if (resp.hasBody) {
+        //             response.setHeader(http2.constants.HTTP2_HEADER_CONTENT_TYPE, 'text/html; charset=utf-8')
+        //             response.write(await resp.body() as string)
+        //         }
+        //     } catch (err) {
+        //         response.statusCode = 503
+        //     } finally {
+        //         response.end()
+        //     }
+        // })
     }
 
     listen(port: number): void {
@@ -246,6 +260,96 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
             this.#middleware.push(this.#routerMiddleware)
         }
     }
+}
+
+class Http2PlainRequest<T> implements HttpRequest<T> {
+
+    #original: http2.Http2ServerRequest
+    private tracer: Tracer
+
+    path: string
+    method: HttpMethod
+    headers: HttpHeaders
+    hasBody: boolean
+    parameters?: Map<string, string | string[]> | undefined
+    body: HttpBodyProvider<T>
+    readable: () => Readable | undefined
+    respond: <U>(status: number, bodyProvider?: HttpBodyProvider<U>) => HttpResponse<U>
+
+    constructor(req: http2.Http2ServerRequest, tracer: Tracer) {
+        this.#original = req
+        const headers = req.headers
+
+        this.path = headers[http2.constants.HTTP2_HEADER_PATH] as string
+        this.method = headers[http2.constants.HTTP2_HEADER_METHOD] as HttpMethod
+        this.headers = emptyHeaders()
+        this.tracer = tracer
+
+        const addr = req.socket.localAddress
+        const remoteAddr = req.socket.remoteAddress
+        const remotePort = req.socket.remotePort
+
+        const spanContext = context.active()
+
+        // Create the root span or this operation
+        const rootSpan = tracer.startSpan('newRequest', {
+            kind: SpanKind.SERVER,
+            attributes: {
+                [SemanticAttributes.HTTP_METHOD]: this.method,
+                [SemanticAttributes.NET_PEER_IP]: remoteAddr,
+                [SemanticAttributes.NET_PEER_PORT]: remotePort,
+                [SemanticAttributes.NET_HOST_IP]: addr,
+                [SemanticAttributes.HTTP_FLAVOR]: req.httpVersion
+            },
+        }, spanContext)
+
+        for (const key in headers) {
+            this.headers.set(key, headers[key]!)
+            rootSpan.setAttribute(`http.header.${key}`, headers[key]!)
+        }
+
+        let mediaType: MediaType | undefined
+
+        // Check for Conntent-Type
+        if (headers['content-type']) {
+            mediaType = parseMediaType(headers['content-type'])
+        }
+
+        if (!req.readableEnded && mediaType) {
+            this.hasBody = true
+            this.body = async () => {
+                // Get the previous span
+                const previousContext = context.active()
+                const previousSpan = trace.getSpan(previousContext)
+
+                try {
+                    return await context.with(spanContext, () => {
+
+                        trace.setSpan(spanContext, rootSpan);
+
+                        if (req.closed) {
+                            // TODO: Handle errors in trace
+                            throw new Error("Underlying stream was closed");
+                        }
+
+                        return parseContents<T>(mediaType!, req.stream)()
+                    });
+                } finally {
+                    // Restore context as needed
+                    if (previousContext && previousSpan) {
+                        trace.setSpan(previousContext, previousSpan);
+                    }
+                }
+            }
+        } else {
+            this.hasBody = false
+            this.body = NO_BODY()
+        }
+
+        this.respond = <U>(status: number, bodyProvider?: HttpBodyProvider<U>) => new Http2Response<U>(req.stream, status, bodyProvider, rootSpan)
+        this.readable = () => this.#original.readableEnded ? undefined : this.#original.stream
+    }
+
 }
 
 class Http2Request<T> implements HttpRequest<T> {

@@ -47,6 +47,7 @@ describe('HttpServer functionality should work as expected', () => {
             const req = client.request({ ':path': '/world' })
 
             req.on('response', (headers) => {
+                const status = headers[http2.constants.HTTP2_HEADER_STATUS]
                 if (404 !== headers[http2.constants.HTTP2_HEADER_STATUS] as any) {
                     reject(new Error(`Invalid status ${headers[http2.constants.HTTP2_HEADER_STATUS]} (${typeof headers[http2.constants.HTTP2_HEADER_STATUS]})`))
                 }
