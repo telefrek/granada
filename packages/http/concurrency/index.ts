@@ -31,9 +31,9 @@ export abstract class RateLimitingMiddleware implements HttpMiddleware {
      * 
      * @returns An optional {@link Limiter} that can be used to gate access beyond this middleware
      */
-    protected abstract _getLimit(request: HttpRequest<any>): Limiter | undefined
+    protected abstract _getLimit(request: HttpRequest<unknown>): Limiter | undefined
 
-    async handle(request: HttpRequest<any>, next?: HttpMiddleware | undefined): Promise<HttpResponse<any>> {
+    async handle(request: HttpRequest<unknown>): Promise<HttpResponse<unknown>> {
 
         // Check if we have a limit
         const limit = this._getLimit(request)
@@ -50,7 +50,7 @@ export abstract class RateLimitingMiddleware implements HttpMiddleware {
                         const response = await this.#next.handle(request)
                         operation.success()
                         return response
-                    } catch (err: any) {
+                    } catch (err: unknown) {
                         // TODO: Check for framework errors that would indicate to throw it away operation.ignore()
                         operation.dropped()
                         throw err

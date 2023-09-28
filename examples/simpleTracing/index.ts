@@ -2,11 +2,10 @@ import * as opentelemetry from '@opentelemetry/sdk-node';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto'
-import { ConsoleSpanExporter } from "@opentelemetry/sdk-trace-node"
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-proto'
 import { HttpRequest, createRouter, getDefaultBuilder } from '../../packages/http';
 
-process.env['OTEL_SERVICE_NAME'] = "granada"
+process.env.OTEL_SERVICE_NAME = "granada"
 console.log("service name = " + process.env.OTEL_SERVICE_NAME ?? "undefined")
 
 const sdk = new opentelemetry.NodeSDK({
@@ -30,7 +29,7 @@ sdk.start();
 console.log("starting server just for kicks")
 
 const router = createRouter()
-router.register("/hello", (request: HttpRequest<any>) => {
+router.register("/hello", (request: HttpRequest<unknown>) => {
     return Promise.resolve(request.respond(200, () => Promise.resolve("Hello World")))
 })
 
@@ -39,12 +38,13 @@ const server = getDefaultBuilder().withRouter(router).build()
 try {
     server.listen(8080)
 } catch (err) {
-    console.log(`error: ${err}`)
+    console.log(`error: ${(err as Error).message}`)
 } finally {
     console.log("running")
 }
 
 
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
 process.on('SIGINT', async () => {
     console.log("sigint")
     setTimeout(() => {

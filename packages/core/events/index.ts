@@ -44,6 +44,7 @@ export interface Emitter<E> {
      */
     emit<T extends keyof E>(
         event: T,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ...args: Parameters<any>
     ): boolean
 }
