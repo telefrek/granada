@@ -1,0 +1,6 @@
+{
+  "entryPoints": ["packages/*"],
+  "name": "Granada Documentation",
+  "entryPointStrategy": "packages",
+  "includeVersion": true
+}
