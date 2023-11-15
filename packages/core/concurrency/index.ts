@@ -2,6 +2,6 @@
  * Exports
  */
 
-export * from "./primitives"
+export * from "./primitives";
 
-export * from "./limits"
+export * from "./limits";
