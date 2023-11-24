@@ -4,16 +4,16 @@
   "description": "",
   "scripts": {
     "compile": "rm -rf dist/* && tsc -p tsconfig.json",
-    "docs": "typedoc --out docs"
+    "upgrade": "npx npm-check-updates -u && npm install"
   },
   "keywords": [],
   "author": "",
   "license": "MIT",
   "dependencies": {
     "@opentelemetry/api": "^1.7.0",
-    "@opentelemetry/semantic-conventions": "^1.17.1"
+    "@opentelemetry/semantic-conventions": "^1.18.1"
   },
   "devDependencies": {
-    "@opentelemetry/core": "^1.17.1"
+    "@opentelemetry/core": "^1.18.1"
   }
 }

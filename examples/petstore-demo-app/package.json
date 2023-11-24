@@ -3,12 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@testing-library/jest-dom": "^6.1.4",
-    "@testing-library/react": "^14.1.2",
-    "@testing-library/user-event": "^14.5.1",
-    "@types/jest": "^29.5.10",
-    "@types/node": "^20.10.0",
-    "@types/react-bootstrap": "^0.32.35",
     "bootstrap": "^5.3.2",
     "jest-environment-jsdom": "^29.7.0",
     "react": "^18.2.0",
@@ -25,6 +19,7 @@
     "typescript": "^5.3.2"
   },
   "scripts": {
+    "upgrade": "npx npm-check-updates -u && npm install",
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test:unit": "react-scripts test",
@@ -51,6 +46,12 @@
     ]
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.1.4",
+    "@testing-library/react": "^14.1.2",
+    "@testing-library/user-event": "^14.5.1",
+    "@types/jest": "^29.5.10",
+    "@types/node": "^20.10.0",
+    "@types/react-bootstrap": "^0.32.35",
     "@types/react": "^18.2.38",
     "@types/react-dom": "^18.2.17",
     "@typescript-eslint/eslint-plugin": "^6.12.0",
