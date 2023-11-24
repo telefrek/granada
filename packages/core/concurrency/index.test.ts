@@ -24,6 +24,11 @@ describe("Testing Concurrency", () => {
 
     let value: number = -1;
 
+    // Monitors should not be allowed on invalid items
+    expect(() => getMonitor(1)).toThrow();
+    expect(() => getMonitor(undefined)).toThrow();
+    expect(() => getMonitor(null)).toThrow();
+
     // Check the monitor is the same regardless of the number of calls
     const monitor = getMonitor(obj);
     expect(monitor).toBe(getMonitor(obj));
@@ -52,6 +57,9 @@ describe("Testing Concurrency", () => {
     const semaphore = new Semaphore(4);
     expect(semaphore.limit()).toBe(4);
     expect(semaphore.available()).toBe(4);
+
+    // Should not be able to set invalid sizes
+    expect(() => semaphore.resize(-1)).toThrow();
 
     // We should be able to get a lease right now
     expect(semaphore.tryAcquire()).toBeTruthy();

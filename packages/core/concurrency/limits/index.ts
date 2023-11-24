@@ -7,6 +7,21 @@ import { Duration } from "../../time";
 import { fixedLimit } from "./algorithms";
 import { simpleLimiter } from "./limiters";
 
+// Memoize the lookup for the first 1000 values
+const _LOG_10_LOOKUP: number[] = Array.from(Array(1000).keys()).map((k) =>
+  Math.max(1, Math.log10(k))
+);
+
+/**
+ * Memoized Log10 function for the first 1000 values capping at >= 1
+ *
+ * @param n The value to calculate the log of 10 for
+ * @returns The value of log10(n)
+ */
+export function LOG10(n: number): number {
+  return n < 1000 ? _LOG_10_LOOKUP[n] : Math.log10(n);
+}
+
 /**
  * Defines the events for the {@link LimitAlgorithm} class
  */

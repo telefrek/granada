@@ -1,24 +1,30 @@
-import { HttpHandler, HttpMethod, HttpRequest, emptyHeaders } from "../core";
+import {
+  HttpHandler,
+  HttpMethod,
+  HttpRequest,
+  HttpVersion,
+  emptyHeaders,
+  parsePath,
+} from "..";
 import { createRouter } from "./index";
 
-function request<T>(
+function request(
   path: string,
   method: HttpMethod = HttpMethod.GET
-): HttpRequest<T> {
+): HttpRequest {
   return {
-    path,
+    ...parsePath(path),
+    version: HttpVersion.HTTP1_1,
     method: method,
     headers: emptyHeaders(),
-    hasBody: false,
-    body: () => Promise.reject("no"),
+    respond: (_response) => {},
   };
 }
 
 describe("verify router", () => {
   test("A router should not accept invalid templates", () => {
     const router = createRouter();
-    const handler: HttpHandler<any, any> = (_request) =>
-      Promise.reject("invalid");
+    const handler: HttpHandler = (_request) => Promise.reject("invalid");
 
     expect(() => router.register("/", handler)).toThrowError();
     expect(() => router.register("/...", handler)).toThrowError();
@@ -38,8 +44,7 @@ describe("verify router", () => {
 
   test("A router should accept valid templates", () => {
     const router = createRouter();
-    const handler: HttpHandler<any, any> = (_request) =>
-      Promise.reject("invalid");
+    const handler: HttpHandler = (_request) => Promise.reject("invalid");
 
     router.register("/valid", handler);
     router.register("/this/is/a/valid/handler/", handler);
@@ -53,8 +58,7 @@ describe("verify router", () => {
 
   test("A router should accept a top level terminal", () => {
     const router = createRouter();
-    const handler: HttpHandler<any, any> = (_request) =>
-      Promise.reject("invalid");
+    const handler: HttpHandler = (_request) => Promise.reject("invalid");
 
     router.register("/**", handler);
 
@@ -65,8 +69,7 @@ describe("verify router", () => {
 
   test("A router should accept a top level wildcard", () => {
     const router = createRouter();
-    const handler: HttpHandler<any, any> = (_request) =>
-      Promise.reject("invalid");
+    const handler: HttpHandler = (_request) => Promise.reject("invalid");
 
     router.register("/*", handler);
 

@@ -2,7 +2,7 @@
  * Package containing all of the routing information for associating a given path/method combination with a handler
  */
 
-import { HTTP_METHODS, HttpHandler, HttpMethod, HttpRequest } from "../core";
+import { HTTP_METHODS, HttpHandler, HttpMethod, HttpRequest } from "..";
 
 /**
  * Custom {@link Error} raised for routing issues
@@ -25,7 +25,7 @@ export interface Router {
    *
    * @returns A {@link HttpHandler} associtaed with the request or `undefined`
    */
-  lookup<T>(request: HttpRequest<T>): HttpHandler<T, unknown> | undefined;
+  lookup(request: HttpRequest): HttpHandler | undefined;
 
   /**
    * Register the given {@link HttpHandler} with the template and optionally {@link HttpMethod}.
@@ -38,11 +38,7 @@ export interface Router {
    *
    * @throws A {@link RoutingError} when there is an issue with the template syntax or overlapping routes
    */
-  register(
-    template: string,
-    handler: HttpHandler<unknown, unknown>,
-    method?: HttpMethod
-  ): void;
+  register(template: string, handler: HttpHandler, method?: HttpMethod): void;
 
   /**
    * Binds the object to the {@link HttpHandler} objects defined in the route tree
@@ -64,10 +60,7 @@ export function createRouter(): Router {
 /**
  * Represents the route handler information for a given request
  */
-type RouteHandler = Record<
-  HttpMethod,
-  HttpHandler<unknown, unknown> | undefined
->;
+type RouteHandler = Partial<Record<HttpMethod, HttpHandler | undefined>>;
 
 /**
  * Default {@link Router} implementation that uses a tree structure to hold the mapping information
@@ -75,11 +68,9 @@ type RouteHandler = Record<
 class RouterImpl implements Router {
   private root: RouteSegment = new RouteSegment();
 
-  lookup<T>(request: HttpRequest<T>): HttpHandler<T, unknown> | undefined {
-    const segments = request.path
-      .replace(/^\//, "")
-      .replace(/\/$/, "")
-      .split("/");
+  lookup(request: HttpRequest): HttpHandler | undefined {
+    const { segments, parameters } = request.path;
+
     if (segments.length > 0) {
       let current = this.root;
       for (const segment of segments) {
@@ -94,20 +85,7 @@ class RouterImpl implements Router {
               break;
             } else if (child.info & RouteSegmentInfo.Parameter) {
               current = child;
-              if (request.parameters === undefined) {
-                request.parameters = new Map();
-              }
-              const parameterName = child.parameter!;
-              if (request.parameters.has(parameterName)) {
-                const v = request.parameters.get(parameterName)!;
-                if (Array.isArray(v)) {
-                  v.push(segment);
-                } else {
-                  request.parameters.set(parameterName, [v, segment]);
-                }
-              } else {
-                request.parameters.set(parameterName, segment);
-              }
+              parameters.set(child.parameter!, segment);
               match = true;
               break;
             } else if (segment === child.segment) {
@@ -132,11 +110,7 @@ class RouterImpl implements Router {
     }
   }
 
-  register(
-    template: string,
-    handler: HttpHandler<unknown, unknown>,
-    method?: HttpMethod
-  ): void {
+  register(template: string, handler: HttpHandler, method?: HttpMethod): void {
     // verify the template matches
     if (!TEMPLATE_REGEX.test(template)) {
       throw new RoutingError("Template is not valid");
@@ -246,7 +220,7 @@ class RouterImpl implements Router {
 
     // Setup the handlers if not already present
     if (current.handlers === undefined) {
-      current.handlers = noHandlers();
+      current.handlers = {};
     }
 
     // Current at this point is located with our target
@@ -315,18 +289,3 @@ class RouteSegment {
   info: RouteSegmentInfo = RouteSegmentInfo.None;
   handlers?: RouteHandler;
 }
-
-/**
- * Utility method to create empty route handlers
- *
- * @returns An empty {@link RouteHandler}
- */
-const noHandlers = (): RouteHandler =>
-  ({
-    GET: undefined,
-    PUT: undefined,
-    POST: undefined,
-    PATCH: undefined,
-    DELETE: undefined,
-    OPTIONS: undefined,
-  } as RouteHandler);

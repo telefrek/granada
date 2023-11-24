@@ -1,7 +1,13 @@
 import { randomInt } from "crypto";
-import { createSimpleLimiter } from ".";
+import { LOG10, createSimpleLimiter } from ".";
 import { delay } from "../../time";
-import { vegasBuilder } from "./algorithms";
+import { fixedLimit, vegasBuilder } from "./algorithms";
+
+describe("Utility functions should perform as expected", () => {
+  test("The LOG10 function should work for cached and uncached values", () => {
+    for (let n = 0; n < 1001; ++n) expect(LOG10(n)).toBeGreaterThanOrEqual(1);
+  });
+});
 
 describe("Limits should function correctly per their design", () => {
   test("A simple limit should behave like a semaphore", async () => {
@@ -54,8 +60,22 @@ describe("Limits should function correctly per their design", () => {
     operation?.success();
   });
 
+  test("Limiters should not allow invalid inputs", () => {
+    expect(() => vegasBuilder(-1).build()).toThrow();
+    expect(() => fixedLimit(-1)).toThrow();
+  });
+
   test("A simple limit with a Vegas limiter should change based on the runtime conditions", async () => {
-    const algorithm = vegasBuilder(2).withMax(12).build();
+    const algorithm = vegasBuilder(2)
+      .withMax(12)
+      .withAlpha((e) => 3 * LOG10(e))
+      .withBeta((e) => 6 * LOG10(e))
+      .withThreshold(LOG10)
+      .withIncrease((e) => e + LOG10(e))
+      .withDecrease((e) => e - LOG10(e))
+      .withProbeMultiplier(30)
+      .withSmoothing(1.0)
+      .build();
     const limiter = createSimpleLimiter(algorithm);
 
     // Get an operation and verify it was provided, then mark it as successful

@@ -1,22 +1,7 @@
 import { randomInt } from "crypto";
 import EventEmitter from "events";
-import { LimitAlgorithm } from ".";
+import { LOG10, LimitAlgorithm } from ".";
 import { Duration } from "../../time";
-
-// Memoize the lookup for the first 1000 values
-const _LOG_10_LOOKUP: number[] = Array.from(Array(1000).keys()).map((k) =>
-  Math.max(1, Math.log10(k))
-);
-
-/**
- * Memoized Log10 function for the first 1000 values
- *
- * @param n The value to calculate the log of 10 for
- * @returns The value of log10(n)
- */
-function LOG10(n: number): number {
-  return n < 1000 ? _LOG_10_LOOKUP[n] : Math.log10(n);
-}
 
 /**
  * Base class for all implementations of the {@link LimitAlgorithm}

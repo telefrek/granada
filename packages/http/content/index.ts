@@ -1,11 +1,48 @@
 import { Readable } from "stream";
-import { HttpBodyProvider, NO_BODY } from "../core";
+import { HttpBodyProvider, HttpHeaders, NO_BODY, StringOrArray } from "..";
 
 /**
  * Represents valid MediaType values including parameters
  */
 export const MEDIA_TYPE_REGEX =
   /^(application|text|image|audio|video|model|font|multipart|message)\/(vnd\.|prs\.|x\.)?([-\w.]+)(\+[-\w]+)?(;.*)?$/;
+
+/**
+ * The content type header
+ */
+export const CONTENT_TYPE_HEADER = "content-type";
+
+/**
+ * Try to extract the content type from the given headers
+ * @param headers The {@link HttpHeaders} to examine
+ * @returns The content type header or undefined
+ */
+export function getContentType(headers: HttpHeaders): string | undefined {
+  let value: StringOrArray | undefined;
+
+  // Fast path is that we have it already lowercase
+  if (headers.has(CONTENT_TYPE_HEADER)) {
+    value = headers.get(CONTENT_TYPE_HEADER);
+  }
+
+  // If undefined, may be that we got a headers collection without lowercase somehow
+  if (value === undefined) {
+    // Iterate the headers trying to find a match
+    for (const header of headers.keys()) {
+      if (header.toLowerCase() === CONTENT_TYPE_HEADER) {
+        value = headers.get(header);
+        break;
+      }
+    }
+  }
+
+  // Return the value if it was found
+  return typeof value === "string"
+    ? value
+    : typeof value === "object" && Array.isArray(value)
+    ? value[0]
+    : undefined;
+}
 
 /**
  * The official composite types
