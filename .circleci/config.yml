@@ -22,7 +22,7 @@ jobs:
           command: npm run test
           name: Run tests
       - run:
-          command: npm run compile -ws
+          command: npm run package
           name: Build app
       - persist_to_workspace:
           root: ~/project
