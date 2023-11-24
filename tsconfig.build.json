@@ -1,24 +1,17 @@
 {
-    "exclude": [
-        "**/*.test.ts",
-        "node_modules",
-        "dist"
-    ],
-    "compilerOptions": {
-        "target": "es2021",
-        "module": "commonjs",
-        "strict": true,
-        "esModuleInterop": true,
-        "skipLibCheck": true,
-        "forceConsistentCasingInFileNames": true,
-        "declaration": true,
-        "paths": {
-            "@telefrek/*": [
-                "./packages/*/"
-            ],
-            "@examples/*": [
-                "./examples/*/"
-            ]
-        }
+  "exclude": ["**/*.test.ts", "node_modules", "dist"],
+  "compilerOptions": {
+    "target": "es2021",
+    "module": "commonjs",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "jsx": "react-jsx",
+    "paths": {
+      "@telefrek/*": ["./packages/*/"],
+      "@examples/*": ["./examples/*/"]
     }
+  }
 }

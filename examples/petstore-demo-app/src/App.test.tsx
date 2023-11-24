@@ -1,0 +1,14 @@
+/* eslint-disable react/react-in-jsx-scope */
+/**
+ * @jest-environment jsdom
+ */
+import '@testing-library/jest-dom';
+
+import { render, screen } from '@testing-library/react';
+import App from './App';
+
+test('renders learn react link', () => {
+  render(<App />);
+  const linkElement = screen.getByText(/Get Response/i);
+  expect(linkElement).toBeInTheDocument();
+});
