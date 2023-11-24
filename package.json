@@ -4,7 +4,6 @@
     "./packages/*"
   ],
   "scripts": {
-    "explain": "jest --showConfig --debug",
     "test": "jest",
     "upgrade": "npx npm-check-updates -u"
   },
