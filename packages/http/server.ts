@@ -7,6 +7,20 @@ import { Emitter } from "@telefrek/core/events";
 import { LifecycleEvents, registerShutdown } from "@telefrek/core/lifecycle";
 import EventEmitter from "events";
 import * as http2 from "http2";
+import { Readable, pipeline } from "stream";
+import {
+  HttpBody,
+  HttpHeaders,
+  HttpMethod,
+  HttpPath,
+  HttpQuery,
+  HttpRequest,
+  HttpResponse,
+  HttpVersion,
+  emptyHeaders,
+  parsePath,
+} from ".";
+import { mediaTypeToString } from "./content";
 
 /**
  * Set of supported events on an {@link HttpServer}
@@ -20,11 +34,18 @@ interface HttpServerEvents extends LifecycleEvents {
   listening: (port: number) => void;
 
   /**
+   * Fired when a new {@link HttpRequest} is received
+   *
+   * @param request The {@link HttpRequest} that was received
+   */
+  request: (request: HttpRequest) => void;
+
+  /**
    * Fired when there is an error with the underlying {@link HttpServer}
    *
    * @param error The error that was encountered
    */
-  error: (error: Error) => void;
+  error: (error: unknown) => void;
 }
 
 /**
@@ -35,8 +56,10 @@ export interface HttpServer extends Emitter<HttpServerEvents> {
    * Starts the server accepting connections on the given port
    *
    * @param port The port to listen on
+   *
+   * @returns A promise to optionally use for tracking listening
    */
-  listen(port: number): void;
+  listen(port: number): Promise<void>;
 
   /**
    * Closes the server, rejecting any further calls
@@ -57,11 +80,11 @@ export interface HttpServerBuilder {
    */
   withTls(details: {
     /** The certificate path */
-    cert: string;
+    cert: string | Buffer;
     /** The key path */
-    key: string;
+    key: string | Buffer;
     /** The key password */
-    passphrase: string;
+    passphrase?: string;
     /** The optional CA Chain file */
     caFile?: string;
     /** Flag to indicate if mutual authentication should be used to validate client certificates */
@@ -88,12 +111,14 @@ export function getDefaultBuilder(): HttpServerBuilder {
  * Default implementation of a {@link HttpServerBuilder}
  */
 class HttpServerBuilderImpl implements HttpServerBuilder {
-  options: http2.SecureServerOptions = {};
+  options: http2.SecureServerOptions = {
+    allowHTTP1: true,
+  };
 
   withTls(details: {
-    cert: string;
-    key: string;
-    passphrase: string;
+    cert: string | Buffer;
+    key: string | Buffer;
+    passphrase?: string;
     caFile?: string | undefined;
     mutualAuth?: boolean | undefined;
   }): HttpServerBuilder {
@@ -116,38 +141,131 @@ class HttpServerBuilderImpl implements HttpServerBuilder {
 class HttpServerImpl extends EventEmitter implements HttpServer {
   #server: http2.Http2Server;
   #tracer = trace.getTracer("Granada.HttpServer");
+  #sessions: http2.ServerHttp2Session[] = [];
 
   constructor(options: http2.SecureServerOptions) {
     super();
 
     // TODO: Start looking at options for more configurations.  If no TLS, HTTP 1.1, etc.
-    this.#server = http2.createServer(options);
+    this.#server = http2.createSecureServer(options);
+
+    this.#server.on("session", (session) => {
+      this.#sessions.push(session);
+      session.on("close", () => {
+        const idx = this.#sessions.indexOf(session);
+        if (idx >= 0) {
+          this.#sessions.splice(idx, 1);
+        }
+      });
+    });
 
     // Register the shutdown hook
     registerShutdown(() => this.close());
+
+    // Make sure to map requests
+    this.#setupRequestMapping();
   }
 
-  listen(port: number): void {
+  listen(port: number): Promise<void> {
     if (!this.#server.listening) {
+      this.emit("started");
       this.#server.listen(port);
+      this.emit("listening", port);
     } else {
       throw new Error("Server is already listening on another port");
     }
+
+    return new Promise((resolve) => {
+      this.once("finished", resolve);
+    });
   }
 
   close(): Promise<void> {
     return new Promise((resolve, reject) => {
       if (this.#server.listening) {
+        this.emit("stopping");
+
+        // Close the server to stop accepting new streams
         this.#server.close((err) => {
+          this.emit("finished");
           if (err) {
+            this.emit("error", err);
             reject(err);
           } else {
             resolve();
           }
         });
+
+        // Close all existing streams
+        this.#sessions.map((s) => s.close());
       } else {
         resolve();
       }
     });
+  }
+
+  #setupRequestMapping(): void {
+    this.#server.on("error", (err) => {
+      console.log("error...");
+      this.emit("error", err);
+    });
+    this.#server.on("request", (req, resp) => {
+      this.emit("request", new Http2Request(req, resp));
+    });
+  }
+}
+
+class Http2Request implements HttpRequest {
+  path: HttpPath;
+  method: HttpMethod;
+  headers: HttpHeaders;
+  version: HttpVersion;
+  query?: HttpQuery | undefined;
+  body?: HttpBody | undefined;
+
+  #response: http2.Http2ServerResponse;
+
+  constructor(
+    request: http2.Http2ServerRequest,
+    response: http2.Http2ServerResponse
+  ) {
+    const { path, query } = parsePath(request.url);
+    this.path = path;
+    this.query = query;
+    this.headers = emptyHeaders();
+    this.version = HttpVersion.HTTP_2;
+    this.method = request.method.toUpperCase() as HttpMethod;
+
+    this.#response = response;
+
+    request.setTimeout(5000, () => {
+      if (this.#response.writable) {
+        this.#response.writeHead(503);
+        this.#response.end();
+      }
+    });
+  }
+
+  respond(response: HttpResponse): void {
+    // Verify timeout or other things didn't end us...
+    if (this.#response.writable) {
+      // Write the head section
+      this.#response.writeHead(response.status, {
+        "Content-Type": mediaTypeToString(response.body.mediaType),
+      });
+
+      // Write the body
+
+      pipeline(
+        response.body.contents as Readable,
+        this.#response.stream,
+        (err) => {
+          if (err) {
+            console.log(`not good...${JSON.stringify(err)}`);
+          }
+          this.#response.end();
+        }
+      );
+    }
   }
 }

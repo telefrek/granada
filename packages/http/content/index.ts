@@ -40,8 +40,8 @@ export function getContentType(headers: HttpHeaders): string | undefined {
   return typeof value === "string"
     ? value
     : typeof value === "object" && Array.isArray(value)
-    ? value[0]
-    : undefined;
+      ? value[0]
+      : undefined;
 }
 
 /**
@@ -151,6 +151,28 @@ export function parseMediaType(mediaType: string): MediaType | undefined {
     }
   }
   return;
+}
+
+export function mediaTypeToString(media: MediaType): string {
+  if (media.subType ?? media.tree) {
+    return `${media.type}/${media.tree ? `${media.tree}.` : ""}${
+      media.subType
+    }${media.suffix ? `+${media.suffix}` : ""}${
+      media.parameters.size > 0
+        ? Array.from(media.parameters.keys())
+            .map((k) => `;${k}=${media.parameters.get(k)}`)
+            .join("")
+        : ""
+    }`;
+  } else {
+    return `${media.type}${
+      media.parameters.size > 0
+        ? Array.from(media.parameters.keys())
+            .map((k) => `;${k}=${media.parameters.get(k)}`)
+            .join("")
+        : ""
+    }`;
+  }
 }
 
 /**

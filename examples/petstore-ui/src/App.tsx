@@ -8,18 +8,42 @@ import Col from 'react-bootstrap/Col';
 import Container from 'react-bootstrap/Container';
 import Row from 'react-bootstrap/Row';
 
+interface Error {
+  name: string;
+}
+
+function isError(err: unknown): err is Error {
+  return (err as Error)?.name !== undefined;
+}
+
 function App() {
   const [message, setMessage] = useState('none');
 
   function handleClick(_e: unknown) {
+    setMessage('loading...');
     const getMessage = async () => {
-      const resp = await fetch('http://localhost:8080/message');
-      if (resp.status === 503) {
-        setMessage('throttled');
-      } else if (resp.status === 200) {
-        setMessage(JSON.stringify(await resp.json()));
-      } else {
-        setMessage('error');
+      try {
+        console.log('trying...');
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), 1000);
+
+        const resp = await fetch(`${window.location.origin}/api/message`, {
+          method: 'GET',
+          signal: controller.signal,
+        });
+        clearTimeout(id);
+
+        if (resp.status === 503) {
+          setMessage('throttled');
+        } else if (resp.status === 200) {
+          setMessage(await resp.text());
+        } else {
+          setMessage('error');
+        }
+      } catch (err: unknown) {
+        if (isError(err)) {
+          setMessage(err.name);
+        }
       }
     };
 
