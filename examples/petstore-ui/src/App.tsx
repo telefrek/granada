@@ -23,14 +23,18 @@ function App() {
     setMessage('loading...');
     const getMessage = async () => {
       try {
-        console.log('trying...');
         const controller = new AbortController();
-        const id = setTimeout(() => controller.abort(), 1000);
+        const id = setTimeout(() => controller.abort(), 50);
 
-        const resp = await fetch(`${window.location.origin}/api/message`, {
+        const req = new Request(`${window.location.origin}/api/message`, {
           method: 'GET',
           signal: controller.signal,
         });
+
+        // Check for aborts...
+        req.signal.onabort = () => console.log('request aborted');
+
+        const resp = await fetch(req);
         clearTimeout(id);
 
         if (resp.status === 503) {
@@ -42,6 +46,7 @@ function App() {
         }
       } catch (err: unknown) {
         if (isError(err)) {
+          console.log(`Error: ${err.name}`);
           setMessage(err.name);
         }
       }
@@ -61,7 +66,9 @@ function App() {
       </Row>
 
       <Row className="justify-content-md-center">
-        <Col md="auto">{message}</Col>
+        <Col md="auto" name="testMessage">
+          {message}
+        </Col>
       </Row>
     </Container>
   );

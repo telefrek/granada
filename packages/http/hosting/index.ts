@@ -28,10 +28,13 @@ class PathTransform extends TransformStream<HttpRequest, HttpRequest> {
   constructor(baseDir: string) {
     super({
       transform: (request, controller) => {
+        const target =
+          request.path.original === "/" || request.path.original === ""
+            ? "/index.html"
+            : request.path.original;
+
         // See if we can find the file
-        const filePath = path.resolve(
-          path.join(baseDir, request.path.original)
-        );
+        const filePath = path.resolve(path.join(baseDir, target));
 
         // Ensure we didn't traverse out...
         if (

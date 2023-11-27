@@ -74,7 +74,6 @@ class DefaultPipelineBuilder implements HttpPipelineBuilder {
       start: (controller: ReadableStreamDefaultController) => {
         console.log("starting request pump");
         this.#server.on("request", (request) => {
-          console.log(`${request.method}: ${request.path.original}`);
           controller.enqueue(request);
         });
       },
@@ -102,7 +101,6 @@ class DefaultPipeline extends EventEmitter implements HttpPipeline {
         request: HttpRequest,
         _controller: WritableStreamDefaultController
       ) => {
-        console.log(`Unhandled: ${request.method}: ${request.path.original}`);
         request.respond({
           status: HttpStatus.NOT_FOUND,
           headers: emptyHeaders(),
