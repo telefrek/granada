@@ -2,6 +2,8 @@
  * Core package definitions and interfaces
  */
 
+import { Emitter } from "@telefrek/core/events";
+import { LifecycleEvents } from "@telefrek/core/lifecycle";
 import { Readable, Writable } from "stream";
 import { MediaType } from "./content";
 
@@ -82,7 +84,7 @@ export interface HttpBody {
 /**
  * An interface defining the behavior of an HTTP Request
  */
-export interface HttpRequest {
+export interface HttpRequest extends Emitter<LifecycleEvents> {
   path: HttpPath;
   method: HttpMethod;
   headers: HttpHeaders;
@@ -152,7 +154,7 @@ export enum HttpStatus {
   INTERNAL_SERVER_ERROR = 500,
   NOT_IMPLEMENTED = 501,
   BAD_GATEWAY = 502,
-  SERVICE_UNAVAILALBE = 503,
+  SERVICE_UNAVAILABLE = 503,
   GATEWAY_TIMEOUT = 504,
   HTTP_VERSION_NOT_SUPPORTED = 505,
   VARIANT_ALSO_NEGOTIATES = 506,

@@ -75,6 +75,11 @@ export interface Limiter {
    * Attempt to acquire a {@link LimitedOperation}
    */
   tryAcquire(): LimitedOperation | undefined;
+
+  /**
+   * Retrieve the current limit
+   */
+  readonly limit: number;
 }
 
 /**

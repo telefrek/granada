@@ -10,6 +10,11 @@ abstract class AbstractLimiter implements Limiter {
   #limit: number;
   #inFlight: number;
 
+  // Allow retrieving the internal limit
+  get limit() {
+    return this.#limit;
+  }
+
   /**
    * Base constructor for all {@link Limiter} abstractions built from this class
    *

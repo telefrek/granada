@@ -2,6 +2,11 @@
  * The goal of this package is to provide the scaffolding for creating an HTTP pipeline
  */
 
+import {
+  Limiter,
+  createSimpleLimiter,
+} from "@telefrek/core/concurrency/limits";
+import { vegasBuilder } from "@telefrek/core/concurrency/limits/algorithms";
 import { Emitter } from "@telefrek/core/events";
 import { LifecycleEvents } from "@telefrek/core/lifecycle";
 import { EventEmitter } from "stream";
@@ -79,6 +84,24 @@ class DefaultPipelineBuilder implements HttpPipelineBuilder {
       },
     });
 
+    // Demo some throttling
+    // eslint-disable-next-line no-constant-condition
+    if (true) {
+      readable = readable.pipeThrough(
+        new ThrottlingTransform(
+          createSimpleLimiter(
+            vegasBuilder(10)
+              .build()
+              .on("changed", (l) => {
+                console.log(`new limit: ${l}`);
+              }),
+            10
+          ),
+          250
+        )
+      );
+    }
+
     // Apply the transformations
     for (const transform of this.#transforms) {
       readable = transform(readable);
@@ -86,6 +109,47 @@ class DefaultPipelineBuilder implements HttpPipelineBuilder {
 
     // Return the pipeline that will run it all
     return new DefaultPipeline(readable);
+  }
+}
+
+/**
+ * Transform requested items to the given path
+ */
+class ThrottlingTransform extends TransformStream<HttpRequest, HttpRequest> {
+  #limit: Limiter;
+
+  /**
+   * Create the {@link PathTransform} for the given directory
+   * @param baseDir The base directory to serve from
+   */
+  constructor(limit: Limiter, timeoutMs = 100) {
+    super({
+      transform: (request, controller) => {
+        const l = limit.tryAcquire();
+        if (l) {
+          const start = process.hrtime.bigint();
+          request.on("finished", () => {
+            const end = process.hrtime.bigint() - start;
+            if (end / 1000000n > timeoutMs) {
+              l.dropped();
+              console.log("dropped due to exceeding timeout");
+            } else {
+              l.success();
+            }
+          });
+          controller.enqueue(request);
+        } else {
+          console.log(`failed to get... ${limit.limit}`);
+          // Load shedding...
+          request.respond({
+            status: HttpStatus.SERVICE_UNAVAILABLE,
+            headers: emptyHeaders(),
+          });
+        }
+      },
+    });
+
+    this.#limit = limit;
   }
 }
 

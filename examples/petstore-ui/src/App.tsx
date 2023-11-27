@@ -24,7 +24,7 @@ function App() {
     const getMessage = async () => {
       try {
         const controller = new AbortController();
-        const id = setTimeout(() => controller.abort(), 50);
+        const id = setTimeout(() => controller.abort(), 150);
 
         const req = new Request(`${window.location.origin}/api/message`, {
           method: 'GET',

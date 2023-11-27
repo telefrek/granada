@@ -7,7 +7,7 @@ import { Emitter } from "@telefrek/core/events";
 import { LifecycleEvents, registerShutdown } from "@telefrek/core/lifecycle";
 import EventEmitter from "events";
 import * as http2 from "http2";
-import { Readable, pipeline } from "stream";
+import { Readable, finished, pipeline } from "stream";
 import {
   HttpBody,
   HttpHeaders,
@@ -169,7 +169,7 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
   listen(port: number): Promise<void> {
     if (!this.#server.listening) {
       this.emit("started");
-      this.#server.listen(port);
+      this.#server.listen(port, "0.0.0.0");
       this.emit("listening", port);
     } else {
       throw new Error("Server is already listening on another port");
@@ -215,7 +215,7 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
   }
 }
 
-class Http2Request implements HttpRequest {
+class Http2Request extends EventEmitter implements HttpRequest {
   path: HttpPath;
   method: HttpMethod;
   headers: HttpHeaders;
@@ -229,6 +229,7 @@ class Http2Request implements HttpRequest {
     request: http2.Http2ServerRequest,
     response: http2.Http2ServerResponse
   ) {
+    super();
     const { path, query } = parsePath(request.url);
     this.path = path;
     this.query = query;
@@ -237,6 +238,11 @@ class Http2Request implements HttpRequest {
     this.method = request.method.toUpperCase() as HttpMethod;
 
     this.#response = response;
+
+    // Ensure we track the response completion event
+    finished(response, (_err) => {
+      this.emit("finished");
+    });
 
     request.setTimeout(5000, () => {
       if (this.#response.writable && !this.#response.headersSent) {
