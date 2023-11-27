@@ -55,20 +55,6 @@ export function emptyHeaders(): HttpHeaders {
 }
 
 /**
- * Helper definition for a method that provides the contents of the http body
- */
-export type HttpBodyProvider<T> = () => Promise<T | T[] | undefined>;
-
-/**
- * Default {@link HttpBodyProvider} that returns a rejected promise if called
- *
- * @returns A failed promise
- */
-export function NO_BODY<T>(): HttpBodyProvider<T> {
-  return () => Promise.reject<T>(new Error("No Body Available"));
-}
-
-/**
  * An interface defining the query portion of a request
  */
 export interface HttpQuery {
@@ -182,7 +168,7 @@ export enum HttpStatus {
 export interface HttpResponse {
   status: HttpStatus;
   headers: HttpHeaders;
-  body: HttpBody;
+  body?: HttpBody;
 }
 
 /**

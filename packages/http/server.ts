@@ -239,7 +239,7 @@ class Http2Request implements HttpRequest {
     this.#response = response;
 
     request.setTimeout(5000, () => {
-      if (this.#response.writable) {
+      if (this.#response.writable && !this.#response.headersSent) {
         this.#response.writeHead(503);
         this.#response.end();
       }
@@ -250,22 +250,30 @@ class Http2Request implements HttpRequest {
     // Verify timeout or other things didn't end us...
     if (this.#response.writable) {
       // Write the head section
-      this.#response.writeHead(response.status, {
-        "Content-Type": mediaTypeToString(response.body.mediaType),
-      });
+      if (response.body) {
+        this.#response.writeHead(response.status, {
+          "Content-Type": mediaTypeToString(response.body.mediaType),
+        });
+      } else {
+        this.#response.writeHead(response.status);
+      }
 
       // Write the body
 
-      pipeline(
-        response.body.contents as Readable,
-        this.#response.stream,
-        (err) => {
-          if (err) {
-            console.log(`not good...${JSON.stringify(err)}`);
+      if (response.body) {
+        pipeline(
+          response.body.contents as Readable,
+          this.#response.stream,
+          (err) => {
+            if (err) {
+              console.log(`not good...${JSON.stringify(err)}`);
+            }
+            this.#response.end();
           }
-          this.#response.end();
-        }
-      );
+        );
+      } else {
+        this.#response.end();
+      }
     }
   }
 }

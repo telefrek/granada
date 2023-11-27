@@ -1,5 +1,5 @@
 import { Readable } from "stream";
-import { HttpBodyProvider, HttpHeaders, NO_BODY, StringOrArray } from "..";
+import { HttpHeaders, StringOrArray } from "..";
 
 /**
  * Represents valid MediaType values including parameters
@@ -72,48 +72,45 @@ export type MediaTreeTypes = "vnd" | "prs" | "x";
  *
  * @param type The {@link MediaType} being parsed
  * @param buffer The {@link Readable} that has the contents
- * @returns A {@link HttpBodyProvider} that will translate the buffer into an object
  */
-export function parseContents<T>(
-  type: MediaType,
-  buffer: Readable
-): HttpBodyProvider<T> {
+export function parseContents(type: MediaType, buffer: Readable): void {
   // Ensure it's not ended already
   if (buffer.readableEnded) {
-    return NO_BODY();
+    return;
   }
 
   // Check for a supported media types
-  if (isJson(type)) {
-    // TODO: Need to support streaming JSON
-    return () =>
-      new Promise((resolve, reject) => {
-        let str = "";
+  // if (isJson(type)) {
+  // }
+  // TODO: Need to support streaming JSON
+  // return () =>
+  //   new Promise((resolve, reject) => {
+  //     let str = "";
+  //     // This is NOT efficient but works for stubbing out the work
+  //     // TODO: Clean this mess up
+  //     const encoding: BufferEncoding =
+  //       (type.parameters?.get("charset") as BufferEncoding) ?? "utf-8";
+  //     buffer
+  //       .on("data", (data: string | Buffer) => {
+  //         str += typeof data === "string" ? data : data.toString(encoding);
+  //       })
+  //       .on("end", () => {
+  //         const j: unknown = JSON.parse(str);
+  //         if (typeof j === "undefined") resolve(undefined);
+  //         else if (typeof j === "object")
+  //           resolve(Array.isArray(j) ? (j as T[]) : (j as T));
+  //       })
+  //       .on("error", (err) => {
+  //         reject(err);
+  //       });
+  //   });
 
-        // This is NOT efficient but works for stubbing out the work
-        // TODO: Clean this mess up
-        const encoding: BufferEncoding =
-          (type.parameters?.get("charset") as BufferEncoding) ?? "utf-8";
-        buffer
-          .on("data", (data: string | Buffer) => {
-            str += typeof data === "string" ? data : data.toString(encoding);
-          })
-          .on("end", () => {
-            const j: unknown = JSON.parse(str);
-            if (typeof j === "undefined") resolve(undefined);
-            else if (typeof j === "object")
-              resolve(Array.isArray(j) ? (j as T[]) : (j as T));
-          })
-          .on("error", (err) => {
-            reject(err);
-          });
-      });
-  }
+  // }
 
-  // Return a promise for unsupported media type handling
-  return () => {
-    return Promise.reject(new Error(`Unsupported media type: ${type.type}`));
-  };
+  // // Return a promise for unsupported media type handling
+  // return () => {
+  //   return Promise.reject(new Error(`Unsupported media type: ${type.type}`));
+  // };
 }
 
 /**

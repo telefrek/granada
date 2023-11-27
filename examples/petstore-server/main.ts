@@ -1,10 +1,7 @@
-import { HttpStatus, emptyHeaders } from "@telefrek/http";
-import { parseMediaType } from "@telefrek/http/content";
+import { hostFolder } from "@telefrek/http/hosting";
+import { createDefaultPipelineBuilder } from "@telefrek/http/pipeline";
 import { getDefaultBuilder } from "@telefrek/http/server";
 import fs from "fs";
-import mime from "mime";
-import path from "path";
-import { Readable } from "stream";
 
 const server = getDefaultBuilder()
   .withTls({
@@ -17,38 +14,17 @@ server.on("listening", (port: number) => console.log(`listening on ${port}`));
 server.on("stopping", () => console.log("stopping"));
 server.on("finished", () => console.log("finished"));
 
-server.on("request", (request) => {
-  if (request.path.original.startsWith("/api")) {
-    request.respond({
-      status: HttpStatus.OK,
-      headers: emptyHeaders(),
-      body: {
-        contents: Readable.from("Hello World"),
-        mediaType: {
-          type: "text",
-          subType: "plain",
-          parameters: new Map([["encoding", "utf-8"]]),
-        },
-      },
-    });
-  } else {
-    const fileName =
-      request.path.original === "/" ? "index.html" : request.path.original;
+const pipeline = createDefaultPipelineBuilder(server)
+  .addTransform(hostFolder("../petstore-ui/build"))
+  .build();
 
-    request.respond({
-      status: HttpStatus.OK,
-      headers: emptyHeaders(),
-      body: {
-        contents: fs.createReadStream(
-          path.join("../petstore-ui/build", fileName),
-          "utf-8"
-        ),
-        mediaType: parseMediaType(
-          mime.lookup(path.join("../petstore-ui/build", fileName))
-        )!,
-      },
-    });
-  }
+pipeline.on("error", (err) => {
+  // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+  console.log(`Error: ${err}`);
+});
+
+pipeline.on("finished", () => {
+  console.log("pipeline has finished");
 });
 
 process.on("SIGINT", () => {
