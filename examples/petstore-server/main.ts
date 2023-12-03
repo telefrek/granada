@@ -10,10 +10,6 @@ const server = getDefaultBuilder()
   })
   .build();
 
-server.on("listening", (port: number) => console.log(`listening on ${port}`));
-server.on("stopping", () => console.log("stopping"));
-server.on("finished", () => console.log("finished"));
-
 const pipeline = createDefaultPipelineBuilder(server)
   .addTransform(hostFolder("../petstore-ui/build"))
   .build();

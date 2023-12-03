@@ -9,10 +9,13 @@ import { HttpMethod, HttpRequest, HttpStatus } from "..";
 import { parseMediaType } from "../content";
 import { HttpPipelineTransform } from "../pipeline";
 
-export function hostFolder(baseDir: string): HttpPipelineTransform {
+export function hostFolder(
+  baseDir: string,
+  defaultFile = "index.html"
+): HttpPipelineTransform {
   const sanitizedBaseDir = path.resolve(baseDir);
   return (requests) =>
-    requests.pipeThrough(new PathTransform(sanitizedBaseDir));
+    requests.pipeThrough(new PathTransform(sanitizedBaseDir, defaultFile));
 }
 
 /**
@@ -24,13 +27,14 @@ class PathTransform extends TransformStream<HttpRequest, HttpRequest> {
   /**
    * Create the {@link PathTransform} for the given directory
    * @param baseDir The base directory to serve from
+   * @param defaultFile The default file name to use in place of `/`
    */
-  constructor(baseDir: string) {
+  constructor(baseDir: string, defaultFile: string) {
     super({
       transform: (request, controller) => {
         const target =
           request.path.original === "/" || request.path.original === ""
-            ? "/index.html"
+            ? defaultFile
             : request.path.original;
 
         // See if we can find the file

@@ -1,24 +1,52 @@
+import { EventEmitter } from "stream";
 import {
+  HttpBody,
   HttpHandler,
+  HttpHeaders,
   HttpMethod,
+  HttpPath,
+  HttpQuery,
   HttpRequest,
+  HttpResponse,
   HttpVersion,
   emptyHeaders,
   parsePath,
 } from "..";
 import { createRouter } from "./index";
 
+class TestRequest extends EventEmitter implements HttpRequest {
+  path: HttpPath;
+  method: HttpMethod;
+  headers: HttpHeaders = emptyHeaders();
+  version: HttpVersion;
+  query?: HttpQuery | undefined;
+  body?: HttpBody | undefined;
+  respond(response: HttpResponse): void {
+    this.emit("response", response);
+  }
+
+  constructor(args: {
+    path: HttpPath;
+    query?: HttpQuery;
+    method?: HttpMethod;
+    version?: HttpVersion;
+  }) {
+    super();
+    this.path = args.path;
+    this.query = args.query;
+    this.method = args.method ?? HttpMethod.GET;
+    this.version = args.version ?? HttpVersion.HTTP1_1;
+  }
+}
+
 function request(
   path: string,
   method: HttpMethod = HttpMethod.GET
 ): HttpRequest {
-  return {
+  return new TestRequest({
     ...parsePath(path),
-    version: HttpVersion.HTTP1_1,
     method: method,
-    headers: emptyHeaders(),
-    respond: (_response) => {},
-  };
+  });
 }
 
 describe("verify router", () => {

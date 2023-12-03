@@ -10,6 +10,7 @@
     "framework",
     "http"
   ],
+  "main": "main.js",
   "author": "nathan@telefrek.com",
   "license": "MIT",
   "dependencies": {
