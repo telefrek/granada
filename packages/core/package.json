@@ -1,6 +1,6 @@
 {
   "name": "@telefrek/core",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "",
   "scripts": {
     "compile": "rm -rf dist/* && tsc -p tsconfig.json",

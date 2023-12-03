@@ -2,20 +2,68 @@
  * Expose the ability to host a folder on a given path
  */
 
-import fs from "fs";
-import mime from "mime";
-import path from "path";
-import { HttpMethod, HttpRequest, HttpStatus } from "..";
+import { createReadStream, existsSync } from "fs";
+import { lookup } from "mime";
+import { join, resolve } from "path";
+import {
+  FileContentResponse,
+  HttpMethod,
+  HttpRequest,
+  HttpResponse,
+  HttpStatus,
+  emptyHeaders,
+} from "..";
 import { parseMediaType } from "../content";
 import { HttpPipelineTransform } from "../pipeline";
 
+/**
+ * Create a {@link HttpPipelineTransform} for hosting a folder
+ *
+ * @param baseDir The directory to host
+ * @param defaultFile The file to send if requesting `/` (default is `index.html`)
+ * @returns A new {@link HttpPipelineTransform}
+ */
 export function hostFolder(
   baseDir: string,
   defaultFile = "index.html"
 ): HttpPipelineTransform {
-  const sanitizedBaseDir = path.resolve(baseDir);
+  if (!existsSync(baseDir)) {
+    throw new Error(`${baseDir} does not exist`);
+  }
+
+  const sanitizedBaseDir = resolve(baseDir);
   return (requests) =>
     requests.pipeThrough(new PathTransform(sanitizedBaseDir, defaultFile));
+}
+
+export function createFileContentResponse(
+  filePath: string
+): FileContentResponse | HttpResponse {
+  if (!existsSync(filePath)) {
+    return {
+      status: HttpStatus.NOT_FOUND,
+      headers: emptyHeaders(),
+    };
+  }
+
+  // Calculate the media type
+  const mediaType = parseMediaType(lookup(filePath));
+
+  // Ensure encoding is set
+  if (!mediaType?.parameters.has("charset")) {
+    mediaType?.parameters.set("charset", "utf-8");
+  }
+
+  // Send back the file content response
+  return {
+    status: HttpStatus.OK,
+    headers: emptyHeaders(),
+    filePath,
+    body: {
+      contents: createReadStream(filePath, "utf-8"),
+      mediaType: parseMediaType(lookup(filePath))!,
+    },
+  };
 }
 
 /**
@@ -32,28 +80,26 @@ class PathTransform extends TransformStream<HttpRequest, HttpRequest> {
   constructor(baseDir: string, defaultFile: string) {
     super({
       transform: (request, controller) => {
-        const target =
-          request.path.original === "/" || request.path.original === ""
-            ? defaultFile
-            : request.path.original;
+        // Only serve GET requests
+        if (request.method === HttpMethod.GET) {
+          const target =
+            request.path.original === "/" || request.path.original === ""
+              ? defaultFile
+              : request.path.original;
 
-        // See if we can find the file
-        const filePath = path.resolve(path.join(baseDir, target));
+          // See if we can find the file
+          const filePath = resolve(join(baseDir, target));
 
-        // Ensure we didn't traverse out...
-        if (
-          request.method === HttpMethod.GET &&
-          filePath.startsWith(baseDir) &&
-          fs.existsSync(filePath)
-        ) {
-          request.respond({
-            status: HttpStatus.OK,
-            headers: new Map(),
-            body: {
-              contents: fs.createReadStream(filePath, "utf-8"),
-              mediaType: parseMediaType(mime.lookup(filePath))!,
-            },
-          });
+          // Ensure we didn't try to traverse out...
+          if (filePath.startsWith(baseDir)) {
+            request.respond(createFileContentResponse(filePath));
+          } else {
+            // TODO: Audit this...
+            request.respond({
+              status: HttpStatus.NOT_FOUND,
+              headers: emptyHeaders(),
+            });
+          }
         } else {
           controller.enqueue(request);
         }

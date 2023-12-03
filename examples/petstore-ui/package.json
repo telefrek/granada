@@ -19,7 +19,7 @@
     "typescript": "^5.3.2"
   },
   "scripts": {
-    "upgrade": "npx npm-check-updates -u && npm install",
+    "upgrade": "npx npm-check-updates -u && npm install --force",
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test:unit": "react-scripts test",
@@ -46,18 +46,18 @@
     ]
   },
   "devDependencies": {
-    "@testing-library/jest-dom": "^6.1.4",
+    "@testing-library/jest-dom": "^6.1.5",
     "@testing-library/react": "^14.1.2",
     "@testing-library/user-event": "^14.5.1",
     "@types/jest": "^29.5.10",
-    "@types/node": "^20.10.0",
+    "@types/node": "^20.10.2",
     "@types/react-bootstrap": "^0.32.35",
-    "@types/react": "^18.2.38",
+    "@types/react": "^18.2.41",
     "@types/react-dom": "^18.2.17",
-    "@typescript-eslint/eslint-plugin": "^6.12.0",
-    "@typescript-eslint/parser": "^6.12.0",
-    "eslint": "^8.54.0",
-    "eslint-config-prettier": "^9.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.1",
+    "@typescript-eslint/parser": "^6.13.1",
+    "eslint": "^8.55.0",
+    "eslint-config-prettier": "^9.1.0",
     "eslint-config-react": "^1.1.7",
     "eslint-plugin-prettier": "^5.0.1",
     "prettier": "^3.1.0"

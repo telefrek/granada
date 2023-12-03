@@ -14,7 +14,7 @@
   "author": "nathan@telefrek.com",
   "license": "MIT",
   "dependencies": {
-    "@telefrek/http": "^1.0.0",
+    "@telefrek/http": "0.1.0",
     "@types/k6": "^0.47.3"
   }
 }

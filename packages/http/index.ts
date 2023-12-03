@@ -174,6 +174,29 @@ export interface HttpResponse {
 }
 
 /**
+ * Utility method to check for {@link FileContentResponse} objects
+ *
+ * @param response A {@link HttpResponse} to inspect
+ * @returns True if the response is a {@link FileContentResponse}
+ */
+export function isFileContent(
+  response: HttpResponse
+): response is FileContentResponse {
+  return (
+    response !== undefined &&
+    "filePath" in response &&
+    typeof response.filePath === "string"
+  );
+}
+
+/**
+ * An interface for defining the shape of a file HTTP Response
+ */
+export interface FileContentResponse extends HttpResponse {
+  filePath: string;
+}
+
+/**
  * Simple type for contracting the async model for an HTTP request/response operation
  */
 export type HttpHandler = (request: HttpRequest) => Promise<never>;
