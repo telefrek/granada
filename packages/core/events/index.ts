@@ -8,7 +8,7 @@ export interface Emitter<E> {
    * @param event The event that was raised
    * @param listener The listener to add
    */
-  on<T extends keyof E>(event: T, listener: E[T]): this;
+  on<T extends keyof E>(event: T, listener: E[T]): this
 
   /**
    * Match all EventEmitter.on functionality
@@ -16,7 +16,7 @@ export interface Emitter<E> {
    * @param event The event that was raised
    * @param listener The listener to add to the next invocation only
    */
-  once<T extends keyof E>(event: T, listener: E[T]): this;
+  once<T extends keyof E>(event: T, listener: E[T]): this
 
   /**
    * Match all EventEmitter.off functionality
@@ -24,7 +24,7 @@ export interface Emitter<E> {
    * @param event The event that was raised
    * @param listener The listener to remove
    */
-  off<T extends keyof E>(event: T, listener: E[T]): this;
+  off<T extends keyof E>(event: T, listener: E[T]): this
 
   /**
    * Match all EventEmitter.emit functionality
@@ -36,5 +36,5 @@ export interface Emitter<E> {
     event: T,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ...args: Parameters<any>
-  ): boolean;
+  ): boolean
 }

@@ -2,14 +2,14 @@
  * Core package definitions and interfaces
  */
 
-import { Emitter } from "@telefrek/core/events";
-import { LifecycleEvents } from "@telefrek/core/lifecycle";
-import { Readable, Writable } from "stream";
-import { MediaType } from "./content";
+import { Emitter } from "@telefrek/core/events"
+import { LifecycleEvents } from "@telefrek/core/lifecycle"
+import { Readable, Writable } from "stream"
+import { MediaType } from "./content"
 
-export type StringOrArray = string | string[];
+export type StringOrArray = string | string[]
 
-export type SegmentValue = string | number | boolean;
+export type SegmentValue = string | number | boolean
 
 /**
  * Supported methods for HTTP operations
@@ -33,7 +33,7 @@ export const HTTP_METHODS = [
   HttpMethod.PATCH,
   HttpMethod.DELETE,
   HttpMethod.OPTIONS,
-] as HttpMethod[];
+] as HttpMethod[]
 
 /**
  * Supported HTTP Versions
@@ -46,53 +46,53 @@ export enum HttpVersion {
 /**
  * HttpHeaders are collections of key, value pairs where the value can be singular or an array
  */
-export type HttpHeaders = Map<string, StringOrArray>;
+export type HttpHeaders = Map<string, StringOrArray>
 
 /**
  * Create an empty set of {@link HttpHeaders}
  * @returns An empty set of {@link HttpHeaders}
  */
 export function emptyHeaders(): HttpHeaders {
-  return new Map();
+  return new Map()
 }
 
 /**
  * An interface defining the query portion of a request
  */
 export interface HttpQuery {
-  readonly original: string;
-  parameters: Map<string, StringOrArray>;
+  readonly original: string
+  parameters: Map<string, StringOrArray>
 }
 
 /**
  * An interface defining the path portion of a request
  */
 export interface HttpPath {
-  readonly original: string;
-  segments: string[];
-  parameters: Map<string, SegmentValue>;
+  readonly original: string
+  segments: string[]
+  parameters: Map<string, SegmentValue>
 }
 
 /**
  * An interface defining the body that is transmitted as part of the request/response cycle
  */
 export interface HttpBody {
-  mediaType: MediaType;
-  contents: Readable | Writable | Promise<unknown>;
+  mediaType?: MediaType
+  contents: Readable | Writable | Promise<unknown>
 }
 
 /**
  * An interface defining the behavior of an HTTP Request
  */
 export interface HttpRequest extends Emitter<LifecycleEvents> {
-  path: HttpPath;
-  method: HttpMethod;
-  headers: HttpHeaders;
-  version: HttpVersion;
-  query?: HttpQuery;
-  body?: HttpBody;
+  path: HttpPath
+  method: HttpMethod
+  headers: HttpHeaders
+  version: HttpVersion
+  query?: HttpQuery
+  body?: HttpBody
 
-  respond(response: HttpResponse): void;
+  respond(response: HttpResponse): void
 }
 
 /**
@@ -168,9 +168,9 @@ export enum HttpStatus {
  * An interface defining the shape of an HTTP Response
  */
 export interface HttpResponse {
-  status: HttpStatus;
-  headers: HttpHeaders;
-  body?: HttpBody;
+  status: HttpStatus
+  headers: HttpHeaders
+  body?: HttpBody
 }
 
 /**
@@ -180,26 +180,26 @@ export interface HttpResponse {
  * @returns True if the response is a {@link FileContentResponse}
  */
 export function isFileContent(
-  response: HttpResponse
+  response: HttpResponse,
 ): response is FileContentResponse {
   return (
     response !== undefined &&
     "filePath" in response &&
     typeof response.filePath === "string"
-  );
+  )
 }
 
 /**
  * An interface for defining the shape of a file HTTP Response
  */
 export interface FileContentResponse extends HttpResponse {
-  filePath: string;
+  filePath: string
 }
 
 /**
  * Simple type for contracting the async model for an HTTP request/response operation
  */
-export type HttpHandler = (request: HttpRequest) => Promise<never>;
+export type HttpHandler = (request: HttpRequest) => Promise<never>
 
 /**
  * Parse the path string into it's corresponding {@link HttpPath} and {@link HttpQuery}
@@ -209,7 +209,7 @@ export type HttpHandler = (request: HttpRequest) => Promise<never>;
  */
 export function parsePath(path: string): { path: HttpPath; query?: HttpQuery } {
   // Remove any URI encoding
-  const uri = decodeURI(path).split("?");
+  const uri = decodeURI(path).split("?")
 
   // Parse out the path and the query, removing leading and trailing '/' characters
   return {
@@ -223,21 +223,21 @@ export function parsePath(path: string): { path: HttpPath; query?: HttpQuery } {
         ? {
             original: uri[1],
             parameters: uri[1].split("&").reduce((map, segment) => {
-              const kv = segment.split("=");
+              const kv = segment.split("=")
               if (kv.length === 2) {
                 if (map.has(kv[0])) {
                   if (Array.isArray(map.get(kv[0]))) {
-                    (map.get(kv[0])! as string[]).push(kv[1]);
+                    ;(map.get(kv[0])! as string[]).push(kv[1])
                   } else {
-                    map.set(kv[0], [map.get(kv[0])! as string, kv[1]]);
+                    map.set(kv[0], [map.get(kv[0])! as string, kv[1]])
                   }
                 } else {
-                  map.set(kv[0], kv[1]);
+                  map.set(kv[0], kv[1])
                 }
               }
-              return map;
+              return map
             }, new Map<string, StringOrArray>()),
           }
         : undefined,
-  };
+  }
 }

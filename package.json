@@ -6,6 +6,7 @@
   ],
   "scripts": {
     "test": "jest",
+    "format": "npx prettier --write .",
     "package": "npm run compile --workspaces --if-present",
     "upgrade-all": "npm run upgrade --workspaces --if-present"
   },

@@ -9,24 +9,24 @@
  * @returns A {@link Promise} that will be scheduled after at least that many milliseconds
  */
 export function delay(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+  return new Promise((resolve) => setTimeout(resolve, milliseconds))
 }
 
 /**
  * Custom class that tracks elapsed {@link Duration}
  */
 export class Timer {
-  running = false;
-  started = 0n;
-  stopped = 0n;
+  running = false
+  started = 0n
+  stopped = 0n
 
   /**
    * Starts the timer
    */
   start(): void {
     if (!this.running) {
-      this.started = process.hrtime.bigint();
-      this.running = true;
+      this.started = process.hrtime.bigint()
+      this.running = true
     }
   }
 
@@ -37,18 +37,18 @@ export class Timer {
    */
   stop(): Duration {
     if (this.running) {
-      this.stopped = process.hrtime.bigint();
-      this.running = false;
+      this.stopped = process.hrtime.bigint()
+      this.running = false
       try {
-        return Duration.fromNano(this.stopped - this.started);
+        return Duration.fromNano(this.stopped - this.started)
       } finally {
         // Clear the timings
-        this.started = 0n;
-        this.stopped = 0n;
+        this.started = 0n
+        this.stopped = 0n
       }
     }
 
-    return Duration.ZERO;
+    return Duration.ZERO
   }
 
   /**
@@ -59,23 +59,23 @@ export class Timer {
   elapsed(): Duration {
     return this.running
       ? Duration.fromNano(process.hrtime.bigint() - this.started)
-      : Duration.ZERO;
+      : Duration.ZERO
   }
 }
 
 /** Factors for translating nanoseconds -> microseconds */
-const NANO_PER_SECOND = 1_000_000_000n;
-const MICRO_PER_SECOND = 1_000_000;
-const MICRO_PER_MILLI = 1_000;
+const NANO_PER_SECOND = 1_000_000_000n
+const MICRO_PER_SECOND = 1_000_000
+const MICRO_PER_MILLI = 1_000
 
 /**
  * Represents a duration of time
  */
 export class Duration {
-  #microseconds: number;
+  #microseconds: number
 
   private constructor(nanoseconds: bigint) {
-    this.#microseconds = Number((nanoseconds * 1_000_000n) / NANO_PER_SECOND);
+    this.#microseconds = Number((nanoseconds * 1_000_000n) / NANO_PER_SECOND)
   }
 
   /**
@@ -83,7 +83,7 @@ export class Duration {
    * @returns The number of seconds with 6 decimal places for microsecond resolution
    */
   public seconds(): number {
-    return this.#microseconds / MICRO_PER_SECOND;
+    return this.#microseconds / MICRO_PER_SECOND
   }
 
   /**
@@ -91,7 +91,7 @@ export class Duration {
    * @returns the number of milliseconds with 3 decimal places for microsecond resolution
    */
   public milliseconds(): number {
-    return this.#microseconds / MICRO_PER_MILLI;
+    return this.#microseconds / MICRO_PER_MILLI
   }
 
   /**
@@ -99,7 +99,7 @@ export class Duration {
    * @returns The number of microseconds
    */
   public microseconds(): number {
-    return this.#microseconds;
+    return this.#microseconds
   }
 
   /**
@@ -109,7 +109,7 @@ export class Duration {
    * @returns A new {@link Duration} object
    */
   static fromNano(nanoseconds: bigint): Duration {
-    return new Duration(nanoseconds);
+    return new Duration(nanoseconds)
   }
 
   /**
@@ -119,11 +119,11 @@ export class Duration {
    * @returns A new {@link Duration} object
    */
   static fromMill(milliseconds: number): Duration {
-    return new Duration(BigInt(MICRO_PER_MILLI * milliseconds));
+    return new Duration(BigInt(MICRO_PER_MILLI * milliseconds))
   }
 
   /**
    * Helper to identify an empty or zero time elapsed duration
    */
-  static ZERO: Duration = Duration.fromNano(0n);
+  static ZERO: Duration = Duration.fromNano(0n)
 }

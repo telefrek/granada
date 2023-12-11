@@ -2,15 +2,15 @@
  * Port of a subset of the Netflix Concurrency Limits functionality {@link https://github.com/Netflix/concurrency-limits}
  */
 
-import { Emitter } from "../../events";
-import { Duration } from "../../time";
-import { fixedLimit } from "./algorithms";
-import { simpleLimiter } from "./limiters";
+import { Emitter } from "../../events"
+import { Duration } from "../../time"
+import { fixedLimit } from "./algorithms"
+import { simpleLimiter } from "./limiters"
 
 // Memoize the lookup for the first 1000 values
 const _LOG_10_LOOKUP: number[] = Array.from(Array(1000).keys()).map((k) =>
-  Math.max(1, Math.log10(k))
-);
+  Math.max(1, Math.log10(k)),
+)
 
 /**
  * Memoized Log10 function for the first 1000 values capping at >= 1
@@ -19,7 +19,7 @@ const _LOG_10_LOOKUP: number[] = Array.from(Array(1000).keys()).map((k) =>
  * @returns The value of log10(n)
  */
 export function LOG10(n: number): number {
-  return n < 1000 ? _LOG_10_LOOKUP[n] : Math.log10(n);
+  return n < 1000 ? _LOG_10_LOOKUP[n] : Math.log10(n)
 }
 
 /**
@@ -30,7 +30,7 @@ export interface LimitEvents {
    * Event fired when the {@link LimitAlgorithm} changes
    * @param newLimit The new limit
    */
-  changed(newLimit: number): void;
+  changed(newLimit: number): void
 }
 
 /**
@@ -44,7 +44,7 @@ export interface LimitAlgorithm extends Emitter<LimitEvents> {
    * @param inFlight The number of other operations that were currently running
    * @param dropped Flag to indicate if the operation was dropped
    */
-  update(duration: Duration, inFlight: number, dropped: boolean): void;
+  update(duration: Duration, inFlight: number, dropped: boolean): void
 }
 
 /**
@@ -54,17 +54,17 @@ export interface LimitedOperation {
   /**
    * Mark the operation as successful
    */
-  success(): void;
+  success(): void
 
   /**
    * Ignore the operation as there was an unusual outcome that might bias the {@link LimitAlgorithm}
    */
-  ignore(): void;
+  ignore(): void
 
   /**
    * The operation was dropped (timed out, was rate limited, or otherwise failed due to too much load)
    */
-  dropped(): void;
+  dropped(): void
 }
 
 /**
@@ -74,12 +74,12 @@ export interface Limiter {
   /**
    * Attempt to acquire a {@link LimitedOperation}
    */
-  tryAcquire(): LimitedOperation | undefined;
+  tryAcquire(): LimitedOperation | undefined
 
   /**
    * Retrieve the current limit
    */
-  readonly limit: number;
+  readonly limit: number
 }
 
 /**
@@ -91,7 +91,7 @@ export interface Limiter {
  */
 export function createSimpleLimiter(
   limitAlgorithm: LimitAlgorithm = fixedLimit(1),
-  initialLimit = 1
+  initialLimit = 1,
 ): Limiter {
-  return simpleLimiter(limitAlgorithm, initialLimit);
+  return simpleLimiter(limitAlgorithm, initialLimit)
 }

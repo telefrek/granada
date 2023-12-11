@@ -1,28 +1,101 @@
-import { Readable } from "stream";
-import { HttpHeaders, StringOrArray } from "..";
+import { Readable } from "stream"
+import { HttpHeaders, HttpRequest, StringOrArray } from ".."
+import { HttpPipelineTransform } from "../pipeline"
 
 /**
  * Represents valid MediaType values including parameters
  */
 export const MEDIA_TYPE_REGEX =
-  /^(application|text|image|audio|video|model|font|multipart|message)\/(vnd\.|prs\.|x\.)?([-\w.]+)(\+[-\w]+)?(;.*)?$/;
+  /^(application|text|image|audio|video|model|font|multipart|message)\/(vnd\.|prs\.|x\.)?([-\w.]+)(\+[-\w]+)?(;.*)?$/
 
 /**
  * The content type header
  */
-export const CONTENT_TYPE_HEADER = "content-type";
+export const CONTENT_TYPE_HEADER = "content-type"
+
+/**
+ * {@link HttpPipelineTransform} for handling content parsing
+ *
+ * @param readable The {@link ReadableStream} of {@link HttpRequest}
+ * @returns A {@link ReadableStream} of {@link HttpRequest} where body contents are parsed
+ */
+export const CONTENT_PARSING_TRANSFORM: HttpPipelineTransform = (
+  readable: ReadableStream<HttpRequest>,
+) => readable.pipeThrough(new ContentParsingTransform())
+
+class ContentParsingTransform extends TransformStream<
+  HttpRequest,
+  HttpRequest
+> {
+  constructor() {
+    super({
+      transform: (request, controller) => {
+        try {
+          // Check if there is a body and if so process the contents
+          if (request.body) {
+            // Parse out the media type
+            request.body.mediaType = getContentType(request.headers)
+
+            // If we know how to decode this, go ahead
+            if (request.body.mediaType) {
+              // TODO: We should be able to inject a media type mapper for streams...
+              if (
+                isJson(request.body.mediaType) &&
+                request.body.contents instanceof Readable &&
+                !request.body.contents.readableEnded
+              ) {
+                const readableStream = request.body.contents
+                const encoding =
+                  (request.body.mediaType.parameters.get(
+                    "charset",
+                  ) as BufferEncoding) ?? "utf-8"
+
+                const bodyReader = async function* () {
+                  yield await new Promise((resolve, reject) => {
+                    let bodyStr = ""
+                    readableStream
+                      .on("data", (chunk: string | Buffer) => {
+                        bodyStr +=
+                          typeof chunk === "string"
+                            ? chunk
+                            : chunk.toString(encoding)
+                      })
+                      .on("end", () => {
+                        resolve(JSON.parse(bodyStr))
+                      })
+                      .on("error", (err) => {
+                        reject(err)
+                      })
+                  })
+                }
+
+                request.body.contents = Readable.from(bodyReader())
+              } else {
+                console.log("no body reading today...")
+              }
+            }
+          }
+
+          controller.enqueue(request)
+        } catch (err) {
+          controller.error(err)
+        }
+      },
+    })
+  }
+}
 
 /**
  * Try to extract the content type from the given headers
  * @param headers The {@link HttpHeaders} to examine
  * @returns The content type header or undefined
  */
-export function getContentType(headers: HttpHeaders): string | undefined {
-  let value: StringOrArray | undefined;
+export function getContentType(headers: HttpHeaders): MediaType | undefined {
+  let value: StringOrArray | undefined
 
   // Fast path is that we have it already lowercase
   if (headers.has(CONTENT_TYPE_HEADER)) {
-    value = headers.get(CONTENT_TYPE_HEADER);
+    value = headers.get(CONTENT_TYPE_HEADER)
   }
 
   // If undefined, may be that we got a headers collection without lowercase somehow
@@ -30,24 +103,24 @@ export function getContentType(headers: HttpHeaders): string | undefined {
     // Iterate the headers trying to find a match
     for (const header of headers.keys()) {
       if (header.toLowerCase() === CONTENT_TYPE_HEADER) {
-        value = headers.get(header);
-        break;
+        value = headers.get(header)
+        break
       }
     }
   }
 
   // Return the value if it was found
   return typeof value === "string"
-    ? value
+    ? parseMediaType(value)
     : typeof value === "object" && Array.isArray(value)
-      ? value[0]
-      : undefined;
+      ? parseMediaType(value[0])
+      : undefined
 }
 
 /**
  * The official composite types
  */
-export type CompositeMediaTypes = "multipart" | "message";
+export type CompositeMediaTypes = "multipart" | "message"
 
 /**
  * The simple and composite type set for all top level MediaTypes
@@ -60,58 +133,12 @@ export type TopLevelMediaTypes =
   | "video"
   | "model"
   | "font"
-  | CompositeMediaTypes;
+  | CompositeMediaTypes
 
 /**
  * Supported media tree types
  */
-export type MediaTreeTypes = "vnd" | "prs" | "x";
-
-/**
- * Parses the contents with the given type out of a buffer.
- *
- * @param type The {@link MediaType} being parsed
- * @param buffer The {@link Readable} that has the contents
- */
-export function parseContents(type: MediaType, buffer: Readable): void {
-  // Ensure it's not ended already
-  if (buffer.readableEnded) {
-    return;
-  }
-
-  // Check for a supported media types
-  // if (isJson(type)) {
-  // }
-  // TODO: Need to support streaming JSON
-  // return () =>
-  //   new Promise((resolve, reject) => {
-  //     let str = "";
-  //     // This is NOT efficient but works for stubbing out the work
-  //     // TODO: Clean this mess up
-  //     const encoding: BufferEncoding =
-  //       (type.parameters?.get("charset") as BufferEncoding) ?? "utf-8";
-  //     buffer
-  //       .on("data", (data: string | Buffer) => {
-  //         str += typeof data === "string" ? data : data.toString(encoding);
-  //       })
-  //       .on("end", () => {
-  //         const j: unknown = JSON.parse(str);
-  //         if (typeof j === "undefined") resolve(undefined);
-  //         else if (typeof j === "object")
-  //           resolve(Array.isArray(j) ? (j as T[]) : (j as T));
-  //       })
-  //       .on("error", (err) => {
-  //         reject(err);
-  //       });
-  //   });
-
-  // }
-
-  // // Return a promise for unsupported media type handling
-  // return () => {
-  //   return Promise.reject(new Error(`Unsupported media type: ${type.type}`));
-  // };
-}
+export type MediaTreeTypes = "vnd" | "prs" | "x"
 
 /**
  * Attempts to validate and parse the media type
@@ -123,7 +150,7 @@ export function parseMediaType(mediaType: string): MediaType | undefined {
   // Verify we didn't get null
   if (mediaType) {
     // Try to parse the media type
-    const typeInfo = MEDIA_TYPE_REGEX.exec(mediaType);
+    const typeInfo = MEDIA_TYPE_REGEX.exec(mediaType)
     if (typeInfo) {
       return {
         type: typeInfo[1] as TopLevelMediaTypes,
@@ -141,13 +168,13 @@ export function parseMediaType(mediaType: string): MediaType | undefined {
                 p
                   .trim()
                   .split("=")
-                  .map((s) => s.trim()) as [string, string]
-            )
+                  .map((s) => s.trim()) as [string, string],
+            ),
         ),
-      };
+      }
     }
   }
-  return;
+  return
 }
 
 export function mediaTypeToString(media: MediaType): string {
@@ -160,7 +187,7 @@ export function mediaTypeToString(media: MediaType): string {
             .map((k) => `;${k}=${media.parameters.get(k)}`)
             .join("")
         : ""
-    }`;
+    }`
   } else {
     return `${media.type}${
       media.parameters.size > 0
@@ -168,7 +195,7 @@ export function mediaTypeToString(media: MediaType): string {
             .map((k) => `;${k}=${media.parameters.get(k)}`)
             .join("")
         : ""
-    }`;
+    }`
   }
 }
 
@@ -178,12 +205,12 @@ export function mediaTypeToString(media: MediaType): string {
  * {@link https://www.rfc-editor.org/rfc/rfc2046.html}
  */
 export interface MediaType {
-  type: TopLevelMediaTypes;
-  tree?: MediaTreeTypes;
-  subType?: string;
-  suffix?: string;
+  type: TopLevelMediaTypes
+  tree?: MediaTreeTypes
+  subType?: string
+  suffix?: string
   /** Note it's up to the type implementation to verify the parameters after parsing */
-  parameters: Map<string, string>;
+  parameters: Map<string, string>
 }
 
 /**
@@ -195,31 +222,31 @@ export interface MediaType {
 export function isJson(media: MediaType): boolean {
   // Simple check for JSON, need to extend this out more
   if (media.type === "application" && media.subType === "json") {
-    return true;
+    return true
   }
 
-  return false;
+  return false
 }
 
 /**
  * Handling composite media types with special handling
  */
 export interface CompositeMediaType extends MediaType {
-  type: CompositeMediaTypes;
+  type: CompositeMediaTypes
 }
 
 /**
  * Represents multipart content types
  */
 export class MultipartMediaType implements CompositeMediaType {
-  readonly type: CompositeMediaTypes = "multipart";
-  readonly parameters = new Map<string, string>();
+  readonly type: CompositeMediaTypes = "multipart"
+  readonly parameters = new Map<string, string>()
 }
 
 /**
  * Represents message content types
  */
 export class MessageMediaType implements CompositeMediaType {
-  readonly type: CompositeMediaTypes = "message";
-  readonly parameters = new Map<string, string>();
+  readonly type: CompositeMediaTypes = "message"
+  readonly parameters = new Map<string, string>()
 }

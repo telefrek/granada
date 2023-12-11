@@ -1,18 +1,18 @@
-import { LimitAlgorithm, LimitedOperation, Limiter } from ".";
-import { Semaphore } from "..";
-import { Timer } from "../../time";
+import { LimitAlgorithm, LimitedOperation, Limiter } from "."
+import { Semaphore } from ".."
+import { Timer } from "../../time"
 
 /**
  * Base class for all implementations of the {@link Limiter}
  */
 abstract class AbstractLimiter implements Limiter {
-  #limitAlgorithm: LimitAlgorithm;
-  #limit: number;
-  #inFlight: number;
+  #limitAlgorithm: LimitAlgorithm
+  #limit: number
+  #inFlight: number
 
   // Allow retrieving the internal limit
   get limit() {
-    return this.#limit;
+    return this.#limit
   }
 
   /**
@@ -23,25 +23,25 @@ abstract class AbstractLimiter implements Limiter {
    */
   constructor(limitAlgorithm: LimitAlgorithm, initialLimit: number) {
     if (initialLimit <= 0) {
-      throw new Error(`Invalid initialLimit: ${initialLimit}`);
+      throw new Error(`Invalid initialLimit: ${initialLimit}`)
     }
 
-    this.#limitAlgorithm = limitAlgorithm;
-    this.#limit = initialLimit;
-    this.#inFlight = 0;
+    this.#limitAlgorithm = limitAlgorithm
+    this.#limit = initialLimit
+    this.#inFlight = 0
 
-    this.#limitAlgorithm.on("changed", this.onChange.bind(this));
+    this.#limitAlgorithm.on("changed", this.onChange.bind(this))
   }
 
   /**
    * @returns The current limit
    */
   getLimit(): number {
-    return this.#limit;
+    return this.#limit
   }
 
   tryAcquire(): LimitedOperation | undefined {
-    return;
+    return
   }
 
   /**
@@ -50,7 +50,7 @@ abstract class AbstractLimiter implements Limiter {
    * @param newLimit The new limit to use
    */
   protected onChange(newLimit: number) {
-    this.#limit = newLimit;
+    this.#limit = newLimit
   }
 
   /**
@@ -59,17 +59,17 @@ abstract class AbstractLimiter implements Limiter {
    * @returns A basic {@link LimitedOperation}
    */
   protected createOperation(): LimitedOperation {
-    return new this.AbstractLimitOperation(this);
+    return new this.AbstractLimitOperation(this)
   }
 
   /**
    * Base {@link LimitedOperation} that handles state tracking and mainpulation of the underlying {@link AbstractLimiter}
    */
   AbstractLimitOperation = class implements LimitedOperation {
-    #limiter: AbstractLimiter;
-    #finished: boolean;
-    #timer: Timer;
-    #running: number;
+    #limiter: AbstractLimiter
+    #finished: boolean
+    #timer: Timer
+    #running: number
 
     /**
      * Requires the base {@link AbstractLimiter} which can be updated
@@ -77,33 +77,33 @@ abstract class AbstractLimiter implements Limiter {
      * @param limiter The {@link AbstractLimiter} to update
      */
     constructor(limiter: AbstractLimiter) {
-      this.#limiter = limiter;
-      this.#finished = false;
-      this.#running = ++limiter.#inFlight;
-      this.#timer = new Timer();
-      this.#timer.start();
+      this.#limiter = limiter
+      this.#finished = false
+      this.#running = ++limiter.#inFlight
+      this.#timer = new Timer()
+      this.#timer.start()
     }
 
     success(): void {
-      this.#update();
+      this.#update()
       this.#limiter.#limitAlgorithm.update(
         this.#timer.stop(),
         this.#running,
-        false
-      );
+        false,
+      )
     }
 
     ignore(): void {
-      this.#update();
+      this.#update()
     }
 
     dropped(): void {
-      this.#update();
+      this.#update()
       this.#limiter.#limitAlgorithm.update(
         this.#timer.stop(),
         this.#running,
-        true
-      );
+        true,
+      )
     }
 
     /**
@@ -112,20 +112,20 @@ abstract class AbstractLimiter implements Limiter {
     #update(): void {
       // Ensure we only finish this once for any state
       if (!this.#finished) {
-        this.#finished = true;
-        this.#limiter.#inFlight--;
+        this.#finished = true
+        this.#limiter.#inFlight--
       } else {
-        throw new Error("This operation has already been finished!");
+        throw new Error("This operation has already been finished!")
       }
     }
-  };
+  }
 }
 
 /**
  * Simple {@link Limiter} that uses a {@link Semaphore} to gate access
  */
 class SimpleLimiter extends AbstractLimiter {
-  #semaphore: Semaphore;
+  #semaphore: Semaphore
 
   /**
    * SimpleLimiter requires at least a {@link LimitAlgorithm} and optional limit (default is 1)
@@ -134,9 +134,9 @@ class SimpleLimiter extends AbstractLimiter {
    * @param initialLimit The optional initial limit (default is 1)
    */
   constructor(limitAlgorithm: LimitAlgorithm, initialLimit = 1) {
-    super(limitAlgorithm, initialLimit);
+    super(limitAlgorithm, initialLimit)
 
-    this.#semaphore = new Semaphore(initialLimit);
+    this.#semaphore = new Semaphore(initialLimit)
   }
 
   override tryAcquire(): LimitedOperation | undefined {
@@ -144,25 +144,25 @@ class SimpleLimiter extends AbstractLimiter {
     if (this.#semaphore.tryAcquire()) {
       return new this.SimpleLimitedOperation(
         this.#semaphore,
-        this.createOperation()
-      );
+        this.createOperation(),
+      )
     }
   }
 
   protected override onChange(newLimit: number): void {
     // Resize the semaphore
-    this.#semaphore.resize(newLimit);
+    this.#semaphore.resize(newLimit)
 
     // Propogate the change
-    super.onChange(newLimit);
+    super.onChange(newLimit)
   }
 
   /**
    * Wrapped {@link LimitedOperation} for releasing the internal {@link Semaphore}
    */
   SimpleLimitedOperation = class implements LimitedOperation {
-    #delegate: LimitedOperation;
-    #semaphore: Semaphore;
+    #delegate: LimitedOperation
+    #semaphore: Semaphore
 
     /**
      * Requires the objects to manage as internal state
@@ -171,25 +171,25 @@ class SimpleLimiter extends AbstractLimiter {
      * @param delegate The {@link LimitedOperation} to delegate to
      */
     constructor(semaphore: Semaphore, delegate: LimitedOperation) {
-      this.#delegate = delegate;
-      this.#semaphore = semaphore;
+      this.#delegate = delegate
+      this.#semaphore = semaphore
     }
 
     success(): void {
-      this.#semaphore.release();
-      this.#delegate.success();
+      this.#semaphore.release()
+      this.#delegate.success()
     }
 
     ignore(): void {
-      this.#semaphore.release();
-      this.#delegate.ignore();
+      this.#semaphore.release()
+      this.#delegate.ignore()
     }
 
     dropped(): void {
-      this.#semaphore.release();
-      this.#delegate.dropped();
+      this.#semaphore.release()
+      this.#delegate.dropped()
     }
-  };
+  }
 }
 
 /**
@@ -201,7 +201,7 @@ class SimpleLimiter extends AbstractLimiter {
  */
 export function simpleLimiter(
   limitAlgorithm: LimitAlgorithm,
-  initialLimit = 1
+  initialLimit = 1,
 ): Limiter {
-  return new SimpleLimiter(limitAlgorithm, initialLimit);
+  return new SimpleLimiter(limitAlgorithm, initialLimit)
 }

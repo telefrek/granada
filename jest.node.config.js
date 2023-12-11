@@ -8,4 +8,4 @@ module.exports = {
   moduleNameMapper: {
     "^@telefrek/(.*)$": "<rootDir>/packages/$1/",
   },
-};
+}

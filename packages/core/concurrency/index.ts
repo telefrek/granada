@@ -2,19 +2,19 @@
  * Concurrency primitives
  */
 
-import { MaybeAwaitable } from "..";
+import { MaybeAwaitable } from ".."
 
 /**
  * Simple type definition for a monitor callback that mirrors what a {@link Promise} will provide
  */
-type MutexCallback = (value: MaybeAwaitable) => void;
+type MutexCallback = (value: MaybeAwaitable) => void
 
 /**
  * Class representing a simple mutex
  */
 export class Mutex {
-  #locked = false;
-  #callbacks: MutexCallback[] = [];
+  #locked = false
+  #callbacks: MutexCallback[] = []
 
   /**
    * Tries to acquire the {@link Mutex} but will not block if unavailable
@@ -23,11 +23,11 @@ export class Mutex {
    */
   tryAcquire(): boolean {
     if (!this.#locked) {
-      this.#locked = true;
-      return true;
+      this.#locked = true
+      return true
     }
 
-    return false;
+    return false
   }
 
   /**
@@ -37,35 +37,35 @@ export class Mutex {
    */
   acquire(): PromiseLike<void> | undefined {
     if (!this.#locked) {
-      this.#locked = true;
-      return;
+      this.#locked = true
+      return
     }
 
     return new Promise((resolve) => {
-      this.#callbacks.push(resolve);
-    });
+      this.#callbacks.push(resolve)
+    })
   }
 
   /**
    * Releases the {@link Mutex} to another waiting caller
    */
   release(): void {
-    this.#locked = false;
+    this.#locked = false
 
     if (this.#callbacks.length > 0) {
-      setImmediate(this.#callbacks.shift()!);
+      setImmediate(this.#callbacks.shift()!)
     }
   }
 }
 
 /** Internal symbol for tracking monitors on objects */
-const MONITOR_SYMBOL = Symbol("_monitor_");
+const MONITOR_SYMBOL = Symbol("_monitor_")
 
 /**
  * Simple implementation of a monitor
  */
 export class Monitor {
-  #mutex: Mutex = new Mutex();
+  #mutex: Mutex = new Mutex()
 
   /**
    * Wait for the given {@link Monitor} to become available
@@ -73,14 +73,14 @@ export class Monitor {
    * @returns A {@link PromiseLike} value that can be used to `await` the underly resource being available
    */
   wait(): PromiseLike<void> | undefined {
-    return this.#mutex.acquire();
+    return this.#mutex.acquire()
   }
 
   /**
    * Notify the next waiter that the {@link Monitor} has become available
    */
   pulse(): void {
-    this.#mutex.release();
+    this.#mutex.release()
   }
 }
 
@@ -92,28 +92,28 @@ export class Monitor {
  */
 export function getMonitor(obj: unknown): Monitor {
   if (typeof obj !== "object" || !obj)
-    throw new Error("Trying to obtain monitor on non-object");
+    throw new Error("Trying to obtain monitor on non-object")
 
   // Get the monitor or inject it
   return obj[MONITOR_SYMBOL as keyof typeof obj] === undefined
     ? // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
       ((obj as any)[MONITOR_SYMBOL] = new Monitor())
-    : (obj[MONITOR_SYMBOL as keyof typeof obj] as Monitor);
+    : (obj[MONITOR_SYMBOL as keyof typeof obj] as Monitor)
 }
 
 /**
  * Represents a semaphore that can be used to control concurrent actions
  */
 export class Semaphore {
-  #concurrency: number;
-  #running = 0;
-  #callbacks: MutexCallback[] = [];
+  #concurrency: number
+  #running = 0
+  #callbacks: MutexCallback[] = []
 
   /**
    * @param concurrency The desired concurrency
    */
   constructor(concurrency: number) {
-    this.#concurrency = concurrency;
+    this.#concurrency = concurrency
   }
 
   /**
@@ -122,12 +122,12 @@ export class Semaphore {
    * @param fn Function to run
    */
   async run<T>(fn: () => Promise<T> | T): Promise<T> {
-    await this.acquire();
+    await this.acquire()
 
     try {
-      return await fn();
+      return await fn()
     } finally {
-      this.release();
+      this.release()
     }
   }
 
@@ -138,11 +138,11 @@ export class Semaphore {
    */
   public tryAcquire(): boolean {
     if (this.#running < this.#concurrency) {
-      this.#running++;
-      return true;
+      this.#running++
+      return true
     }
 
-    return false;
+    return false
   }
 
   /**
@@ -152,14 +152,14 @@ export class Semaphore {
   public acquire(): Promise<void> | undefined {
     // Go ahead and run
     if (this.#running < this.#concurrency) {
-      this.#running++;
-      return;
+      this.#running++
+      return
     }
 
     // Queue the promise fulfillment as a mutex callback
     return new Promise<void>((resolve) => {
-      this.#callbacks.push(resolve);
-    });
+      this.#callbacks.push(resolve)
+    })
   }
 
   /**
@@ -170,10 +170,10 @@ export class Semaphore {
   public release() {
     if (this.#callbacks.length > 0 && this.#running < this.#concurrency) {
       // Fire the mutex to release another unit of work
-      this.#callbacks.shift()!();
+      this.#callbacks.shift()!()
     } else {
       // Decrement the current running count
-      this.#running--;
+      this.#running--
     }
   }
 
@@ -185,17 +185,17 @@ export class Semaphore {
   public resize(newLimit: number): void {
     // Verify we don't get a silly value
     if (newLimit <= 0) {
-      throw new Error(`Invalid newLimit: ${newLimit}`);
+      throw new Error(`Invalid newLimit: ${newLimit}`)
     }
 
     // Update the concurrency
-    this.#concurrency = newLimit;
+    this.#concurrency = newLimit
 
     // We only need to signal more work during an increase, the decrease will happen automatically during the release cycle
     while (this.#concurrency >= this.#running && this.#callbacks.length > 0) {
       // Increase the running count and release one of the waiting callbacks
-      this.#running++;
-      this.#callbacks.shift()!();
+      this.#running++
+      this.#callbacks.shift()!()
     }
   }
 
@@ -203,13 +203,13 @@ export class Semaphore {
    * @returns The number of available slots in the semaphore
    */
   available(): number {
-    return this.#concurrency - this.#running;
+    return this.#concurrency - this.#running
   }
 
   /**
    * @returns The current concurrency limit
    */
   limit(): number {
-    return this.#concurrency;
+    return this.#concurrency
   }
 }

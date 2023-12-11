@@ -1,9 +1,9 @@
 {
   "name": "@telefrek/http",
   "version": "0.1.0",
-  "description": "",
+  "description": "This package standardizes how HTTP clients and servers interact at a low level",
   "scripts": {
-    "compile": "rm -rf dist/* && tsc -p tsconfig.json",
+    "compile": "rm -rf dist/* && tsc -p tsconfig.compile.json",
     "upgrade": "npx npm-check-updates -u && npm install"
   },
   "keywords": [

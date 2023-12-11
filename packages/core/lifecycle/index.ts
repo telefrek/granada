@@ -2,7 +2,7 @@
  * Package exports
  */
 
-import { MaybeAwaitable } from "..";
+import { MaybeAwaitable } from ".."
 
 /**
  * Set of supported events on an object with a defined lifecycle
@@ -11,23 +11,23 @@ export interface LifecycleEvents {
   /**
    * Fired when the object is initializing itself
    */
-  initializing: () => void;
+  initializing: () => void
 
   /**
    * Fired when the object is started
    */
-  started: () => void;
+  started: () => void
 
   /**
    * Fired when the object is stopping
    */
-  stopping: () => void;
+  stopping: () => void
 
   /**
    *
    * @returns Fired when the object has finished
    */
-  finished: () => void;
+  finished: () => void
 }
 
 /**
@@ -36,11 +36,11 @@ export interface LifecycleEvents {
  * @param callback The callback to invoke on a shutdown
  */
 export function registerShutdown(callback: () => MaybeAwaitable) {
-  shutdownHooks.push(callback);
+  shutdownHooks.push(callback)
 }
 
 /** Set of shutdown hooks to fire on exit */
-const shutdownHooks: (() => MaybeAwaitable)[] = [];
+const shutdownHooks: (() => MaybeAwaitable)[] = []
 
 /** Simple method to invoke shutdowns */
 const shutdown = () => {
@@ -48,13 +48,13 @@ const shutdown = () => {
   Promise.all(shutdownHooks.map(async (s) => await s())).then(
     () => console.log("shutdown finished"),
     (err) => {
-      console.error(`error: ${err}`);
-    }
-  );
-};
+      console.error(`error: ${err}`)
+    },
+  )
+}
 
 // Local process kill (ctrl+c)
-process.on("SIGINT", shutdown);
+process.on("SIGINT", shutdown)
 
 // Container process kill (docker, etc.)
-process.on("SIGTERM", shutdown);
+process.on("SIGTERM", shutdown)
