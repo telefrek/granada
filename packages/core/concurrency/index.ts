@@ -3,11 +3,12 @@
  */
 
 import { MaybeAwaitable } from ".."
+import { Duration } from "../time"
 
 /**
  * Simple type definition for a monitor callback that mirrors what a {@link Promise} will provide
  */
-type MutexCallback = (value: MaybeAwaitable) => void
+type MutexCallback = (value: MaybeAwaitable<boolean>) => void
 
 /**
  * Class representing a simple mutex
@@ -33,16 +34,46 @@ export class Mutex {
   /**
    * Acquires the {@link Mutex}, waiting if necessary
    *
+   * @param timeout An optional timeout for the operation
+   *
    * @returns A {@link PromiseLike} value for tracking when the mutex is acquired
    */
-  acquire(): PromiseLike<void> | undefined {
+  acquire(timeout?: Duration): PromiseLike<boolean> | boolean {
     if (!this.#locked) {
       this.#locked = true
-      return
+      return true
     }
 
     return new Promise((resolve) => {
-      this.#callbacks.push(resolve)
+      // Check for timeout
+      if (timeout !== undefined) {
+        // eslint-disable-next-line prefer-const
+        let timer: NodeJS.Timeout | undefined
+
+        // Have to create the callback before the timeout
+        const callback: MutexCallback = (v) => {
+          clearTimeout(timer)
+          resolve(v)
+        }
+
+        // Set the timeout
+        timer = setTimeout(() => {
+          // Verify our callback is still in the set
+          const idx = this.#callbacks.indexOf(callback)
+          if (idx > 0) {
+            // Remove the callback from being accessed to release memory
+            this.#callbacks.splice(idx, 1)
+
+            // Don't resolve false unless we popped off the stack
+            resolve(false)
+          }
+        }, timeout.milliseconds())
+
+        // Add the callback to cancel the timer
+        this.#callbacks.push(callback)
+      } else {
+        this.#callbacks.push(resolve)
+      }
     })
   }
 
@@ -50,10 +81,20 @@ export class Mutex {
    * Releases the {@link Mutex} to another waiting caller
    */
   release(): void {
+    // Release our hold on the lock...
     this.#locked = false
 
+    // Fire the next callback when ready with a true flag to indicate success
     if (this.#callbacks.length > 0) {
-      setImmediate(this.#callbacks.shift()!)
+      // Re-lock the structure
+      this.#locked = true
+
+      // Fire the next piece of code right after this since we can't know which phase of the event
+      // loop we are currently in
+      process.nextTick(() => {
+        // Let the next code execute
+        this.#callbacks.shift()!(true)
+      })
     }
   }
 }
@@ -70,10 +111,12 @@ export class Monitor {
   /**
    * Wait for the given {@link Monitor} to become available
    *
-   * @returns A {@link PromiseLike} value that can be used to `await` the underly resource being available
+   * @param timeout The maximum amount of time to wait
+   *
+   * @returns A {@link MutexCallback} value that can be used to `await` the underly resource being available
    */
-  wait(): PromiseLike<void> | undefined {
-    return this.#mutex.acquire()
+  wait(timeout?: Duration): PromiseLike<boolean> | boolean {
+    return this.#mutex.acquire(timeout)
   }
 
   /**
@@ -146,19 +189,50 @@ export class Semaphore {
   }
 
   /**
+   * Waits up to the timeout (if defined) for the semaphore to become available
+   *
+   * @param timeout The maximum amount of time to wait for the semaphore
    *
    * @returns A promise for tracking the aquisition of the semaphore
    */
-  public acquire(): Promise<void> | undefined {
+  public acquire(timeout?: Duration): Promise<boolean> | boolean {
     // Go ahead and run
     if (this.#running < this.#concurrency) {
       this.#running++
-      return
+      return true
     }
 
     // Queue the promise fulfillment as a mutex callback
-    return new Promise<void>((resolve) => {
-      this.#callbacks.push(resolve)
+    return new Promise((resolve) => {
+      // Check for timeout
+      if (timeout !== undefined) {
+        // eslint-disable-next-line prefer-const
+        let timer: NodeJS.Timeout | undefined
+
+        // Have to create the callback before the timeout
+        const callback: MutexCallback = (v) => {
+          clearTimeout(timer)
+          resolve(v)
+        }
+
+        // Set the timeout
+        timer = setTimeout(() => {
+          // Verify our callback is still in the set
+          const idx = this.#callbacks.indexOf(callback)
+          if (idx > 0) {
+            // Remove the callback from being accessed to release memory
+            this.#callbacks.splice(idx, 1)
+
+            // Don't resolve false unless we popped off the stack
+            resolve(false)
+          }
+        }, timeout.milliseconds())
+
+        // Add the callback to cancel the timer
+        this.#callbacks.push(callback)
+      } else {
+        this.#callbacks.push(resolve)
+      }
     })
   }
 
@@ -170,7 +244,7 @@ export class Semaphore {
   public release() {
     if (this.#callbacks.length > 0 && this.#running < this.#concurrency) {
       // Fire the mutex to release another unit of work
-      this.#callbacks.shift()!()
+      this.#callbacks.shift()!(true)
     } else {
       // Decrement the current running count
       this.#running--
@@ -195,7 +269,7 @@ export class Semaphore {
     while (this.#concurrency >= this.#running && this.#callbacks.length > 0) {
       // Increase the running count and release one of the waiting callbacks
       this.#running++
-      this.#callbacks.shift()!()
+      this.#callbacks.shift()!(true)
     }
   }
 

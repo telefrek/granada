@@ -4,11 +4,7 @@
 
 import { Emitter } from "@telefrek/core/events"
 import { LifecycleEvents } from "@telefrek/core/lifecycle"
-import { EventEmitter } from "stream"
-import { HttpRequest, HttpStatus, emptyHeaders } from "."
-import { CONTENT_PARSING_TRANSFORM } from "./content"
-import { enableLoadShedding } from "./loadShedding"
-import { HttpServer } from "./server"
+import type { HttpRequest } from "."
 
 /**
  * Set of supported events on an {@link HttpServer}
@@ -20,12 +16,73 @@ interface HttpPipelineEvents extends LifecycleEvents {
    * @param error The error that was encountered
    */
   error: (error: unknown) => void
+
+  /**
+   * Fired when the pipeline is paused
+   */
+  paused: () => void
+
+  /**
+   * Fired when the pipeline resumes processing
+   */
+  resumed: () => void
+}
+
+/**
+ * Explicitly define the stages of a pipeline
+ */
+export enum PipelineStage {
+  LOAD_SHEDDING = "loadShedding",
+  AUTHENTICATION = "authentication",
+  CONTENT_PARSING = "contentParsing",
+  MIDDLEWARE = "middleware",
+  ROUTING = "routing",
+  AUTHORIZATION = "authorization",
+  HANDLER = "handler",
+}
+
+/**
+ * Interface for a pipeline {@link HttpRequest}
+ */
+export interface PipelineRequest extends HttpRequest {
+  /**
+   * The current {@link PipelineStage}
+   */
+  pipelineStage: PipelineStage
+}
+
+/**
+ * Define a type that has transforms for each stage
+ */
+export type StagedPipeline = Partial<
+  Record<PipelineStage, HttpPipelineTransform>
+>
+
+/**
+ * Combine two {@link HttpPipelineTransform} together
+ *
+ * @param left The first {@link HttpPipelineTransform} to run
+ * @param right seocond {@link HttpPipelineTransform} to run
+ * @returns A new {@link HttpPipelineTransform} that combines the two inputs
+ */
+export function combine(
+  left: HttpPipelineTransform,
+  right: HttpPipelineTransform,
+): HttpPipelineTransform {
+  return (readable: ReadableStream<HttpRequest>) => {
+    return right(left(readable))
+  }
 }
 
 /**
  * Represents an abstract pipeline for processing requests
  */
-export type HttpPipeline = Emitter<HttpPipelineEvents>
+export interface HttpPipeline extends Emitter<HttpPipelineEvents> {
+  /**
+   * Stops the pipeline from processing further requests
+   */
+  stop(): void
+}
 
 /**
  * Simple pipeline transformation
@@ -34,109 +91,23 @@ export type HttpPipelineTransform = (
   requests: ReadableStream<HttpRequest>,
 ) => ReadableStream<HttpRequest>
 
-/**
- * Represents an object capable of building an {@link HttpPipeline}
- */
-export interface HttpPipelineBuilder {
-  /**
-   * Get the current set of transforms
-   */
-  readonly transforms: HttpPipelineTransform[]
-
-  /**
-   * Adds a transform
-   *
-   * @param transform The {@link HttpPipelineTransform} to add
-   */
-  addTransform(transform: HttpPipelineTransform): HttpPipelineBuilder
-
-  /**
-   * Builds an {@link HttpPipeline}
-   */
-  build(): HttpPipeline
-}
-
-/**
- *
- * @param server
- * @returns
- */
-export function createDefaultPipelineBuilder(
-  server: HttpServer,
-): HttpPipelineBuilder {
-  return new DefaultPipelineBuilder(server)
-    .addTransform(enableLoadShedding())
-    .addTransform(CONTENT_PARSING_TRANSFORM)
-}
-
-class DefaultPipelineBuilder implements HttpPipelineBuilder {
-  readonly #server: HttpServer
-  readonly #transforms: HttpPipelineTransform[] = []
-
-  get transforms() {
-    return this.#transforms
-  }
-
-  constructor(server: HttpServer) {
-    this.#server = server
-  }
-
-  addTransform(transform: HttpPipelineTransform): HttpPipelineBuilder {
-    this.#transforms.push(transform)
-    return this
-  }
-
-  build(): HttpPipeline {
-    // Start the chain
-    let readable = new ReadableStream<HttpRequest>({
-      start: (controller: ReadableStreamDefaultController) => {
-        console.log("starting request pump")
-        this.#server.on("request", (request) => {
-          controller.enqueue(request)
-        })
-      },
-    })
-
-    // Apply the transformations
-    for (const transform of this.#transforms) {
-      readable = transform(readable)
-    }
-
-    // Return the pipeline that will run it all
-    return new DefaultPipeline(readable)
-  }
+export function createPipeline(
+  source: ReadableStream,
+  stages: StagedPipeline,
+): HttpPipeline {
+  return new DefaultPipeline(source, stages)
 }
 
 class DefaultPipeline extends EventEmitter implements HttpPipeline {
-  #requestStream: ReadableStream<HttpRequest>
-  #unhandledRequestWriter: WritableStream<HttpRequest>
+  #pipeline: ReadableStream<HttpRequest> | undefined
 
-  constructor(requestStream: ReadableStream<HttpRequest>) {
+  constructor(source: ReadableStream<HttpRequest>, stages: StagedPipeline) {
     super()
-    this.#requestStream = requestStream
-    this.#unhandledRequestWriter = new WritableStream({
-      write: (
-        request: HttpRequest,
-        _controller: WritableStreamDefaultController,
-      ) => {
-        request.respond({
-          status: HttpStatus.NOT_FOUND,
-          headers: emptyHeaders(),
-        })
-      },
-    })
 
-    setImmediate(() => void this.#processRequests())
+    const test = Readable.fromWeb(source)
   }
 
-  /**
-   * Process the requests and handle any errors or unhandled requests
-   */
-  async #processRequests(): Promise<void> {
-    this.emit("started")
-    await this.#requestStream
-      .pipeTo(this.#unhandledRequestWriter, {})
-      .catch((err) => this.emit("error", err))
-      .finally(() => this.emit("finished"))
+  stop(): void {
+    throw new Error("Method not implemented.")
   }
 }

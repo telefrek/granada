@@ -54,7 +54,7 @@ describe("Testing Time Utilities", () => {
     expect(nanoDuration.microseconds()).toBeLessThanOrEqual(expectedMicro)
 
     // Verify the durations for milliseconds
-    const milliDuration = Duration.fromMill(afterMs - beforeMs)
+    const milliDuration = Duration.fromMilli(afterMs - beforeMs)
     expect(milliDuration.seconds()).toBeLessThanOrEqual(expectedSeconds)
     expect(milliDuration.milliseconds()).toBeLessThanOrEqual(expectedMilli)
     expect(milliDuration.microseconds()).toBeLessThanOrEqual(expectedMicro)

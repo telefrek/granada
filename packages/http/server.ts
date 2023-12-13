@@ -65,6 +65,8 @@ export interface HttpServer extends Emitter<HttpServerEvents> {
    * Closes the server, rejecting any further calls
    */
   close(): Promise<void>
+
+  toReadable(): Readable
 }
 
 /**
@@ -202,6 +204,14 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
         resolve()
       }
     })
+  }
+
+  toReadable(): Readable {
+    const readable = Readable.from(async *function()=>{
+      let next = new Awaitable
+    })
+
+    return readable
   }
 
   #setupRequestMapping(): void {

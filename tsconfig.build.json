@@ -1,8 +1,8 @@
 {
   "exclude": ["**/*.test.ts", "node_modules", "dist"],
   "compilerOptions": {
-    "target": "es2021",
-    "module": "commonjs",
+    "target": "ESNext",
+    "module": "CommonJS",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,

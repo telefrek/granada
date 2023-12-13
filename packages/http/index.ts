@@ -4,8 +4,8 @@
 
 import { Emitter } from "@telefrek/core/events"
 import { LifecycleEvents } from "@telefrek/core/lifecycle"
-import { Readable, Writable } from "stream"
-import { MediaType } from "./content"
+import type { Readable, Writable } from "stream"
+import type { MediaType } from "./content"
 
 export type StringOrArray = string | string[]
 

@@ -118,7 +118,7 @@ export class Duration {
    * @param milliseconds The number of milliseconds elapsed
    * @returns A new {@link Duration} object
    */
-  static fromMill(milliseconds: number): Duration {
+  static fromMilli(milliseconds: number): Duration {
     return new Duration(BigInt(MICRO_PER_MILLI * milliseconds))
   }
 
