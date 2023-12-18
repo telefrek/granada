@@ -35,12 +35,12 @@ export interface LifecycleEvents {
  *
  * @param callback The callback to invoke on a shutdown
  */
-export function registerShutdown(callback: () => MaybeAwaitable) {
+export function registerShutdown(callback: () => MaybeAwaitable<unknown>) {
   shutdownHooks.push(callback)
 }
 
 /** Set of shutdown hooks to fire on exit */
-const shutdownHooks: (() => MaybeAwaitable)[] = []
+const shutdownHooks: (() => MaybeAwaitable<unknown>)[] = []
 
 /** Simple method to invoke shutdowns */
 const shutdown = () => {

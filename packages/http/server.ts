@@ -5,6 +5,7 @@
 import { trace } from "@opentelemetry/api"
 import { Emitter } from "@telefrek/core/events"
 import { LifecycleEvents, registerShutdown } from "@telefrek/core/lifecycle"
+import { CircularArrayBuffer } from "@telefrek/core/structures/circularBuffer"
 import EventEmitter from "events"
 import * as http2 from "http2"
 import { Readable, finished, pipeline } from "stream"
@@ -16,6 +17,7 @@ import {
   HttpQuery,
   HttpRequest,
   HttpResponse,
+  HttpStatus,
   HttpVersion,
   emptyHeaders,
   parsePath,
@@ -66,6 +68,9 @@ export interface HttpServer extends Emitter<HttpServerEvents> {
    */
   close(): Promise<void>
 
+  /**
+   * Create a readable stream from the server
+   */
   toReadable(): Readable
 }
 
@@ -207,11 +212,24 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
   }
 
   toReadable(): Readable {
-    const readable = Readable.from(async *function()=>{
-      let next = new Awaitable
+    // TODO: Make this configurable
+    const buffer = new CircularArrayBuffer<HttpRequest>({ highWaterMark: 64 })
+
+    this.on("request", (request: HttpRequest) => {
+      // If we can't add to the buffer, need to reject
+      if (!buffer.tryAdd(request)) {
+        const headers = emptyHeaders()
+
+        // TODO: Make this configurable...
+        headers.set("Retry-After", "60")
+        request.respond({
+          status: HttpStatus.SERVICE_UNAVAILABLE,
+          headers,
+        })
+      }
     })
 
-    return readable
+    return Readable.from(buffer, { objectMode: true })
   }
 
   #setupRequestMapping(): void {

@@ -12,7 +12,7 @@ import { Duration } from "../time"
  * consumers.  While this is technically possible to represent with a stream, the semantics and runtime
  * behavior aren't necessarily desirable and I believe this makes for a better mental model.
  */
-export interface CircularBuffer<T> {
+export interface CircularBuffer<T> extends AsyncIterable<T> {
   /** The amount of space currently remaining */
   available: number
   /** The total size of the allocated buffer */
@@ -165,6 +165,10 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
 
     // Fill the buffer with a lot of nothing
     this.#buffer = Array(bufferSize) as T[]
+  }
+
+  [Symbol.asyncIterator](): AsyncIterator<T, void, undefined> {
+    return createIterator(this)
   }
 
   get available(): number {
