@@ -60,7 +60,7 @@ export class Mutex {
         timer = setTimeout(() => {
           // Verify our callback is still in the set
           const idx = this.#callbacks.indexOf(callback)
-          if (idx > 0) {
+          if (idx >= 0) {
             // Remove the callback from being accessed to release memory
             this.#callbacks.splice(idx, 1)
 
@@ -88,12 +88,100 @@ export class Mutex {
     if (this.#callbacks.length > 0) {
       // Re-lock the structure
       this.#locked = true
+      const resolve = this.#callbacks.shift()!
 
       // Fire the next piece of code right after this since we can't know which phase of the event
       // loop we are currently in
       process.nextTick(() => {
         // Let the next code execute
-        this.#callbacks.shift()!(true)
+        resolve(true)
+      })
+    }
+  }
+}
+
+/**
+ * Simple type definition for a signal callback that mirrors what a {@link Promise} will provide
+ */
+type SignalCallback = (value: MaybeAwaitable<boolean>) => void
+
+/**
+ * Class to allow waiting for a signal from another concurrent execution
+ */
+export class Signal {
+  #callbacks: SignalCallback[] = []
+
+  /**
+   * Wait for the given {@link Signal} to become available
+   *
+   * @param timeout The maximum amount of time to wait
+   *
+   * @returns A {@link Promise} value that can be used to `await` the underly resource being available
+   */
+  wait(timeout?: Duration): PromiseLike<boolean> | void {
+    return new Promise<boolean>((resolve) => {
+      // Check for timeout
+      if (timeout !== undefined) {
+        // eslint-disable-next-line prefer-const
+        let timer: NodeJS.Timeout | undefined
+
+        // Have to create the callback before the timeout
+        const callback: SignalCallback = () => {
+          clearTimeout(timer)
+          resolve(true)
+        }
+
+        // Set the timeout
+        timer = setTimeout(() => {
+          // Verify our callback is still in the set
+          const idx = this.#callbacks.indexOf(callback)
+          if (idx >= 0) {
+            // Remove the callback from being accessed to release memory
+            this.#callbacks.splice(idx, 1)
+
+            // Don't resolve false unless we popped off the stack
+            resolve(false)
+          }
+        }, timeout.milliseconds())
+
+        // Add the callback to cancel the timer
+        this.#callbacks.push(callback)
+      } else {
+        this.#callbacks.push(resolve)
+      }
+    })
+  }
+
+  /**
+   * Notify the next waiter that the {@link Signal} has become available
+   */
+  notify(): void {
+    // Fire the next callback when ready with a true flag to indicate success
+    if (this.#callbacks.length > 0) {
+      const resolve = this.#callbacks.shift()!
+
+      // Fire the next piece of code right after this since we can't know which phase of the event
+      // loop we are currently in
+      process.nextTick(() => {
+        // Let the next code execute
+        resolve(true)
+      })
+    }
+  }
+
+  /**
+   * Notify all the waiter that the {@link Signal} has become available
+   */
+  notifyAll(): void {
+    // Fire the next callback when ready with a true flag to indicate success
+    while (this.#callbacks.length > 0) {
+      const resolve = this.#callbacks.shift()!
+
+      // Fire the next piece of code right after this since we can't know which phase of the event
+      // loop we are currently in
+      process.nextTick(() => {
+        // Let the next code execute
+        resolve(true)
       })
     }
   }

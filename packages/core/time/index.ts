@@ -119,7 +119,7 @@ export class Duration {
    * @returns A new {@link Duration} object
    */
   static fromMilli(milliseconds: number): Duration {
-    return new Duration(BigInt(MICRO_PER_MILLI * milliseconds))
+    return new Duration(BigInt(1_000_000 * milliseconds))
   }
 
   /**

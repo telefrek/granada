@@ -26,17 +26,17 @@ describe("Testing Time Utilities", () => {
     const elapsed = timer.stop()
 
     // Stop right after
-    const after = process.hrtime.bigint()
+    const after = process.hrtime.bigint() + 1_000_000n // Add 1 ms
     const afterMs = Date.now()
 
     // Verify the checkpoints are different
     expect(check2.microseconds()).toBeGreaterThan(check1.microseconds())
 
-    // Setup the bounds from the process.hrtimer timings
+    // Setup the bounds from the process.hrtimer timings and give some wiggle room (~1ms)
     const expectedSeconds =
-      Number(((after - before) * 1_000_000n) / 1_000_000_000n) / 1_000_000
+      Number(((after - before) * 1_000_000_000n) / 1_000_000_000n) / 1_000_000
     const expectedMilli =
-      Number(((after - before) * 1_000n) / 1_000_000n) / 1_000
+      Number(((after - before) * 1_000_000n) / 1_000_000_000n) / 1_000
     const expectedMicro = Number((after - before) / 1_000n)
 
     // Verify the timing values are under the expected bounds

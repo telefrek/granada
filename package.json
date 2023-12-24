@@ -5,7 +5,7 @@
     "./examples/*"
   ],
   "scripts": {
-    "test": "jest",
+    "test": "jest --coverage",
     "format": "npx prettier --write .",
     "package": "npm run compile --workspaces --if-present",
     "upgrade-all": "npm run upgrade --workspaces --if-present"
@@ -22,6 +22,7 @@
     "@typescript-eslint/eslint-plugin": "^6.12.0",
     "@typescript-eslint/parser": "^6.12.0",
     "eslint": "^8.54.0",
+    "identity-obj-proxy": "^3.0.0",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
     "ts-jest": "^29.1.1",

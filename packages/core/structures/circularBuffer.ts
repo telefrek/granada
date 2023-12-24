@@ -2,7 +2,7 @@
  * Package contains a definition for a circular buffer
  */
 
-import { Monitor } from "../concurrency"
+import { Signal } from "../concurrency"
 import { Duration } from "../time"
 
 /**
@@ -145,9 +145,9 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
 
   #capacity: number
 
-  // Read/Write locks
-  #readLock = new Monitor()
-  #writeLock = new Monitor()
+  // Read/Write signals
+  #readSignal = new Signal()
+  writeSignal = new Signal()
 
   // Buffer management
   readonly #MASK: number
@@ -195,7 +195,7 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
       this.#size++
 
       // Notify pending writers there is more data
-      this.#writeLock.pulse()
+      this.writeSignal.notify()
 
       return true
     }
@@ -205,8 +205,8 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
 
   tryAddRange(values: T[]): number {
     // If there is room, add what we can
-    if (this.available > 0) {
-      let rem = this.available
+    if (this.available > 0 && values.length > 0) {
+      let rem = Math.min(this.available, values.length)
       let idx = 0
       // Keep adding until the remainder is 0
       // TODO: Probably a faster way to do this, but fine for now to walk the arrays
@@ -217,7 +217,7 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
       }
 
       // Notify pending writers there is more data
-      this.#writeLock.pulse()
+      this.writeSignal.notify()
 
       return idx
     }
@@ -229,7 +229,7 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
     // Check if there is something available
     if (this.available === 0) {
       // Try to see if we can became unblocked before the timeout
-      if (this.#closed || !(await this.#readLock.wait(timeout))) {
+      if (this.#closed || !(await this.#readSignal.wait(timeout))) {
         return false
       }
     }
@@ -237,9 +237,10 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
     // Add it to the buffer and return success
     this.#buffer[this.#head++] = value
     this.#head &= this.#MASK
+    this.#size++
 
     // Notify pending writers there is more data
-    this.#writeLock.pulse()
+    this.writeSignal.notify()
     return true
   }
 
@@ -264,7 +265,7 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
     while (this.available < (minValues ?? 1)) {
       if (
         this.#closed ||
-        !(await this.#readLock.wait(
+        !(await this.#readSignal.wait(
           expiration !== Number.MAX_VALUE
             ? Duration.fromMilli(Math.max(1, Date.now() - expiration))
             : undefined,
@@ -281,10 +282,11 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
     while (rem-- > 0) {
       this.#buffer[this.#head++] = values[idx++]
       this.#head &= this.#MASK
+      this.#size++
     }
 
     // Notify pending writers there is more data
-    this.#writeLock.pulse()
+    this.writeSignal.notify()
 
     return idx
   }
@@ -301,7 +303,7 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
     this.#size--
 
     // Notify pending readers there is more room
-    this.#readLock.pulse()
+    this.#readSignal.notify()
 
     return ret
   }
@@ -325,7 +327,7 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
     }
 
     // Notify pending readers there is more room
-    this.#readLock.pulse()
+    this.#readSignal.notify()
 
     return ret
   }
@@ -333,7 +335,7 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
   async remove(timeout?: Duration): Promise<T | undefined> {
     if (this.#size == 0) {
       // If we are closed or can't read, abandon
-      if (this.#closed || !(await this.#writeLock.wait(timeout))) {
+      if (this.#closed || !(await this.writeSignal.wait(timeout))) {
         return undefined
       }
     }
@@ -344,7 +346,7 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
     this.#size--
 
     // Notify pending readers there is more room
-    this.#readLock.pulse()
+    this.#readSignal.notify()
 
     return ret
   }
@@ -362,9 +364,9 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
         : Number.MAX_VALUE
 
     // Try to wait for the amount of space we need to show up
-    while (!this.#closed && this.available < (minValues ?? 1)) {
+    while (!this.#closed && this.#size < (minValues ?? 1)) {
       if (
-        !(await this.#readLock.wait(
+        !(await this.#readSignal.wait(
           expiration !== Number.MAX_VALUE
             ? Duration.fromMilli(Math.max(1, Date.now() - expiration))
             : undefined,
@@ -388,7 +390,7 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
     }
 
     // Notify pending readers there is more room
-    this.#readLock.pulse()
+    this.#readSignal.notify()
 
     return ret
   }
@@ -396,7 +398,7 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
   close(): void {
     this.#closed = true
 
-    this.#writeLock.pulse()
-    this.#readLock.pulse()
+    this.writeSignal.notifyAll()
+    this.#readSignal.notifyAll()
   }
 }
