@@ -24,7 +24,7 @@ export class GenericTransform<T, U> extends Stream.Transform {
    * @param _encoding Ignored since we are always in object mode
    * @param callback The callback to fire on completion
    */
-  async _transform(
+  override async _transform(
     chunk: T,
     _encoding: BufferEncoding,
     callback: TransformCallback,
