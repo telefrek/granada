@@ -3,17 +3,15 @@
  */
 
 import { createReadStream, existsSync } from "fs"
-import { lookup } from "mime"
 import { join, resolve } from "path"
 import {
   FileContentResponse,
   HttpMethod,
-  HttpRequest,
   HttpResponse,
   HttpStatus,
   emptyHeaders,
 } from ".."
-import { parseMediaType } from "../content"
+import { fileToMediaType } from "../content"
 import { HttpPipelineTransform } from "../pipeline"
 
 /**
@@ -31,14 +29,41 @@ export function hostFolder(
     throw new Error(`${baseDir} does not exist`)
   }
 
+  // Sanitize our base directory
   const sanitizedBaseDir = resolve(baseDir)
-  return (requests) =>
-    requests.pipeThrough(new PathTransform(sanitizedBaseDir, defaultFile))
+
+  // Return the transform
+  return async (request) => {
+    // Only serve GET requests
+    if (request.method === HttpMethod.GET) {
+      const target =
+        request.path.original === "/" || request.path.original === ""
+          ? defaultFile
+          : request.path.original
+
+      // See if we can find the file
+      const filePath = resolve(join(sanitizedBaseDir, target))
+
+      // Ensure we didn't try to traverse out...
+      if (filePath.startsWith(sanitizedBaseDir)) {
+        request.respond(await createFileContentResponse(filePath))
+      } else {
+        // TODO: Audit this...
+        request.respond({
+          status: HttpStatus.NOT_FOUND,
+          headers: emptyHeaders(),
+        })
+      }
+    } else {
+      // Let someone else handle it
+      return request
+    }
+  }
 }
 
-export function createFileContentResponse(
+export async function createFileContentResponse(
   filePath: string,
-): FileContentResponse | HttpResponse {
+): Promise<FileContentResponse | HttpResponse> {
   if (!existsSync(filePath)) {
     return {
       status: HttpStatus.NOT_FOUND,
@@ -46,8 +71,10 @@ export function createFileContentResponse(
     }
   }
 
+  console.log(`verifying mime for ${filePath}`)
+
   // Calculate the media type
-  const mediaType = parseMediaType(lookup(filePath))
+  const mediaType = await fileToMediaType(filePath)
 
   // Ensure encoding is set
   if (!mediaType?.parameters.has("charset")) {
@@ -61,51 +88,7 @@ export function createFileContentResponse(
     filePath,
     body: {
       contents: createReadStream(filePath, "utf-8"),
-      mediaType: parseMediaType(lookup(filePath))!,
+      mediaType,
     },
-  }
-}
-
-/**
- * Transform requested items to the given path
- */
-class PathTransform extends TransformStream<HttpRequest, HttpRequest> {
-  #baseDir: string
-
-  /**
-   * Create the {@link PathTransform} for the given directory
-   * @param baseDir The base directory to serve from
-   * @param defaultFile The default file name to use in place of `/`
-   */
-  constructor(baseDir: string, defaultFile: string) {
-    super({
-      transform: (request, controller) => {
-        // Only serve GET requests
-        if (request.method === HttpMethod.GET) {
-          const target =
-            request.path.original === "/" || request.path.original === ""
-              ? defaultFile
-              : request.path.original
-
-          // See if we can find the file
-          const filePath = resolve(join(baseDir, target))
-
-          // Ensure we didn't try to traverse out...
-          if (filePath.startsWith(baseDir)) {
-            request.respond(createFileContentResponse(filePath))
-          } else {
-            // TODO: Audit this...
-            request.respond({
-              status: HttpStatus.NOT_FOUND,
-              headers: emptyHeaders(),
-            })
-          }
-        } else {
-          controller.enqueue(request)
-        }
-      },
-    })
-
-    this.#baseDir = baseDir
   }
 }

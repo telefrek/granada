@@ -1,5 +1,6 @@
+import { isEmpty } from "@telefrek/core"
 import { Readable } from "stream"
-import { HttpHeaders, HttpRequest, StringOrArray } from ".."
+import { HttpHeaders, StringOrArray } from ".."
 import { HttpPipelineTransform } from "../pipeline"
 
 /**
@@ -19,70 +20,51 @@ export const CONTENT_TYPE_HEADER = "content-type"
  * @param readable The {@link ReadableStream} of {@link HttpRequest}
  * @returns A {@link ReadableStream} of {@link HttpRequest} where body contents are parsed
  */
-export const CONTENT_PARSING_TRANSFORM: HttpPipelineTransform = (
-  readable: ReadableStream<HttpRequest>,
-) => readable.pipeThrough(new ContentParsingTransform())
+export const CONTENT_PARSING_TRANSFORM: HttpPipelineTransform = (request) => {
+  // Check if there is a body and if so process the contents
+  if (request.body) {
+    // Parse out the media type
+    request.body.mediaType = getContentType(request.headers)
 
-class ContentParsingTransform extends TransformStream<
-  HttpRequest,
-  HttpRequest
-> {
-  constructor() {
-    super({
-      transform: (request, controller) => {
-        try {
-          // Check if there is a body and if so process the contents
-          if (request.body) {
-            // Parse out the media type
-            request.body.mediaType = getContentType(request.headers)
+    // If we know how to decode this, go ahead
+    if (request.body.mediaType) {
+      // TODO: We should be able to inject a media type mapper for streams...
+      if (
+        isJson(request.body.mediaType) &&
+        request.body.contents instanceof Readable &&
+        !request.body.contents.readableEnded
+      ) {
+        const readableStream = request.body.contents
+        const encoding =
+          (request.body.mediaType.parameters.get(
+            "charset",
+          ) as BufferEncoding) ?? "utf-8"
 
-            // If we know how to decode this, go ahead
-            if (request.body.mediaType) {
-              // TODO: We should be able to inject a media type mapper for streams...
-              if (
-                isJson(request.body.mediaType) &&
-                request.body.contents instanceof Readable &&
-                !request.body.contents.readableEnded
-              ) {
-                const readableStream = request.body.contents
-                const encoding =
-                  (request.body.mediaType.parameters.get(
-                    "charset",
-                  ) as BufferEncoding) ?? "utf-8"
-
-                const bodyReader = async function* () {
-                  yield await new Promise((resolve, reject) => {
-                    let bodyStr = ""
-                    readableStream
-                      .on("data", (chunk: string | Buffer) => {
-                        bodyStr +=
-                          typeof chunk === "string"
-                            ? chunk
-                            : chunk.toString(encoding)
-                      })
-                      .on("end", () => {
-                        resolve(JSON.parse(bodyStr))
-                      })
-                      .on("error", (err) => {
-                        reject(err)
-                      })
-                  })
-                }
-
-                request.body.contents = Readable.from(bodyReader())
-              } else {
-                console.log("no body reading today...")
-              }
-            }
-          }
-
-          controller.enqueue(request)
-        } catch (err) {
-          controller.error(err)
+        const bodyReader = async function* () {
+          yield await new Promise((resolve, reject) => {
+            let bodyStr = ""
+            readableStream
+              .on("data", (chunk: string | Buffer) => {
+                bodyStr +=
+                  typeof chunk === "string" ? chunk : chunk.toString(encoding)
+              })
+              .on("end", () => {
+                resolve(JSON.parse(bodyStr))
+              })
+              .on("error", (err) => {
+                reject(err)
+              })
+          })
         }
-      },
-    })
+
+        request.body.contents = Readable.from(bodyReader())
+      } else {
+        console.log("no body reading today...")
+      }
+    }
   }
+
+  return request
 }
 
 /**
@@ -250,3 +232,34 @@ export class MessageMediaType implements CompositeMediaType {
   readonly type: CompositeMediaTypes = "message"
   readonly parameters = new Map<string, string>()
 }
+
+const EXTENSION_MAP: Partial<Record<string, MediaType>> = {}
+
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+export const fileToMediaType = async (
+  filename: string,
+): Promise<MediaType | undefined> => {
+  // Load the map the first time through
+  if (isEmpty(EXTENSION_MAP)) {
+    for (const [key, value] of Object.entries(
+      await import("./mime-extension.json", {
+        assert: { type: "json" },
+      }),
+    )) {
+      const type = parseMediaType(value as string)
+      if (type) {
+        EXTENSION_MAP[key] = type
+      }
+    }
+  }
+
+  console.log(
+    `Checking ${filename} [${filename
+      .replace(/^.*[\\.\\/\\]/, "")
+      .toLowerCase()}]`,
+  )
+
+  return EXTENSION_MAP[filename.replace(/^.*[\\.\\/\\]/, "").toLowerCase()]
+}
+
+/* eslint-enable @typescript-eslint/no-unsafe-argument */

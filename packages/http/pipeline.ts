@@ -2,9 +2,18 @@
  * The goal of this package is to provide the scaffolding for creating an HTTP pipeline
  */
 
+import { MaybeAwaitable } from "@telefrek/core"
 import { Emitter } from "@telefrek/core/events"
 import { LifecycleEvents } from "@telefrek/core/lifecycle"
-import type { HttpRequest } from "."
+import {
+  TransformFunc,
+  combineTransforms,
+  createTransform,
+} from "@telefrek/core/streams"
+import EventEmitter from "events"
+import { Readable, Writable, pipeline } from "stream"
+import { promisify } from "util"
+import { HttpStatus, emptyHeaders, type HttpRequest } from "."
 
 /**
  * Set of supported events on an {@link HttpServer}
@@ -59,55 +68,134 @@ export type StagedPipeline = Partial<
 >
 
 /**
- * Combine two {@link HttpPipelineTransform} together
- *
- * @param left The first {@link HttpPipelineTransform} to run
- * @param right seocond {@link HttpPipelineTransform} to run
- * @returns A new {@link HttpPipelineTransform} that combines the two inputs
- */
-export function combine(
-  left: HttpPipelineTransform,
-  right: HttpPipelineTransform,
-): HttpPipelineTransform {
-  return (readable: ReadableStream<HttpRequest>) => {
-    return right(left(readable))
-  }
-}
-
-/**
  * Represents an abstract pipeline for processing requests
  */
 export interface HttpPipeline extends Emitter<HttpPipelineEvents> {
+  paused: boolean
+  closed: boolean
+
   /**
-   * Stops the pipeline from processing further requests
+   * Pause processing incoming requests in the {@link HttpPipeline}
    */
-  stop(): void
+  pause(): void
+
+  /**
+   * Resume processing of requests in the {@link HttpPipeline}
+   */
+  resume(): void
+
+  /**
+   * Stops the {@link HttpPipeline} from processing further requests
+   */
+  stop(): Promise<void>
 }
 
 /**
  * Simple pipeline transformation
  */
-export type HttpPipelineTransform = (
-  requests: ReadableStream<HttpRequest>,
-) => ReadableStream<HttpRequest>
+export type HttpPipelineTransform = TransformFunc<HttpRequest, HttpRequest>
+
+export type RequestSource = Iterable<HttpRequest> | AsyncIterable<HttpRequest>
+
+export type UnhandledRequestConsumer = (
+  request: HttpRequest,
+) => MaybeAwaitable<void>
+
+export const NOT_FOUND_CONSUMER: UnhandledRequestConsumer = (request) =>
+  request.respond({ status: HttpStatus.NOT_FOUND, headers: emptyHeaders() })
 
 export function createPipeline(
-  source: ReadableStream,
+  source: RequestSource,
   stages: StagedPipeline,
+  unhandledRequest: UnhandledRequestConsumer = NOT_FOUND_CONSUMER,
 ): HttpPipeline {
-  return new DefaultPipeline(source, stages)
+  return new DefaultPipeline(source, stages, unhandledRequest)
 }
 
 class DefaultPipeline extends EventEmitter implements HttpPipeline {
-  #pipeline: ReadableStream<HttpRequest> | undefined
+  #reader: Readable
+  #abort = new AbortController()
+  #pipelineCompletion: Promise<void>
 
-  constructor(source: ReadableStream<HttpRequest>, stages: StagedPipeline) {
+  constructor(
+    source: RequestSource,
+    stages: StagedPipeline,
+    unhandledRequest: UnhandledRequestConsumer,
+  ) {
     super()
 
-    const test = Readable.fromWeb(source)
+    this.#reader = Readable.from(source)
+    let transform: HttpPipelineTransform | undefined
+
+    // Combine the transforms in order
+    for (const key of Object.values(PipelineStage)) {
+      if (stages[key]) {
+        console.log(`Transform for ${key} loading`)
+        transform = transform
+          ? combineTransforms(transform, stages[key]!)
+          : stages[key]!
+      }
+    }
+
+    const unhandled = new Writable({
+      async write(chunk, _encoding, callback) {
+        try {
+          await unhandledRequest(chunk as HttpRequest)
+          callback()
+        } catch (err) {
+          callback(err as Error)
+        }
+      },
+    })
+
+    if (transform) {
+      this.#pipelineCompletion = promisify(pipeline)(
+        this.#reader,
+        createTransform(transform),
+        unhandled,
+        {
+          signal: this.#abort.signal,
+          end: true,
+        },
+      )
+    } else {
+      this.#pipelineCompletion = promisify(pipeline)(
+        this.#reader,
+        unhandled,
+        unhandled,
+        {
+          signal: this.#abort.signal,
+          end: true,
+        },
+      )
+    }
   }
 
-  stop(): void {
+  paused = false
+  closed = false
+
+  pause(): void {
     throw new Error("Method not implemented.")
+  }
+
+  resume(): void {
+    throw new Error("Method not implemented.")
+  }
+
+  async stop(): Promise<void> {
+    // Emit our stopping event
+    this.emit("stopping")
+    this.#abort.abort("stop requested")
+
+    try {
+      // Wait for the pipeline to complete
+      await this.#pipelineCompletion
+    } catch (err) {
+      // Emit any errors
+      this.emit("error", err)
+    }
+
+    // Emit our finished event
+    this.emit("finished")
   }
 }

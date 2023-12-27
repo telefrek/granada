@@ -24,27 +24,20 @@ describe("Verify parsing is appropriately delayed", () => {
       },
     })
 
-    // Simulate the pipeline
-    const simulatedPipeline = new ReadableStream({
-      start: (controller) => controller.enqueue(request),
-    })
-
     // Pump it through the transform
-    const outputRequest = await CONTENT_PARSING_TRANSFORM(simulatedPipeline)
-      .getReader()
-      .read()
+    const outputRequest = await CONTENT_PARSING_TRANSFORM(request)
 
     // Add some delay since we have to wait for event loop to schedule streaming, etc.
     await delay(50)
 
     // Make sure we got something...
-    expect(outputRequest.done).toBeFalsy()
+    expect(outputRequest).not.toBeUndefined()
 
     // We shouldn't have consumed the stream yet..
     expect(contentsRead).toBeFalsy()
 
     const foo: any = await new Promise((resolve, reject) => {
-      ;(outputRequest.value?.body?.contents as Readable)
+      ;(outputRequest!.body?.contents as Readable)
         .on("data", (chunk: unknown) => {
           resolve(chunk)
         })

@@ -2,12 +2,15 @@
   "exclude": ["**/*.test.ts", "node_modules", "dist"],
   "compilerOptions": {
     "target": "ESNext",
-    "module": "CommonJS",
+    "module": "NodeNext",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "declaration": true,
+    "resolveJsonModule": true,
+    "noFallthroughCasesInSwitch": false,
+    "noImplicitOverride": true,
     "jsx": "react-jsx",
     "paths": {
       "@telefrek/*": ["./packages/*/"],

@@ -5,7 +5,10 @@
 import { trace } from "@opentelemetry/api"
 import { Emitter } from "@telefrek/core/events"
 import { LifecycleEvents, registerShutdown } from "@telefrek/core/lifecycle"
-import { CircularArrayBuffer } from "@telefrek/core/structures/circularBuffer"
+import {
+  CircularArrayBuffer,
+  createIterator,
+} from "@telefrek/core/structures/circularBuffer"
 import EventEmitter from "events"
 import * as http2 from "http2"
 import { Readable, finished, pipeline } from "stream"
@@ -69,9 +72,9 @@ export interface HttpServer extends Emitter<HttpServerEvents> {
   close(): Promise<void>
 
   /**
-   * Create a readable stream from the server
+   * Allow iterating over the {@link HttpRequest} that are received
    */
-  toReadable(): Readable
+  [Symbol.asyncIterator](): AsyncIterator<HttpRequest>
 }
 
 /**
@@ -173,6 +176,27 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
     this.#setupRequestMapping()
   }
 
+  [Symbol.asyncIterator](): AsyncIterator<HttpRequest, void, never> {
+    // TODO: Make this configurable
+    const buffer = new CircularArrayBuffer<HttpRequest>({ highWaterMark: 64 })
+
+    this.on("request", (request: HttpRequest) => {
+      // If we can't add to the buffer, need to reject
+      if (!buffer.tryAdd(request)) {
+        const headers = emptyHeaders()
+
+        // TODO: Make this configurable...
+        headers.set("Retry-After", "60")
+        request.respond({
+          status: HttpStatus.SERVICE_UNAVAILABLE,
+          headers,
+        })
+      }
+    })
+
+    return createIterator(buffer)
+  }
+
   listen(port: number): Promise<void> {
     if (!this.#server.listening) {
       this.emit("started")
@@ -211,30 +235,9 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
     })
   }
 
-  toReadable(): Readable {
-    // TODO: Make this configurable
-    const buffer = new CircularArrayBuffer<HttpRequest>({ highWaterMark: 64 })
-
-    this.on("request", (request: HttpRequest) => {
-      // If we can't add to the buffer, need to reject
-      if (!buffer.tryAdd(request)) {
-        const headers = emptyHeaders()
-
-        // TODO: Make this configurable...
-        headers.set("Retry-After", "60")
-        request.respond({
-          status: HttpStatus.SERVICE_UNAVAILABLE,
-          headers,
-        })
-      }
-    })
-
-    return Readable.from(buffer, { objectMode: true })
-  }
-
   #setupRequestMapping(): void {
     this.#server.on("error", (err) => {
-      console.log("error...")
+      console.error("error...")
       this.emit("error", err)
     })
     this.#server.on("request", (req, resp) => {
