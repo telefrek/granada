@@ -1,5 +1,5 @@
 import { Readable } from "stream"
-import { createTransform } from "."
+import { createTransform } from "./"
 
 describe("Generic streams should work normally", () => {
   const generator = function* () {

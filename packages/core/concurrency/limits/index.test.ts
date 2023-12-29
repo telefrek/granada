@@ -1,6 +1,6 @@
 import { randomInt } from "crypto"
-import { LOG10, createSimpleLimiter } from "."
-import { delay } from "../../time"
+import { delay } from "../../time/"
+import { LOG10, createSimpleLimiter } from "./"
 import { fixedLimit, vegasBuilder } from "./algorithms"
 
 describe("Utility functions should perform as expected", () => {

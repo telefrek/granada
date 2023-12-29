@@ -2,8 +2,8 @@
  * Package contains a definition for a circular buffer
  */
 
-import { Signal } from "../concurrency"
-import { Duration } from "../time"
+import { Signal } from "../concurrency/"
+import { Duration } from "../time/"
 
 /**
  * Represents a circular buffer that uses fixed memory space to provide an "infinite" set of values.

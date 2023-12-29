@@ -10,8 +10,8 @@ import {
   HttpResponse,
   HttpStatus,
   emptyHeaders,
-} from ".."
-import { fileToMediaType } from "../content"
+} from "../"
+import { fileToMediaType } from "../content/"
 import { HttpPipelineTransform } from "../pipeline"
 
 /**

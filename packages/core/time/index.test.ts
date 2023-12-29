@@ -1,4 +1,4 @@
-import { Duration, Timer } from "."
+import { Duration, Timer } from "./"
 
 describe("Testing Time Utilities", () => {
   test("A timer should accurately track durations", async () => {

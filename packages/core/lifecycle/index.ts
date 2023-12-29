@@ -2,7 +2,7 @@
  * Package exports
  */
 
-import { MaybeAwaitable } from ".."
+import { MaybeAwaitable } from "../"
 
 /**
  * Set of supported events on an object with a defined lifecycle

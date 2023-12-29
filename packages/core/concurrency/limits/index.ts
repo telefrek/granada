@@ -2,8 +2,8 @@
  * Port of a subset of the Netflix Concurrency Limits functionality {@link https://github.com/Netflix/concurrency-limits}
  */
 
-import { Emitter } from "../../events"
-import { Duration } from "../../time"
+import { Emitter } from "../../events/"
+import { Duration } from "../../time/"
 import { fixedLimit } from "./algorithms"
 import { simpleLimiter } from "./limiters"
 

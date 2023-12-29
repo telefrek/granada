@@ -2,8 +2,8 @@
  * Concurrency primitives
  */
 
-import { MaybeAwaitable } from ".."
-import { Duration } from "../time"
+import { MaybeAwaitable } from "../"
+import { Duration } from "../time/"
 
 /**
  * Simple type definition for a monitor callback that mirrors what a {@link Promise} will provide

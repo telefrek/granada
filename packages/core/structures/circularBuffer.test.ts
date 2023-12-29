@@ -1,4 +1,4 @@
-import { Duration } from "../time"
+import { Duration } from "../time/"
 import { CircularArrayBuffer } from "./circularBuffer"
 
 describe("Circular buffers should behave as infinite lists with fixed memory", () => {

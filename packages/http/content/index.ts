@@ -1,6 +1,6 @@
 import { isEmpty } from "@telefrek/core"
 import { Readable } from "stream"
-import { HttpHeaders, StringOrArray } from ".."
+import { HttpHeaders, StringOrArray } from "../"
 import { HttpPipelineTransform } from "../pipeline"
 
 /**
@@ -241,12 +241,9 @@ export const fileToMediaType = async (
 ): Promise<MediaType | undefined> => {
   // Load the map the first time through
   if (isEmpty(EXTENSION_MAP)) {
-    for (const [key, value] of Object.entries(
-      await import("./mime-extension.json", {
-        assert: { type: "json" },
-      }),
-    )) {
-      const type = parseMediaType(value as string)
+    const mime = await import("./mime-extension.js")
+    for (const [key, value] of Object.entries(mime.MIME_MAP)) {
+      const type = parseMediaType(value)
       if (type) {
         EXTENSION_MAP[key] = type
       }

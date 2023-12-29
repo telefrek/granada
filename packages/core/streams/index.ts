@@ -1,5 +1,5 @@
 import { Stream, TransformCallback } from "stream"
-import { MaybeAwaitable } from ".."
+import { MaybeAwaitable } from "../"
 
 /**
  * Custom type allowing mapping a type through a {@link MaybeAwaitable} to a new value

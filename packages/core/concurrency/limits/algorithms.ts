@@ -1,7 +1,7 @@
 import { randomInt } from "crypto"
 import EventEmitter from "events"
-import { LOG10, LimitAlgorithm } from "."
-import { Duration } from "../../time"
+import { Duration } from "../../time/"
+import { LOG10, LimitAlgorithm } from "./"
 
 /**
  * Base class for all implementations of the {@link LimitAlgorithm}

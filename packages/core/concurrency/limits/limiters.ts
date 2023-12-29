@@ -1,6 +1,6 @@
-import { LimitAlgorithm, LimitedOperation, Limiter } from "."
-import { Semaphore } from ".."
-import { Timer } from "../../time"
+import { Semaphore } from "../"
+import { Timer } from "../../time/"
+import { LimitAlgorithm, LimitedOperation, Limiter } from "./"
 
 /**
  * Base class for all implementations of the {@link Limiter}
