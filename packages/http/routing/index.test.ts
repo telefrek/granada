@@ -17,20 +17,18 @@ describe("verify router", () => {
     const router = createRouter()
     const handler: HttpHandler = (_request) => Promise.reject("invalid")
 
-    expect(() => router.register("/", handler)).toThrowError()
-    expect(() => router.register("/...", handler)).toThrowError()
-    expect(() => router.register("/{parameter", handler)).toThrowError()
-    expect(() => router.register("/{{parameter}}", handler)).toThrowError()
-    expect(() => router.register("/invlid{parameter}", handler)).toThrowError()
-    expect(() => router.register("/ /is/not/valid", handler)).toThrowError()
-    expect(() =>
-      router.register("/cannot/**/terminate", handler),
-    ).toThrowError()
-    expect(() => router.register("/*t", handler)).toThrowError()
-    expect(() => router.register("/t*", handler)).toThrowError()
+    expect(() => router.register("/", handler)).toThrow()
+    expect(() => router.register("/...", handler)).toThrow()
+    expect(() => router.register("/{parameter", handler)).toThrow()
+    expect(() => router.register("/{{parameter}}", handler)).toThrow()
+    expect(() => router.register("/invlid{parameter}", handler)).toThrow()
+    expect(() => router.register("/ /is/not/valid", handler)).toThrow()
+    expect(() => router.register("/cannot/**/terminate", handler)).toThrow()
+    expect(() => router.register("/*t", handler)).toThrow()
+    expect(() => router.register("/t*", handler)).toThrow()
 
     router.register("/one/{two}/three", handler)
-    expect(() => router.register("/one/*/three", handler)).toThrowError()
+    expect(() => router.register("/one/*/three", handler)).toThrow()
   })
 
   test("A router should accept valid templates", () => {

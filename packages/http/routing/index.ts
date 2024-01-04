@@ -39,13 +39,6 @@ export interface Router {
    * @throws A {@link RoutingError} when there is an issue with the template syntax or overlapping routes
    */
   register(template: string, handler: HttpHandler, method?: HttpMethod): void
-
-  /**
-   * Binds the object to the {@link HttpHandler} objects defined in the route tree
-   *
-   * @param obj The object to bind the underlying {@link HttpHandler} to
-   */
-  bind(obj: unknown): void
 }
 
 /**
@@ -66,7 +59,25 @@ type RouteHandler = Partial<Record<HttpMethod, HttpHandler | undefined>>
  * Default {@link Router} implementation that uses a tree structure to hold the mapping information
  */
 class RouterImpl implements Router {
-  private root: RouteSegment = new RouteSegment()
+  private root: RouteSegment = {
+    info: RouteSegmentInfo.None,
+  }
+
+  toString(): string {
+    return `Route: ${JSON.stringify(this.root.children, (key, value) => {
+      switch (key) {
+        case "parent":
+        case "info":
+          return undefined
+        case "handlers":
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+          return Object.keys(value).length
+        default:
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+          return value
+      }
+    })}`
+  }
 
   lookup(request: HttpRequest): HttpHandler | undefined {
     const { segments, parameters } = request.path
@@ -238,27 +249,6 @@ class RouterImpl implements Router {
       }
     }
   }
-
-  bind(obj: unknown): void {
-    const routes: RouteSegment[] = [this.root]
-    let current: RouteSegment
-
-    while (routes.length > 0) {
-      current = routes.shift()!
-      if (current.handlers) {
-        for (const value of HTTP_METHODS) {
-          const h = current.handlers[value]
-          if (h) {
-            current.handlers[value] = h.bind(obj)
-          }
-        }
-      }
-
-      if (current.children) {
-        routes.push(...current.children)
-      }
-    }
-  }
 }
 
 const WILDCARD = "*"
@@ -281,11 +271,11 @@ enum RouteSegmentInfo {
 /**
  * Single segment of a route at any point in the tree
  */
-class RouteSegment {
+interface RouteSegment {
   parent?: RouteSegment
   children?: RouteSegment[]
   parameter?: string
   segment?: string
-  info: RouteSegmentInfo = RouteSegmentInfo.None
+  info: RouteSegmentInfo
   handlers?: RouteHandler
 }

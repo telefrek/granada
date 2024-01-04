@@ -11,7 +11,7 @@ import {
   HttpStatus,
   emptyHeaders,
 } from "../"
-import { fileToMediaType } from "../content/"
+import { fileToMediaType } from "../content/media"
 import { HttpPipelineTransform } from "../pipeline"
 
 /**
@@ -33,7 +33,7 @@ export function hostFolder(
   const sanitizedBaseDir = resolve(baseDir)
 
   // Return the transform
-  return async (request) => {
+  return (request) => {
     // Only serve GET requests
     if (request.method === HttpMethod.GET) {
       const target =
@@ -46,7 +46,7 @@ export function hostFolder(
 
       // Ensure we didn't try to traverse out...
       if (filePath.startsWith(sanitizedBaseDir)) {
-        request.respond(await createFileContentResponse(filePath))
+        request.respond(createFileContentResponse(filePath))
       } else {
         // TODO: Audit this...
         request.respond({
@@ -61,9 +61,9 @@ export function hostFolder(
   }
 }
 
-export async function createFileContentResponse(
+export function createFileContentResponse(
   filePath: string,
-): Promise<FileContentResponse | HttpResponse> {
+): FileContentResponse | HttpResponse {
   if (!existsSync(filePath)) {
     return {
       status: HttpStatus.NOT_FOUND,
@@ -74,7 +74,7 @@ export async function createFileContentResponse(
   console.log(`verifying mime for ${filePath}`)
 
   // Calculate the media type
-  const mediaType = await fileToMediaType(filePath)
+  const mediaType = fileToMediaType(filePath)
 
   // Ensure encoding is set
   if (!mediaType?.parameters.has("charset")) {

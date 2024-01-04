@@ -21,5 +21,6 @@ module.exports = {
         caughtErrorsIgnorePattern: "^_",
       },
     ],
+    "no-warning-comments": 1,
   },
 }

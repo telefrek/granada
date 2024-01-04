@@ -1,8 +1,9 @@
 import { delay } from "@telefrek/core/time"
 import { Readable } from "stream"
+import { parseMediaType } from "."
 import { HttpMethod, parsePath } from "../"
 import { TestRequest } from "../testUtils"
-import { CONTENT_PARSING_TRANSFORM, parseMediaType } from "./"
+import { CONTENT_PARSING_TRANSFORM } from "./parsers"
 
 describe("Verify parsing is appropriately delayed", () => {
   it("Should correctly wait to parse json until requested", async () => {

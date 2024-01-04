@@ -4,7 +4,7 @@
 
 import { Emitter } from "@telefrek/core/events"
 import { LifecycleEvents } from "@telefrek/core/lifecycle"
-import type { Readable, Writable } from "stream"
+import type { Readable } from "stream"
 import type { MediaType } from "./content"
 
 export type StringOrArray = string | string[]
@@ -78,7 +78,7 @@ export interface HttpPath {
  */
 export interface HttpBody {
   mediaType?: MediaType
-  contents: Readable | Writable | Promise<unknown>
+  contents?: Readable
 }
 
 /**
@@ -199,7 +199,7 @@ export interface FileContentResponse extends HttpResponse {
 /**
  * Simple type for contracting the async model for an HTTP request/response operation
  */
-export type HttpHandler = (request: HttpRequest) => Promise<never>
+export type HttpHandler = (request: HttpRequest) => Promise<void>
 
 /**
  * Parse the path string into it's corresponding {@link HttpPath} and {@link HttpQuery}

@@ -1,8 +1,10 @@
+import { CONTENT_PARSING_TRANSFORM } from "@telefrek/http/content/parsers"
 import { hostFolder } from "@telefrek/http/hosting"
 import { createPipeline } from "@telefrek/http/pipeline"
 import { getDefaultBuilder } from "@telefrek/http/server"
 import fs from "fs"
 import path from "path"
+import { StoreApi } from "./api"
 
 const dir = path.dirname(__filename)
 
@@ -13,7 +15,10 @@ const server = getDefaultBuilder()
   })
   .build()
 
+const _store = new StoreApi()
+
 const pipeline = createPipeline(server, {
+  contentParsing: CONTENT_PARSING_TRANSFORM,
   routing: hostFolder(path.join(dir, "../petstore-ui/build")),
 })
 

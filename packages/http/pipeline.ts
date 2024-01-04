@@ -71,19 +71,6 @@ export type StagedPipeline = Partial<
  * Represents an abstract pipeline for processing requests
  */
 export interface HttpPipeline extends Emitter<HttpPipelineEvents> {
-  paused: boolean
-  closed: boolean
-
-  /**
-   * Pause processing incoming requests in the {@link HttpPipeline}
-   */
-  pause(): void
-
-  /**
-   * Resume processing of requests in the {@link HttpPipeline}
-   */
-  resume(): void
-
   /**
    * Stops the {@link HttpPipeline} from processing further requests
    */
@@ -150,8 +137,10 @@ class DefaultPipeline extends EventEmitter implements HttpPipeline {
 
     if (transform) {
       this.#pipelineCompletion = promisify(pipeline)(
-        this.#reader,
-        createTransform(transform),
+        this.#reader.on("error", (err) => this.emit("error", err)),
+        createTransform(transform).on("error", (err) =>
+          this.emit("error", err),
+        ),
         unhandled,
         {
           signal: this.#abort.signal,
@@ -159,27 +148,11 @@ class DefaultPipeline extends EventEmitter implements HttpPipeline {
         },
       )
     } else {
-      this.#pipelineCompletion = promisify(pipeline)(
-        this.#reader,
-        unhandled,
-        unhandled,
-        {
-          signal: this.#abort.signal,
-          end: true,
-        },
-      )
+      this.#pipelineCompletion = promisify(pipeline)(this.#reader, unhandled, {
+        signal: this.#abort.signal,
+        end: true,
+      })
     }
-  }
-
-  paused = false
-  closed = false
-
-  pause(): void {
-    throw new Error("Method not implemented.")
-  }
-
-  resume(): void {
-    throw new Error("Method not implemented.")
   }
 
   async stop(): Promise<void> {
