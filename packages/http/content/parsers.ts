@@ -71,8 +71,6 @@ export const CONTENT_PARSERS: Partial<
 export const JSON_CONTENT_PARSER: ContentTypeParser = (
   body: HttpBody,
 ): MaybeAwaitable<void> => {
-  console.log("JSON content parser")
-
   // Verify we have a body
   if (body.contents) {
     const readableStream = body.contents

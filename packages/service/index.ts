@@ -9,7 +9,9 @@ import {
   HttpStatus,
   emptyHeaders,
 } from "@telefrek/http"
-import { Router, createRouter } from "@telefrek/http/routing"
+import { parseMediaType } from "@telefrek/http/content"
+import { RoutableApi, Router, createRouter } from "@telefrek/http/routing"
+import { Readable } from "stream"
 
 /**
  * The target platform the service will be running on for optimizing some operations
@@ -55,7 +57,8 @@ export const serviceToRouter = (service: Service): Router => {
 
   // Add all the endpoints
   for (const endpoint of service.endpoints) {
-    router.register(endpoint.pathTemplate, endpoint.handler, endpoint.method)
+    console.log(`Adding endpoint ${endpoint.pathTemplate} (${endpoint.method})`)
+    router.addHandler(endpoint.pathTemplate, endpoint.handler, endpoint.method)
   }
 
   // Return the router
@@ -109,15 +112,22 @@ type Constructor = new (...args: any[]) => {}
  */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/prefer-function-type, @typescript-eslint/ban-types
-export function routableApi(_options: RoutableApiOptions) {
+export function routableApi(options: RoutableApiOptions) {
   // Wrap in a legacy decorator until Node supports the Typescript v5 format
   return <ApiClass extends Constructor>(target: ApiClass) => {
     // Return the new class cast as a RoutableApi that can be passed into a pipeline
-    return class extends target {
+    return class extends target implements RoutableApi {
+      router: Router
+      prefix: string | undefined
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       constructor(...args: any[]) {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument
         super(...args)
+
+        // Hide our extra properties
+        Object.defineProperty(this, "router", { enumerable: false })
+        Object.defineProperty(this, "prefix", { enumerable: false })
 
         // Get the routing data
         const routingData = getRoutingData(target.prototype)
@@ -134,11 +144,28 @@ export function routableApi(_options: RoutableApiOptions) {
               method: info.options.method,
               handler: async (request: HttpRequest): Promise<void> => {
                 try {
-                  const _resp: unknown = await info.method.call(this, [])
-                  request.respond({
-                    status: HttpStatus.OK,
-                    headers: emptyHeaders(),
-                  })
+                  const resp: unknown = await info.method.call(this, [])
+
+                  if (
+                    resp &&
+                    (typeof resp === "object" || Array.isArray(resp))
+                  ) {
+                    request.respond({
+                      status: HttpStatus.OK,
+                      headers: emptyHeaders(),
+                      body: {
+                        mediaType: parseMediaType("application/json"),
+                        contents: Readable.from(
+                          Buffer.from(JSON.stringify(resp), "utf-8"),
+                        ),
+                      },
+                    })
+                  } else {
+                    request.respond({
+                      status: HttpStatus.OK,
+                      headers: emptyHeaders(),
+                    })
+                  }
                 } catch (err) {
                   console.log(`Error: ${JSON.stringify(err)}`)
                   request.respond({
@@ -152,10 +179,9 @@ export function routableApi(_options: RoutableApiOptions) {
             })
           }
 
-          const router = serviceToRouter(service)
-          // eslint-disable-next-line @typescript-eslint/no-base-to-string, @typescript-eslint/restrict-template-expressions
-          console.log(`Created router: ${router}`)
-        }
+          this.router = serviceToRouter(service)
+          this.prefix = options.pathPrefix
+        } else this.router = createRouter()
       }
     }
   }

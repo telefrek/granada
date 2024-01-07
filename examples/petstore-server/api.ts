@@ -73,6 +73,8 @@ export class StoreApi {
     format: SerializationFormat.JSON,
   })
   async getInventory(): Promise<Record<string, number>> {
+    console.log("called get inventory")
+
     return Promise.resolve({
       additionalProp1: 0,
       additionalProp2: 0,

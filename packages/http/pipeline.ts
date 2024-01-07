@@ -14,6 +14,7 @@ import EventEmitter from "events"
 import { Readable, Writable, pipeline } from "stream"
 import { promisify } from "util"
 import { HttpStatus, emptyHeaders, type HttpRequest } from "."
+import { Router, createRouter, isRoutableApi } from "./routing"
 
 /**
  * Set of supported events on an {@link HttpServer}
@@ -51,6 +52,13 @@ export enum PipelineStage {
 }
 
 /**
+ * Define a type that has transforms for each stage
+ */
+export type StagedPipeline = Partial<
+  Record<PipelineStage, HttpPipelineTransform>
+>
+
+/**
  * Interface for a pipeline {@link HttpRequest}
  */
 export interface PipelineRequest extends HttpRequest {
@@ -59,13 +67,6 @@ export interface PipelineRequest extends HttpRequest {
    */
   pipelineStage: PipelineStage
 }
-
-/**
- * Define a type that has transforms for each stage
- */
-export type StagedPipeline = Partial<
-  Record<PipelineStage, HttpPipelineTransform>
->
 
 /**
  * Represents an abstract pipeline for processing requests
@@ -77,27 +78,135 @@ export interface HttpPipeline extends Emitter<HttpPipelineEvents> {
   stop(): Promise<void>
 }
 
+interface RoutingLayer {
+  apiRouting?: Router
+  hosting?: HttpPipelineTransform
+}
+
+/**
+ * Builder class for creating pipelines using a flow style api
+ */
+class HttpPipelineBuilder {
+  readonly #source: RequestSource
+  readonly #unhandled: UnhandledRequestConsumer
+  readonly #routing: RoutingLayer = {}
+  readonly #pipeline: StagedPipeline = {}
+
+  constructor(
+    source: RequestSource,
+    unhandled: UnhandledRequestConsumer = NOT_FOUND_CONSUMER,
+  ) {
+    this.#source = source
+    this.#unhandled = unhandled
+  }
+
+  withContentParsing(transform: HttpPipelineTransform): HttpPipelineBuilder {
+    // Already defined, this is meant to be singular
+    // TODO: Create the types to handle combined vs singular per stage so it's easy to see
+    if (this.#pipeline.contentParsing) {
+      throw new Error("ContentParsing is already specified")
+    }
+
+    this.#pipeline.contentParsing = transform
+    return this
+  }
+
+  withContentHosting(transform: HttpPipelineTransform): HttpPipelineBuilder {
+    this.#routing.hosting = this.#routing.hosting
+      ? combineTransforms(this.#routing.hosting, transform)
+      : transform
+    return this
+  }
+
+  withApi(routable: unknown): HttpPipelineBuilder {
+    if (isRoutableApi(routable)) {
+      // Ensure it exists
+      if (this.#routing.apiRouting === undefined) {
+        this.#routing.apiRouting = createRouter()
+      }
+
+      this.#routing.apiRouting.addRouter(
+        routable.prefix ?? "/",
+        routable.router,
+      )
+    }
+
+    return this
+  }
+
+  build(): HttpPipeline {
+    // Build the routing
+    let route = this.#routing.apiRouting
+      ? routeTransform(this.#routing.apiRouting)
+      : undefined
+
+    if (route) {
+      route = this.#routing.hosting
+        ? combineTransforms(route, this.#routing.hosting)
+        : route
+    } else {
+      route = this.#routing.hosting
+    }
+
+    this.#pipeline.routing = route
+
+    return new DefaultPipeline(this.#source, this.#pipeline, this.#unhandled)
+  }
+}
+
+function routeTransform(router: Router): HttpPipelineTransform {
+  return async (request: HttpRequest): Promise<HttpRequest | undefined> => {
+    const info = router.lookup({
+      path: request.path.original,
+      method: request.method,
+    })
+    if (info) {
+      await info.handler(request)
+      return
+    }
+
+    return request
+  }
+}
+
 /**
  * Simple pipeline transformation
  */
 export type HttpPipelineTransform = TransformFunc<HttpRequest, HttpRequest>
 
+/**
+ * We only want an iterable source so we can control the flow of consumption
+ */
 export type RequestSource = Iterable<HttpRequest> | AsyncIterable<HttpRequest>
 
+/**
+ * Simple method that consumes a {@link HttpRequest} and ensures a response is provided
+ *
+ * @param request The {@link HttpRequest} to finish
+ */
 export type UnhandledRequestConsumer = (
   request: HttpRequest,
 ) => MaybeAwaitable<void>
 
+/**
+ * The default {@link UnhandledRequestConsumer} that just returns 404
+ *
+ * @param request The unhandled {@link HttpRequest}
+ * @returns A {@link UnhandledRequestConsumer} that responds as 404
+ */
 export const NOT_FOUND_CONSUMER: UnhandledRequestConsumer = (request) =>
   request.respond({ status: HttpStatus.NOT_FOUND, headers: emptyHeaders() })
 
-export function createPipeline(
+/**
+ *
+ * @param source The {@link RequestSource} for the pipeline
+ * @param unhandledRequest The optional {@link UnhandledRequestConsumer} (default is {@link NOT_FOUND_CONSUMER})
+ * @returns
+ */
+export const createPipeline = (
   source: RequestSource,
-  stages: StagedPipeline,
   unhandledRequest: UnhandledRequestConsumer = NOT_FOUND_CONSUMER,
-): HttpPipeline {
-  return new DefaultPipeline(source, stages, unhandledRequest)
-}
+): HttpPipelineBuilder => new HttpPipelineBuilder(source, unhandledRequest)
 
 class DefaultPipeline extends EventEmitter implements HttpPipeline {
   #reader: Readable

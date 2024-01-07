@@ -15,12 +15,11 @@ const server = getDefaultBuilder()
   })
   .build()
 
-const _store = new StoreApi()
-
-const pipeline = createPipeline(server, {
-  contentParsing: CONTENT_PARSING_TRANSFORM,
-  routing: hostFolder(path.join(dir, "../petstore-ui/build")),
-})
+const pipeline = createPipeline(server)
+  .withContentHosting(hostFolder(path.join(dir, "../petstore-ui/build")))
+  .withApi(new StoreApi())
+  .withContentParsing(CONTENT_PARSING_TRANSFORM)
+  .build()
 
 pipeline.on("error", (err) => {
   // eslint-disable-next-line @typescript-eslint/restrict-template-expressions

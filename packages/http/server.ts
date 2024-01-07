@@ -327,16 +327,12 @@ class Http2Request extends EventEmitter implements HttpRequest {
       // Write the body
 
       if (response.body?.contents) {
-        pipeline(
-          response.body.contents as Readable,
-          this.#response.stream,
-          (err) => {
-            if (err) {
-              console.log(`not good...${JSON.stringify(err)}`)
-            }
-            this.#response.end()
-          },
-        )
+        pipeline(response.body.contents, this.#response.stream, (err) => {
+          if (err) {
+            console.log(`not good...${JSON.stringify(err)}`)
+          }
+          this.#response.end()
+        })
       } else {
         this.#response.end()
       }
