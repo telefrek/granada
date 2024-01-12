@@ -159,7 +159,7 @@ class RouterImpl implements Router {
           break
         case children !== undefined: {
           // Check if any children cover this path
-          let child = children.find(
+          let child = children?.find(
             (c) => c.segment !== undefined && remainder.startsWith(c.segment),
           )
 
@@ -195,7 +195,7 @@ class RouterImpl implements Router {
             }
           } else {
             // Check for terminal, wildcard or parameter
-            child = children.find((c) => c.info !== RouteSegmentInfo.None)
+            child = children?.find((c) => c.info !== RouteSegmentInfo.None)
 
             if (child) {
               // Keep processing

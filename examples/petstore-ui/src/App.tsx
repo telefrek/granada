@@ -26,7 +26,7 @@ function App() {
         const controller = new AbortController();
         const id = setTimeout(() => controller.abort(), 150);
 
-        const req = new Request(`${window.location.origin}/api/message`, {
+        const req = new Request(`${window.location.origin}/store/inventory`, {
           method: 'GET',
           signal: controller.signal,
         });
