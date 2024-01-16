@@ -1,0 +1,23 @@
+{
+  "name": "@telefrek/postgres",
+  "version": "0.1.0",
+  "description": "This package handles abstractions around postgres and interactions with a database",
+  "scripts": {
+    "compile": "rm -rf dist/* && tsc -p tsconfig.json",
+    "upgrade": "npx npm-check-updates -u && npm install"
+  },
+  "keywords": [
+    "granada",
+    "framework",
+    "postgres"
+  ],
+  "author": "nathan@telefrek.com",
+  "license": "MIT",
+  "dependencies": {
+    "@telefrek/core": "0.1.0",
+    "pg": "8.11.3"
+  },
+  "devDependencies": {
+    "@types/pg": "8.10.9"
+  }
+}
