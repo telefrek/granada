@@ -7,8 +7,8 @@ describe("Postgres schemas should be easily defined in code", () => {
       firstName: { type: PostgresColumnTypes.TEXT }
       lastName: { type: PostgresColumnTypes.TEXT }
       counter: { type: PostgresColumnTypes.INTEGER }
-      validated: { type: PostgresColumnTypes.BOOLEAN }
-      payload: { type: PostgresColumnTypes.JSONB }
+      validated?: { type: PostgresColumnTypes.BOOLEAN }
+      payload?: { type: PostgresColumnTypes.JSONB }
     }
 
     expect(
@@ -17,7 +17,6 @@ describe("Postgres schemas should be easily defined in code", () => {
         lastName: "bar",
         counter: 0,
         validated: false,
-        payload: {}, // Figure out undefined, this is a problem
       }),
     ).toBeTruthy()
   })

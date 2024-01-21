@@ -24,10 +24,14 @@ export type PostgresEnum<T extends Record<string | number, string>> = T[keyof T]
  */
 export interface PostgresColumn {
   // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-explicit-any
-  type: PostgresColumnTypes | PostgresEnum<any> | PostgresArray<any>
+  type: PostgresColumnTypes | PostgresEnum<any> | PostgresArray<any> | undefined
   defaultValue?: unknown
+  nullable?: boolean
 }
 
+/**
+ * Represents an array of {@link PostgresColumnTypes}
+ */
 export interface PostgresArray<T extends PostgresColumnTypes> {
   itemType: T
 }
@@ -35,7 +39,7 @@ export interface PostgresArray<T extends PostgresColumnTypes> {
 /**
  * Utility type for indicating a table schema as a column name and {@link PostgresColumn} definition
  */
-export type PostgresTable = Record<string, PostgresColumn>
+export type PostgresTable = Record<string, PostgresColumn | undefined>
 
 /**
  * Represents the definition for a given schema (collection of objects)
@@ -61,7 +65,9 @@ interface PostgresTypeMapping {
 /**
  * Utility type for mapping a {@link PostgresColumn} to it's {@link PostgresTypeMapping}
  */
-export type PostgresColumnType<T extends PostgresColumn> =
-  T["type"] extends PostgresArray<never>
-    ? PostgresTypeMapping[T["type"]["itemType"]][]
-    : PostgresTypeMapping[T["type"]]
+export type PostgresColumnType<T extends PostgresColumn | undefined> =
+  T extends PostgresColumn
+    ? T["type"] extends PostgresArray<never>
+      ? PostgresTypeMapping[T["type"]["itemType"]][]
+      : PostgresTypeMapping[T["type"]]
+    : never

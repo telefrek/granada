@@ -4,7 +4,7 @@ import { PostgresColumnType, PostgresTable } from "./schema"
  * Defines a row of a given {@link PostgresTable}
  */
 export type PostgresRow<T extends PostgresTable> = {
-  [K in keyof T]: PostgresColumnType<T[K]>
+  [K in keyof T]?: PostgresColumnType<T[K]>
 }
 
 /**
