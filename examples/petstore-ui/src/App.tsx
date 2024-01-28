@@ -6,6 +6,7 @@ import './App.css';
 import Button from 'react-bootstrap/Button';
 import Col from 'react-bootstrap/Col';
 import Container from 'react-bootstrap/Container';
+import Form from 'react-bootstrap/Form';
 import Row from 'react-bootstrap/Row';
 
 interface Error {
@@ -18,6 +19,7 @@ function isError(err: unknown): err is Error {
 
 function App() {
   const [message, setMessage] = useState('none');
+  const [orderId, setOrderId] = useState('1');
 
   function handleClick(_e: unknown) {
     setMessage('loading...');
@@ -26,7 +28,7 @@ function App() {
         const controller = new AbortController();
         const id = setTimeout(() => controller.abort(), 150);
 
-        const req = new Request(`${window.location.origin}/store/inventory`, {
+        const req = new Request(`${window.location.origin}/store/order/${orderId}`, {
           method: 'GET',
           signal: controller.signal,
         });
@@ -57,6 +59,12 @@ function App() {
 
   return (
     <Container fluid>
+      <Row className="justify-content-md-center">
+        <Col md="auto">
+          <Form.Control placeholder="OrderId" onChange={(e) => setOrderId(e.target.value)} />
+        </Col>
+      </Row>
+
       <Row className="justify-content-md-center">
         <Col md="auto">
           <Button name="testClick" onClick={handleClick}>

@@ -160,7 +160,11 @@ function routeTransform(router: Router): HttpPipelineTransform {
       path: request.path.original,
       method: request.method,
     })
+
     if (info) {
+      // Add the parameter mapping...
+      request.path.parameters = info.parameters
+
       await info.handler(request)
       return
     }
@@ -226,7 +230,6 @@ class DefaultPipeline extends EventEmitter implements HttpPipeline {
     // Combine the transforms in order
     for (const key of Object.values(PipelineStage)) {
       if (stages[key]) {
-        console.log(`Transform for ${key} loading`)
         transform = transform
           ? combineTransforms(transform, stages[key]!)
           : stages[key]!

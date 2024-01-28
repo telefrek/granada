@@ -4,17 +4,19 @@ import { PostgresColumnType, PostgresTable } from "./schema"
  * Defines a row of a given {@link PostgresTable}
  */
 export type PostgresRow<T extends PostgresTable> = {
-  [K in keyof T]?: PostgresColumnType<T[K]>
+  [K in keyof T["columns"]]: PostgresColumnType<T["columns"][K]>
 }
 
-/**
- * Check the {@link PostgresRow} against the information in the {@link PostgresTable}
- *
- * @param row The {@link PostgresRow} to validate
- * @returns True if the {@link PostgresRow} is valid
- */
-export function isRowValid<T extends PostgresTable>(
-  row: PostgresRow<T>,
-): boolean {
-  return row === null ? false : true
+export interface PostgresQuery {
+  name: string
+  text: string
+}
+
+export interface PostgresQueryResult<
+  T extends PostgresTable,
+  R extends PostgresRow<T>,
+> {
+  hasRows: boolean
+  query: PostgresQuery
+  rows: R[] | AsyncIterable<R>
 }

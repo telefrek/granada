@@ -70,7 +70,7 @@ export interface HttpQuery {
 export interface HttpPath {
   readonly original: string
   segments: string[]
-  parameters: Map<string, SegmentValue>
+  parameters?: Map<string, SegmentValue>
 }
 
 /**

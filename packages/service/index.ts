@@ -57,7 +57,6 @@ export const serviceToRouter = (service: Service): Router => {
 
   // Add all the endpoints
   for (const endpoint of service.endpoints) {
-    console.log(`Adding endpoint ${endpoint.pathTemplate} (${endpoint.method})`)
     router.addHandler(endpoint.pathTemplate, endpoint.handler, endpoint.method)
   }
 
@@ -72,15 +71,24 @@ export const serviceToRouter = (service: Service): Router => {
 // Use an internal unique symbol that won't show up in mapping
 const ROUTING_DATA: unique symbol = Symbol()
 
-interface RoutableApiOptions {
+export type RouteParameter = string
+
+/**
+ * Options for controlling {@link RoutableApi} behaviors
+ */
+export interface RoutableApiOptions {
   pathPrefix?: string
   format?: SerializationFormat
 }
 
-interface RouteOptions {
+/**
+ * Options for controlling a specific {@link RoutableApi} route behavior
+ */
+export interface RouteOptions {
   template: string
   method?: HttpMethod
   format?: SerializationFormat
+  parameters?: string[]
 }
 
 interface RouteInfo {
@@ -90,6 +98,7 @@ interface RouteInfo {
 }
 
 interface RoutingData {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   info: RouteInfo[]
 }
 
@@ -144,7 +153,34 @@ export function routableApi(options: RoutableApiOptions) {
               method: info.options.method,
               handler: async (request: HttpRequest): Promise<void> => {
                 try {
-                  const resp: unknown = await info.method.call(this, [])
+                  // Create a storage location for the parameter mapping
+                  const args: unknown[] = []
+
+                  // Check for body contents and push those to the contents
+                  if (request.body?.contents) {
+                    const bodyArgs: unknown[] = []
+                    for await (const obj of request.body.contents) {
+                      bodyArgs.push(obj)
+                    }
+
+                    if (bodyArgs.length === 1) {
+                      args.push(bodyArgs[0])
+                    } else if (bodyArgs.length > 0) {
+                      args.push(bodyArgs)
+                    }
+                  }
+
+                  // Check for parameters
+                  if (request.path.parameters && info.options.parameters) {
+                    args.push(
+                      ...info.options.parameters.map(
+                        (p) => request.path.parameters!.get(p) ?? undefined,
+                      ),
+                    )
+                  }
+
+                  // Invoke the method
+                  const resp: unknown = await info.method.call(this, args)
 
                   if (
                     resp &&

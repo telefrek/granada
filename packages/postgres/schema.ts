@@ -9,7 +9,10 @@ export enum PostgresColumnTypes {
   UUID = "uuid",
   TEXT = "text",
   INTEGER = "integer",
+  BIGSERIAL = "bigserial",
+  BIGINT = "bigint",
   BOOLEAN = "boolean",
+  TIMESTAMP = "timestamp",
   JSONB = "jsonb",
 }
 
@@ -26,7 +29,6 @@ export interface PostgresColumn {
   // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-explicit-any
   type: PostgresColumnTypes | PostgresEnum<any> | PostgresArray<any> | undefined
   defaultValue?: unknown
-  nullable?: boolean
 }
 
 /**
@@ -39,16 +41,18 @@ export interface PostgresArray<T extends PostgresColumnTypes> {
 /**
  * Utility type for indicating a table schema as a column name and {@link PostgresColumn} definition
  */
-export type PostgresTable = Record<string, PostgresColumn | undefined>
-
+export interface PostgresTable {
+  columns: Record<string, PostgresColumn | undefined>
+}
 /**
  * Represents the definition for a given schema (collection of objects)
  */
 export interface Schema {
   /** The {@link PostgresTable} definitions in this schema */
   tables: Record<string, PostgresTable>
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  enums: Record<string, PostgresEnum<any>>
+  enums?: Record<string, PostgresEnum<any>>
 }
 
 /**
@@ -60,6 +64,9 @@ interface PostgresTypeMapping {
   integer: number
   boolean: boolean
   jsonb: object
+  timestamp: string
+  bigserial: number
+  bigint: number
 }
 
 /**
@@ -67,7 +74,10 @@ interface PostgresTypeMapping {
  */
 export type PostgresColumnType<T extends PostgresColumn | undefined> =
   T extends PostgresColumn
-    ? T["type"] extends PostgresArray<never>
+    ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      T["type"] extends PostgresArray<any>
       ? PostgresTypeMapping[T["type"]["itemType"]][]
-      : PostgresTypeMapping[T["type"]]
+      : T["type"] extends keyof PostgresTypeMapping
+        ? PostgresTypeMapping[T["type"]]
+        : string
     : never

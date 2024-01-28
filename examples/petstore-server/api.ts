@@ -4,25 +4,27 @@
 
 import { HttpMethod } from "@telefrek/http"
 import { SerializationFormat, routableApi, route } from "@telefrek/service"
+import { OrderStore } from "./dataAccess/orders"
+import { Order } from "./entities"
 
 @routableApi({ pathPrefix: "/pet" })
 export class PetApi {}
 
 /**
- * The interface that represents an order
+ * The {@link RoutableApi} for handling the ordre store
  */
-export interface Order {
-  id: number
-  petId: number
-  quantity: number
-  shipDate: string
-  status: "placed" | "approved" | "delivered"
-  complete: boolean
-}
-
 @routableApi({ pathPrefix: "/store", format: SerializationFormat.JSON })
 export class StoreApi {
-  #orders = new Map<number, Order>()
+  readonly #orderStore: OrderStore
+
+  /**
+   * Ctor for the {@link StoreApi}
+   *
+   * @param orderStore The {@link OrderStore} to use
+   */
+  constructor(orderStore: OrderStore) {
+    this.#orderStore = orderStore
+  }
 
   /**
    * Places an order
@@ -35,31 +37,30 @@ export class StoreApi {
     method: HttpMethod.POST,
   })
   async placeOrder(order: Order): Promise<Order> {
-    let lookup = this.#orders.get(order.id)
-    if (lookup === undefined) {
-      lookup = order
-      this.#orders.set(lookup.id, lookup)
-      lookup.status = "placed"
-    }
-
-    return Promise.resolve(lookup)
+    return Promise.resolve(order)
   }
 
   @route({
     template: "/order/{orderId}",
-    method: HttpMethod.POST,
+    method: HttpMethod.GET,
+    parameters: ["orderId"],
   })
   async getOrder(orderId: number): Promise<Order | undefined> {
-    return Promise.resolve(this.#orders.get(orderId))
+    console.log(`called getOrder(${orderId})`)
+    return await this.#orderStore.getOrderById(orderId)
   }
 
   @route({
     template: "/order/{orderId}",
     method: HttpMethod.DELETE,
+    parameters: ["orderId"],
   })
   async deleteOrder(orderId: number): Promise<void> {
-    this.#orders.delete(orderId)
-    return Promise.resolve()
+    if (await this.#orderStore.getOrderById(orderId)) {
+      return Promise.resolve(undefined)
+    }
+
+    return Promise.resolve(undefined)
   }
 
   /**

@@ -108,6 +108,19 @@ export function createRouter(): Router {
  */
 type RouteHandler = Partial<Record<HttpMethod, HttpHandler | undefined>>
 
+const parseParameter = (s: string): SegmentValue => {
+  switch (true) {
+    case /^[+-]?\d*\.?\d+(?:[Ee][+-]?\d+)?$/.test(s):
+      return +s
+    case s.toLowerCase() === "true":
+      return true
+    case s.toLowerCase() === "false":
+      return false
+    default:
+      return s
+  }
+}
+
 /**
  * Default {@link Router} implementation that uses a tree structure to hold the mapping information
  */
@@ -136,24 +149,23 @@ class RouterImpl implements Router {
           children = current.children
 
           break
-        case info === RouteSegmentInfo.Parameter:
+        case info === RouteSegmentInfo.Parameter: {
           if (parameters === undefined) {
             parameters = new Map()
           }
 
+          const val =
+            nextSlash > 0 ? remainder.substring(0, nextSlash) : remainder
+
           nextSlash = remainder.indexOf("/")
-          parameters.set(current.parameter!, remainder.substring(0, nextSlash))
-          console.log(
-            `Found parameter ${current.parameter!} = ${parameters.get(
-              current.parameter!,
-            )}`,
-          )
+          parameters.set(current.parameter!, parseParameter(val))
 
           remainder = nextSlash > 0 ? remainder.substring(nextSlash) : ""
           info = RouteSegmentInfo.None
           children = current.children
 
           break
+        }
         case info === RouteSegmentInfo.Terminal:
           remainder = ""
           break
@@ -512,12 +524,6 @@ class RouterImpl implements Router {
     segment: RouteSegment,
     prefixLegnth: number,
   ): RouteTrieNode {
-    console.log(
-      `Splitting ${current.segment} and ${
-        segment.segment
-      } with overlap ${segment.segment!.substring(0, prefixLegnth)}`,
-    )
-
     // Create a new node with the current children
     let left: RouteTrieNode = {
       segment: current.segment!.substring(prefixLegnth),
@@ -545,12 +551,6 @@ class RouterImpl implements Router {
       // Remove the router from this object
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
       delete (current as RouteTrieNode as any).router
-
-      console.log(
-        `Found router that needed down prop left: ${isRouterNode(
-          left,
-        )} current: ${isRouterNode(current)}`,
-      )
     }
 
     // Change the children to be the two new nodes
@@ -628,6 +628,7 @@ class RouterImpl implements Router {
 
     for (let n = 0; n < segments.length; ++n) {
       const segment = segments[n]
+
       switch (true) {
         // Test for wildcards
         case WILDCARD === segment:

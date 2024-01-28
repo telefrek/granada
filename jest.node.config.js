@@ -5,8 +5,6 @@ module.exports = {
   testMatch: ["<rootDir>/**/*.test.ts"],
   collectCoverageFrom: ["packages/**/*.{ts,js,jsx}"],
   coveragePathIgnorePatterns: ["jest.*.config.js", "/node_modules", "/dist"],
-  collectCoverage: true,
-  mapCoverage: true,
   moduleNameMapper: {
     "^@telefrek/(.*)$": "<rootDir>/packages/$1/",
   },

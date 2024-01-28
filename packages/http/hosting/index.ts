@@ -71,8 +71,6 @@ export function createFileContentResponse(
     }
   }
 
-  console.log(`verifying mime for ${filePath}`)
-
   // Calculate the media type
   const mediaType = fileToMediaType(filePath)
 

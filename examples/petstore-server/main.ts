@@ -5,6 +5,7 @@ import { getDefaultBuilder } from "@telefrek/http/server"
 import fs from "fs"
 import path from "path"
 import { StoreApi } from "./api"
+import { createOrderStore } from "./dataAccess/orders"
 
 const dir = path.dirname(__filename)
 
@@ -17,7 +18,7 @@ const server = getDefaultBuilder()
 
 const pipeline = createPipeline(server)
   .withContentHosting(hostFolder(path.join(dir, "../petstore-ui/build")))
-  .withApi(new StoreApi())
+  .withApi(new StoreApi(createOrderStore()))
   .withContentParsing(CONTENT_PARSING_TRANSFORM)
   .build()
 

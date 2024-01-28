@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "description": "",
   "scripts": {
-    "compile": "rm -rf dist/* && tsc -p tsconfig.json"
+    "compile": "rm -rf dist/* && tsc -p tsconfig.json",
+    "runStore": "npx ts-node main.ts"
   },
   "keywords": [
     "granada",
@@ -15,6 +16,8 @@
   "license": "MIT",
   "dependencies": {
     "@telefrek/http": "0.1.0",
-    "@types/k6": "^0.47.3"
+    "@telefrek/postgres": "0.1.0",
+    "@types/k6": "^0.47.3",
+    "@types/node": "20.11.7"
   }
 }
