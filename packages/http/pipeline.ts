@@ -249,8 +249,8 @@ class DefaultPipeline extends EventEmitter implements HttpPipeline {
 
     if (transform) {
       this.#pipelineCompletion = promisify(pipeline)(
-        this.#reader.on("error", (err) => this.emit("error", err)),
-        createTransform(transform).on("error", (err) =>
+        this.#reader.once("error", (err) => this.emit("error", err)),
+        createTransform(transform).once("error", (err) =>
           this.emit("error", err),
         ),
         unhandled,

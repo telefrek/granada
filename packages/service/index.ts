@@ -180,7 +180,10 @@ export function routableApi(options: RoutableApiOptions) {
                   }
 
                   // Invoke the method
-                  const resp: unknown = await info.method.call(this, args)
+                  const resp: unknown = await info.method.call(
+                    this,
+                    args.length === 1 ? args[0] : args,
+                  )
 
                   if (
                     resp &&

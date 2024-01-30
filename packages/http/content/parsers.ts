@@ -81,15 +81,18 @@ export const JSON_CONTENT_PARSER: ContentTypeParser = (
     const bodyReader = async function* () {
       yield await new Promise((resolve, reject) => {
         let bodyStr = ""
+        const readBody = (chunk: string | Buffer) => {
+          bodyStr +=
+            typeof chunk === "string" ? chunk : chunk.toString(encoding)
+        }
         readableStream
-          .on("data", (chunk: string | Buffer) => {
-            bodyStr +=
-              typeof chunk === "string" ? chunk : chunk.toString(encoding)
-          })
-          .on("end", () => {
+          .on("data", readBody)
+          .once("end", () => {
+            readableStream.off("data", readBody)
             resolve(JSON.parse(bodyStr))
           })
-          .on("error", (err) => {
+          .once("error", (err) => {
+            readableStream.off("data", readBody)
             reject(err)
           })
       })

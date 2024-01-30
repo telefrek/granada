@@ -57,6 +57,51 @@ function App() {
     void getMessage();
   }
 
+  function handleCreate(_e: unknown) {
+    setMessage('loading...');
+    const getMessage = async () => {
+      try {
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), 150);
+
+        const req = new Request(`${window.location.origin}/store/order`, {
+          method: 'POST',
+          body: JSON.stringify({
+            pet_id: 1,
+            quantity: 1,
+            status: 'placed',
+            complete: false,
+          }),
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+        });
+
+        // Check for aborts...
+        req.signal.onabort = () => console.log('request aborted');
+
+        const resp = await fetch(req);
+        clearTimeout(id);
+
+        if (resp.status === 503) {
+          setMessage('throttled');
+        } else if (resp.status === 200) {
+          setMessage(await resp.text());
+        } else {
+          setMessage('error');
+        }
+      } catch (err: unknown) {
+        if (isError(err)) {
+          console.log(`Error: ${err.name}`);
+          setMessage(err.name);
+        }
+      }
+    };
+
+    void getMessage();
+  }
+
   return (
     <Container fluid>
       <Row className="justify-content-md-center">
@@ -69,6 +114,9 @@ function App() {
         <Col md="auto">
           <Button name="testClick" onClick={handleClick}>
             Get Response
+          </Button>
+          <Button name="testCreate" onClick={handleCreate}>
+            Create
           </Button>
         </Col>
       </Row>

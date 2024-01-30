@@ -36,8 +36,8 @@ export class StoreApi {
     template: "/order",
     method: HttpMethod.POST,
   })
-  async placeOrder(order: Order): Promise<Order> {
-    return Promise.resolve(order)
+  placeOrder(order: Omit<Order, "id">): Promise<Order> {
+    return this.#orderStore.createOrder(order)
   }
 
   @route({
@@ -46,7 +46,6 @@ export class StoreApi {
     parameters: ["orderId"],
   })
   async getOrder(orderId: number): Promise<Order | undefined> {
-    console.log(`called getOrder(${orderId})`)
     return await this.#orderStore.getOrderById(orderId)
   }
 
@@ -74,8 +73,6 @@ export class StoreApi {
     format: SerializationFormat.JSON,
   })
   async getInventory(): Promise<Record<string, number>> {
-    console.log("called get inventory")
-
     return Promise.resolve({
       colleenIsAwesome: 3,
     })

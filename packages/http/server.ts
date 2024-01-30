@@ -11,7 +11,7 @@ import {
 } from "@telefrek/core/structures/circularBuffer"
 import EventEmitter from "events"
 import * as http2 from "http2"
-import { Readable, finished, pipeline } from "stream"
+import { Readable, Stream, finished, pipeline } from "stream"
 import {
   HttpBody,
   HttpHeaders,
@@ -156,12 +156,14 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
   constructor(options: http2.SecureServerOptions) {
     super()
 
+    Stream.Duplex.setMaxListeners(200)
+
     // TODO: Start looking at options for more configurations.  If no TLS, HTTP 1.1, etc.
     this.#server = http2.createSecureServer(options)
 
     this.#server.on("session", (session) => {
       this.#sessions.push(session)
-      session.on("close", () => {
+      session.once("close", () => {
         const idx = this.#sessions.indexOf(session)
         if (idx >= 0) {
           this.#sessions.splice(idx, 1)

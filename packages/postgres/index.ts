@@ -2,7 +2,12 @@
  * Wrap the pg library calls
  */
 
-import { PostgresQuery, PostgresQueryResult, PostgresRow } from "./query"
+import {
+  PostgresQuery,
+  PostgresQueryResult,
+  PostgresRow,
+  isBoundQuery,
+} from "./query"
 import { PostgresTable } from "./schema"
 
 import { Client } from "pg"
@@ -11,7 +16,7 @@ import { Client } from "pg"
  * Thin wrapper around a database
  */
 export interface Database {
-  runQuery<T extends PostgresTable, R extends PostgresRow<T>>(
+  runQuery<T extends PostgresTable, R extends Partial<PostgresRow<T>>>(
     query: PostgresQuery,
   ): Promise<PostgresQueryResult<T, R>>
 }
@@ -21,7 +26,7 @@ export function createDatabase(): Database {
 }
 
 class TestDatabase implements Database {
-  async runQuery<T extends PostgresTable, R extends PostgresRow<T>>(
+  async runQuery<T extends PostgresTable, R extends Partial<PostgresRow<T>>>(
     query: PostgresQuery,
   ): Promise<PostgresQueryResult<T, R>> {
     const client = new Client({
@@ -35,7 +40,10 @@ class TestDatabase implements Database {
     // Connect
     await client.connect()
 
-    const result = await client.query(query.text)
+    const result = await client.query(
+      query.text,
+      isBoundQuery(query) ? query.args : undefined,
+    )
 
     const ret = {
       query,
