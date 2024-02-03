@@ -82,6 +82,26 @@ export interface HttpBody {
 }
 
 /**
+ * Set of states that a {@link HttpRequest} can be in
+ */
+export enum HttpRequestState {
+  /** The request is waiting to be processed */
+  PENDING = "pending",
+  /** The request is being read but not processed via handler */
+  READING = "reading",
+  /** The request is being processed via a handler */
+  PROCESSING = "processing",
+  /** The request has response data being written to it */
+  WRITING = "writing",
+  /**  The request was fully written and completed */
+  COMPLETED = "completed",
+  /** The request timed out before being handled */
+  TIMEOUT = "timeout",
+  /** The request encountered some error */
+  ERROR = "error",
+}
+
+/**
  * An interface defining the behavior of an HTTP Request
  */
 export interface HttpRequest extends Emitter<LifecycleEvents> {
@@ -89,6 +109,7 @@ export interface HttpRequest extends Emitter<LifecycleEvents> {
   method: HttpMethod
   headers: HttpHeaders
   version: HttpVersion
+  state: HttpRequestState
   query?: HttpQuery
   body?: HttpBody
 

@@ -25,7 +25,7 @@ describe("Generic streams should work normally", () => {
       )
       .toArray()
 
-    expect(results.length).toEqual(4)
+    expect(results.length).toEqual(5) // 0, 2, 4, 6, 8
     expect(results.reduce((l, r) => l + r, 0)).toEqual(20)
   })
 })

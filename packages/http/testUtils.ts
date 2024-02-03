@@ -10,6 +10,7 @@ import {
   HttpPath,
   HttpQuery,
   HttpRequest,
+  HttpRequestState,
   HttpResponse,
   HttpVersion,
   emptyHeaders,
@@ -18,6 +19,7 @@ import {
 export class TestRequest extends EventEmitter implements HttpRequest {
   path: HttpPath
   method: HttpMethod
+  state: HttpRequestState
   headers: HttpHeaders = emptyHeaders()
   version: HttpVersion
   query?: HttpQuery | undefined
@@ -26,17 +28,11 @@ export class TestRequest extends EventEmitter implements HttpRequest {
     this.emit("response", response)
   }
 
-  constructor(args: {
-    path: HttpPath
-    query?: HttpQuery
-    method?: HttpMethod
-    version?: HttpVersion
-    headers?: HttpHeaders
-    body?: HttpBody
-  }) {
+  constructor(args: Partial<HttpRequest>) {
     super()
-    this.path = args.path
+    this.path = args.path ?? { original: "/", segments: [] }
     this.query = args.query
+    this.state = args.state ?? HttpRequestState.PENDING
     this.method = args.method ?? HttpMethod.GET
     this.version = args.version ?? HttpVersion.HTTP1_1
     this.headers = args.headers ?? emptyHeaders()

@@ -19,6 +19,7 @@ import {
   HttpPath,
   HttpQuery,
   HttpRequest,
+  HttpRequestState,
   HttpResponse,
   HttpStatus,
   HttpVersion,
@@ -180,7 +181,7 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
 
   [Symbol.asyncIterator](): AsyncIterator<HttpRequest, void, never> {
     // TODO: Make this configurable
-    const buffer = new CircularArrayBuffer<HttpRequest>({ highWaterMark: 64 })
+    const buffer = new CircularArrayBuffer<HttpRequest>({ highWaterMark: 256 })
 
     this.on("request", (request: HttpRequest) => {
       // If we can't add to the buffer, need to reject
@@ -276,15 +277,21 @@ function parseHttp2Headers(
   return headers
 }
 
+let counter = 0
+
 class Http2Request extends EventEmitter implements HttpRequest {
   path: HttpPath
   method: HttpMethod
   headers: HttpHeaders
   version: HttpVersion
-  query?: HttpQuery | undefined
-  body?: HttpBody | undefined
+  state: HttpRequestState
+
+  query: HttpQuery | undefined
+  body: HttpBody | undefined
+  #status: number | undefined
 
   #response: http2.Http2ServerResponse
+  #id: number | undefined
 
   constructor(
     request: http2.Http2ServerRequest,
@@ -294,6 +301,7 @@ class Http2Request extends EventEmitter implements HttpRequest {
     const { path, query } = parsePath(request.url)
     this.path = path
     this.query = query
+    this.state = HttpRequestState.PENDING
     this.headers = parseHttp2Headers(request.headers)
     this.version = HttpVersion.HTTP_2
     this.method = request.method.toUpperCase() as HttpMethod
@@ -304,40 +312,68 @@ class Http2Request extends EventEmitter implements HttpRequest {
     // Ensure we track the response completion event
     finished(response, (_err) => {
       this.emit("finished")
+      if (_err) {
+        console.log(`error on finish ${JSON.stringify(_err)}`)
+      }
     })
 
     request.setTimeout(5000, () => {
-      if (this.#response.writable && !this.#response.headersSent) {
-        this.#response.writeHead(503)
-        this.#response.end()
-      }
+      this.state = HttpRequestState.TIMEOUT
+      this.#response.writeHead(503)
+      this.#response.end()
     })
   }
 
   respond(response: HttpResponse): void {
-    // Verify timeout or other things didn't end us...
-    if (this.#response.writable) {
-      // Write the head section
-      if (response.body?.mediaType) {
-        this.#response.writeHead(response.status, {
-          "Content-Type": mediaTypeToString(response.body.mediaType),
-        })
-      } else {
-        this.#response.writeHead(response.status)
+    try {
+      if (this.#id !== undefined) {
+        console.log(`id before inc: ${this.#id}`)
       }
 
-      // Write the body
+      this.#id = counter++
+      switch (true) {
+        case this.state === HttpRequestState.COMPLETED:
+          console.log(`BAD MONKEY!! ${this.#id}  ${JSON.stringify(this.path)}`)
+      }
 
-      if (response.body?.contents) {
-        pipeline(response.body.contents, this.#response.stream, (err) => {
-          if (err) {
-            console.log(`not good...${JSON.stringify(err)}`)
-          }
+      // We're now writing
+      this.state = HttpRequestState.WRITING
+      this.#status = response.status
+
+      // Verify headers weren't sent
+      if (!this.#response.headersSent) {
+        // Write the head section
+        if (response.body?.mediaType) {
+          this.#response.writeHead(response.status, {
+            "Content-Type": mediaTypeToString(response.body.mediaType),
+          })
+        } else {
+          this.#response.writeHead(response.status)
+        }
+
+        // Write the body
+
+        if (response.body?.contents && !this.#response.writableEnded) {
+          pipeline(response.body.contents, this.#response.stream, (err) => {
+            if (err) {
+              console.log(
+                `not good...${JSON.stringify(err)} at ${JSON.stringify(this.path)}`,
+              )
+            }
+            this.#response.end()
+            this.state = HttpRequestState.COMPLETED
+          })
+        } else {
           this.#response.end()
-        })
-      } else {
+          this.state = HttpRequestState.COMPLETED
+        }
+      }
+    } catch (err) {
+      console.trace(`error during response ${JSON.stringify(err)}`)
+      if (!this.#response.writableEnded) {
         this.#response.end()
       }
+      this.state = HttpRequestState.ERROR
     }
   }
 }

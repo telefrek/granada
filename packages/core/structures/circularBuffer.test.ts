@@ -14,7 +14,7 @@ describe("Circular buffers should behave as infinite lists with fixed memory", (
     expect(buffer.tryRemoveRange(1).length).toBe(0)
 
     for (let n = 0; n < 61; ++n) {
-      buffer.tryAdd(n)
+      expect(buffer.tryAdd(n)).toBeTruthy()
       expect(buffer.size).toBe(n + 1)
       expect(buffer.available).toBe(61 - (n + 1))
     }

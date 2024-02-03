@@ -191,7 +191,7 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
     // Verify we have enough space
     if (this.available > 0) {
       this.#buffer[this.#head++] = value
-      this.#head & -this.#MASK
+      this.#head &= this.#MASK
       this.#size++
 
       // Notify pending writers there is more data
@@ -227,7 +227,7 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
 
   async add(value: T, timeout?: Duration): Promise<boolean> {
     // Check if there is something available
-    if (this.available === 0) {
+    while (this.available === 0) {
       // Try to see if we can became unblocked before the timeout
       if (this.#closed || !(await this.#readSignal.wait(timeout))) {
         return false
@@ -293,7 +293,7 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
 
   tryRemove(): T | undefined {
     // Check size
-    if (this.size === 0) {
+    if (this.#size === 0) {
       return undefined
     }
 
@@ -333,7 +333,7 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
   }
 
   async remove(timeout?: Duration): Promise<T | undefined> {
-    if (this.#size == 0) {
+    while (this.#size == 0) {
       // If we are closed or can't read, abandon
       if (this.#closed || !(await this.writeSignal.wait(timeout))) {
         return undefined

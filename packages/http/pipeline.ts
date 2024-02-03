@@ -166,10 +166,9 @@ function routeTransform(router: Router): HttpPipelineTransform {
       request.path.parameters = info.parameters
 
       await info.handler(request)
-      return
+    } else {
+      return request
     }
-
-    return request
   }
 }
 
@@ -229,15 +228,17 @@ class DefaultPipeline extends EventEmitter implements HttpPipeline {
 
     // Combine the transforms in order
     for (const key of Object.values(PipelineStage)) {
-      if (stages[key]) {
-        transform = transform
-          ? combineTransforms(transform, stages[key]!)
-          : stages[key]!
+      if (stages[key] !== undefined) {
+        transform =
+          transform !== undefined
+            ? combineTransforms(transform, stages[key]!)
+            : stages[key]
       }
     }
 
     const unhandled = new Writable({
       async write(chunk, _encoding, callback) {
+        console.log("unhandled handler executing")
         try {
           await unhandledRequest(chunk as HttpRequest)
           callback()
@@ -249,7 +250,8 @@ class DefaultPipeline extends EventEmitter implements HttpPipeline {
 
     if (transform) {
       this.#pipelineCompletion = promisify(pipeline)(
-        this.#reader.once("error", (err) => this.emit("error", err)),
+        this.#reader.on("error", (err) => this.emit("error", err)),
+
         createTransform(transform).once("error", (err) =>
           this.emit("error", err),
         ),

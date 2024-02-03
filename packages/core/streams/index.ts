@@ -31,7 +31,7 @@ export class GenericTransform<T, U> extends Stream.Transform {
   ): Promise<void> {
     try {
       const val = await this.#transform(chunk)
-      if (val) this.push(val)
+      if (val !== undefined) this.push(val)
       callback()
     } catch (err) {
       callback(err as Error, chunk)

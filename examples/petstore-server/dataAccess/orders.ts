@@ -2,7 +2,7 @@
  * Handles mapping order information to the underlying data storage
  */
 
-import { createDatabase } from "@telefrek/postgres"
+import { Database, createDatabase } from "@telefrek/postgres"
 import { PostgresRow, bind } from "@telefrek/postgres/query"
 import { PostgresColumnTypes, PostgresEnum } from "@telefrek/postgres/schema"
 import { Order } from "../entities"
@@ -37,9 +37,10 @@ export function createOrderStore(): OrderStore {
 }
 
 class PostgresOrderStore implements OrderStore {
+  #database: Database = createDatabase()
+
   async createOrder<T extends Omit<Order, "id">>(order: T): Promise<Order> {
-    const database = createDatabase()
-    const response = await database.runQuery<
+    const response = await this.#database.runQuery<
       OrderTable,
       { order_id: number; ship_date: string }
     >(
@@ -65,8 +66,7 @@ class PostgresOrderStore implements OrderStore {
     throw new Error("nope")
   }
   async getOrderById(id: number): Promise<Order | undefined> {
-    const database = createDatabase()
-    const response = await database.runQuery<OrderTable, OrderRow>({
+    const response = await this.#database.runQuery<OrderTable, OrderRow>({
       name: "getOrderById",
       text: `SELECT * FROM Orders WHERE order_id=${id}`,
     })

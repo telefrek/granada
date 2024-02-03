@@ -26,21 +26,25 @@ export function createDatabase(): Database {
 }
 
 class TestDatabase implements Database {
+  #client: Client | undefined
+
   async runQuery<T extends PostgresTable, R extends Partial<PostgresRow<T>>>(
     query: PostgresQuery,
   ): Promise<PostgresQueryResult<T, R>> {
-    const client = new Client({
-      host: "localhost",
-      port: 5432,
-      user: "postgres",
-      password: "password123",
-      database: "postgres",
-    })
+    if (this.#client === undefined) {
+      this.#client = new Client({
+        host: "localhost",
+        port: 5432,
+        user: "postgres",
+        password: "password123",
+        database: "postgres",
+      })
 
-    // Connect
-    await client.connect()
+      // Connect
+      await this.#client.connect()
+    }
 
-    const result = await client.query(
+    const result = await this.#client.query(
       query.text,
       isBoundQuery(query) ? query.args : undefined,
     )
@@ -53,9 +57,6 @@ class TestDatabase implements Database {
       ret.rows = result.rows as R[]
       ret.hasRows = true
     }
-
-    // Cleanup
-    await client.end()
 
     return ret
   }
