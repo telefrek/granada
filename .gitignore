@@ -4,7 +4,3 @@
 
 # Don't store local build cache results
 **/*.tsbuildinfo
-
-# Filter out the coverage files until I figure out plugin stuff
-/**/*.js
-/**/*.d.ts

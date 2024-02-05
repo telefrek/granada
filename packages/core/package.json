@@ -1,10 +1,13 @@
 {
   "name": "@telefrek/core",
-  "version": "0.1.0",
+  "version": "1.0.0-alpha.0",
   "description": "This package contains the core utilities that are referenced throughout the Granada framework",
   "scripts": {
     "compile": "rm -rf dist/* && tsc -p tsconfig.compile.json",
-    "upgrade": "npx npm-check-updates -u && npm install"
+    "upgrade": "npx npm-check-updates -u && npm install",
+    "alpha": "npm version premajor --preid alpha",
+    "beta": "npm version premajor --preid beta",
+    "increment": "npm version prerelease"
   },
   "keywords": [],
   "author": "",
