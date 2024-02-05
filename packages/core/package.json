@@ -1,6 +1,6 @@
 {
   "name": "@telefrek/core",
-  "version": "1.0.0-alpha.6",
+  "version": "1.0.0-alpha.7",
   "description": "This package contains the core utilities that are referenced throughout the Granada framework",
   "scripts": {
     "compile": "rm -rf dist/* && tsc -p tsconfig.compile.json",
