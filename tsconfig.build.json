@@ -1,5 +1,4 @@
 {
-  "exclude": ["**/*.test.ts", "**/node_modules", "dist"],
   "compilerOptions": {
     "target": "ESNext",
     "module": "NodeNext",
@@ -14,9 +13,6 @@
     "noImplicitOverride": true,
     "experimentalDecorators": true,
     "outDir": "./dist",
-    "jsx": "react-jsx",
-    "paths": {
-      "@telefrek/*": ["./packages/*/"]
-    }
+    "jsx": "react-jsx"
   }
 }
