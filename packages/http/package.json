@@ -11,10 +11,13 @@
     "framework",
     "http"
   ],
+  "files": [
+    "dist"
+  ],
   "author": "nathan@telefrek.com",
   "license": "MIT",
   "dependencies": {
     "@telefrek/core": "*"
   },
-  "types": "./dist/index.d.ts"
+  "gitHead": "730d8573af6f7e7edf7187ab6f1a082f52d224e0"
 }
