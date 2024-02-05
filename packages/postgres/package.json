@@ -1,6 +1,6 @@
 {
   "name": "@telefrek/postgres",
-  "version": "1.0.0-alpha.8",
+  "version": "1.0.0-alpha.9",
   "description": "This package handles abstractions around postgres and interactions with a database",
   "scripts": {
     "compile": "rm -rf dist/* && tsc -p tsconfig.compile.json",
@@ -14,6 +14,7 @@
   "files": [
     "dist"
   ],
+  "type": "module",
   "exports": {
     "./*": "./dist/*.js"
   },
