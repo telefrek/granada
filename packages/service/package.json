@@ -1,6 +1,6 @@
 {
   "name": "@telefrek/service",
-  "version": "1.0.0-alpha.9",
+  "version": "1.0.0-alpha.10",
   "description": "This package makes creating new services easier than working with the raw HTTP stack",
   "scripts": {
     "compile": "rm -rf dist/* && tsc -p tsconfig.compile.json",
@@ -13,7 +13,7 @@
     "REST"
   ],
   "files": [
-    "dist/service"
+    "dist"
   ],
   "type": "module",
   "exports": {
