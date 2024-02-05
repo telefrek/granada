@@ -1,25 +1,22 @@
 {
   "private": true,
   "workspaces": [
-    "./packages/*",
-    "./examples/*"
+    "./packages/*"
   ],
   "scripts": {
     "test": "jest --coverage",
     "format": "npx prettier --write .",
     "package": "npm run compile --workspaces --if-present",
-    "upgrade-all": "npx npm-check-updates -u & npm install & npm run upgrade --workspaces --if-present",
-    "store": "npm run build -w examples/ --if-present && npm run runStore -w examples/petstore-server"
+    "upgrade-all": "npx npm-check-updates -u & npm install & npm run upgrade --workspaces --if-present"
   },
   "jest": {
     "projects": [
-      "<rootDir>/jest.node.config.js",
-      "<rootDir>/jest.jsdom.config.js"
+      "<rootDir>/jest.node.config.js"
     ]
   },
   "devDependencies": {
-    "@types/jest": "^29.5.11",
-    "@types/node": "^20.11.14",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.11.16",
     "@typescript-eslint/eslint-plugin": "^6.20.0",
     "@typescript-eslint/parser": "^6.20.0",
     "eslint": "^8.56.0",
@@ -29,8 +26,5 @@
     "ts-jest": "^29.1.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
-  },
-  "dependencies": {
-    "petstore-demo-app": "file:examples/petstore-demo-app"
   }
 }
