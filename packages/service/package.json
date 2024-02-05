@@ -4,10 +4,7 @@
   "description": "This package makes creating new services easier than working with the raw HTTP stack",
   "scripts": {
     "compile": "rm -rf dist/* && tsc -p tsconfig.json",
-    "upgrade": "npx npm-check-updates -u && npm install",
-    "alpha": "npm version premajor --preid alpha",
-    "beta": "npm version premajor --preid beta",
-    "increment": "npm version prerelease"
+    "upgrade": "npx npm-check-updates -u && npm install"
   },
   "keywords": [
     "granada",

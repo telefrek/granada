@@ -4,10 +4,7 @@
   "description": "This package standardizes how HTTP clients and servers interact at a low level",
   "scripts": {
     "compile": "rm -rf dist/* && tsc -p tsconfig.compile.json",
-    "upgrade": "npx npm-check-updates -u && npm install",
-    "alpha": "npm version premajor --preid alpha",
-    "beta": "npm version premajor --preid beta",
-    "increment": "npm version prerelease"
+    "upgrade": "npx npm-check-updates -u && npm install"
   },
   "keywords": [
     "granada",
