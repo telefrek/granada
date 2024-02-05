@@ -12,7 +12,7 @@
     "http"
   ],
   "files": [
-    "dist"
+    "dist/http"
   ],
   "author": "nathan@telefrek.com",
   "license": "MIT",
