@@ -1,6 +1,6 @@
 {
   "name": "@telefrek/postgres",
-  "version": "1.0.0-alpha.11",
+  "version": "1.0.0-alpha.12",
   "description": "This package handles abstractions around postgres and interactions with a database",
   "scripts": {
     "compile": "rm -rf dist/* && tsc -p tsconfig.compile.json",
@@ -12,13 +12,17 @@
     "postgres"
   ],
   "files": [
-    "dist"
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "dist/**/*.json"
   ],
   "exports": {
+    ".": "./dist/index.js",
     "./*": [
-      "./dist/*.js",
-      "./dist/*/index.js"
-    ]
+      "./dist/*/index.js",
+      "./dist/*.js"
+    ],
+    "./*.js": "./dist/*.js"
   },
   "author": "nathan@telefrek.com",
   "license": "MIT",

@@ -1,6 +1,6 @@
 {
   "name": "@telefrek/http",
-  "version": "1.0.0-alpha.11",
+  "version": "1.0.0-alpha.12",
   "description": "This package standardizes how HTTP clients and servers interact at a low level",
   "scripts": {
     "compile": "rm -rf dist/* && tsc -p tsconfig.compile.json",
@@ -12,19 +12,22 @@
     "http"
   ],
   "files": [
-    "dist"
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "dist/**/*.json"
   ],
   "exports": {
+    ".": "./dist/index.js",
     "./*": [
-      "./dist/*.js",
-      "./dist/*/index.js"
-    ]
+      "./dist/*/index.js",
+      "./dist/*.js"
+    ],
+    "./*.js": "./dist/*.js"
   },
   "author": "nathan@telefrek.com",
   "license": "MIT",
   "dependencies": {
-    "@telefrek/core": "*",
-    "@telefrek/http": "*"
+    "@telefrek/core": "*"
   },
   "gitHead": "730d8573af6f7e7edf7187ab6f1a082f52d224e0"
 }
