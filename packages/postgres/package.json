@@ -1,0 +1,37 @@
+{
+  "name": "@telefrek/postgres",
+  "version": "1.0.0-alpha.12",
+  "description": "This package handles abstractions around postgres and interactions with a database",
+  "scripts": {
+    "compile": "rm -rf dist/* && tsc -p tsconfig.compile.json",
+    "upgrade": "npx npm-check-updates -u && npm install"
+  },
+  "keywords": [
+    "granada",
+    "framework",
+    "postgres"
+  ],
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "dist/**/*.json"
+  ],
+  "exports": {
+    ".": "./dist/index.js",
+    "./*": [
+      "./dist/*/index.js",
+      "./dist/*.js"
+    ],
+    "./*.js": "./dist/*.js"
+  },
+  "author": "nathan@telefrek.com",
+  "license": "MIT",
+  "dependencies": {
+    "@telefrek/core": "*",
+    "pg": "8.11.3"
+  },
+  "devDependencies": {
+    "@types/pg": "8.11.0"
+  },
+  "gitHead": "730d8573af6f7e7edf7187ab6f1a082f52d224e0"
+}

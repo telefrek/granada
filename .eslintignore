@@ -1,0 +1,5 @@
+.eslintrc.cjs
+**/*.js
+**/dist/*
+**/*.test.ts
+**/jest.config.ts

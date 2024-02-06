@@ -1,0 +1,34 @@
+{
+  "name": "@telefrek/service",
+  "version": "1.0.0-alpha.12",
+  "description": "This package makes creating new services easier than working with the raw HTTP stack",
+  "scripts": {
+    "compile": "rm -rf dist/* && tsc -p tsconfig.compile.json",
+    "upgrade": "npx npm-check-updates -u && npm install"
+  },
+  "keywords": [
+    "granada",
+    "framework",
+    "service",
+    "REST"
+  ],
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "dist/**/*.json"
+  ],
+  "exports": {
+    ".": "./dist/index.js",
+    "./*": [
+      "./dist/*/index.js",
+      "./dist/*.js"
+    ],
+    "./*.js": "./dist/*.js"
+  },
+  "author": "nathan@telefrek.com",
+  "license": "MIT",
+  "dependencies": {
+    "@telefrek/http": "*"
+  },
+  "gitHead": "730d8573af6f7e7edf7187ab6f1a082f52d224e0"
+}

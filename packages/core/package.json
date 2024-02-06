@@ -1,0 +1,33 @@
+{
+  "name": "@telefrek/core",
+  "version": "1.0.0-alpha.12",
+  "description": "This package contains the core utilities that are referenced throughout the Granada framework",
+  "scripts": {
+    "compile": "rm -rf dist/* && tsc -p tsconfig.compile.json",
+    "upgrade": "npx npm-check-updates -u && npm install"
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "dist/**/*.json"
+  ],
+  "keywords": [],
+  "author": "nathan@telefrek.com",
+  "license": "MIT",
+  "dependencies": {
+    "@opentelemetry/api": "^1.7.0",
+    "@opentelemetry/semantic-conventions": "^1.21.0"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./*": [
+      "./dist/*/index.js",
+      "./dist/*.js"
+    ],
+    "./*.js": "./dist/*.js"
+  },
+  "devDependencies": {
+    "@opentelemetry/core": "^1.21.0"
+  },
+  "gitHead": "730d8573af6f7e7edf7187ab6f1a082f52d224e0"
+}
