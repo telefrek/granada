@@ -256,7 +256,7 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
  * @returns The mapped {@link HttpHeaders}
  */
 function parseHttp2Headers(
-  incomingHeaders: http2.IncomingHttpHeaders,
+  incomingHeaders: http2.IncomingHttpHeaders
 ): HttpHeaders {
   const headers = emptyHeaders()
 
@@ -295,7 +295,7 @@ class Http2Request extends EventEmitter implements HttpRequest {
 
   constructor(
     request: http2.Http2ServerRequest,
-    response: http2.Http2ServerResponse,
+    response: http2.Http2ServerResponse
   ) {
     super()
     const { path, query } = parsePath(request.url)
@@ -357,7 +357,9 @@ class Http2Request extends EventEmitter implements HttpRequest {
           pipeline(response.body.contents, this.#response.stream, (err) => {
             if (err) {
               console.log(
-                `not good...${JSON.stringify(err)} at ${JSON.stringify(this.path)}`,
+                `not good...${JSON.stringify(err)} at ${JSON.stringify(
+                  this.path
+                )}`
               )
             }
             this.#response.end()

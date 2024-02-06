@@ -201,7 +201,7 @@ export interface HttpResponse {
  * @returns True if the response is a {@link FileContentResponse}
  */
 export function isFileContent(
-  response: HttpResponse,
+  response: HttpResponse
 ): response is FileContentResponse {
   return (
     response !== undefined &&

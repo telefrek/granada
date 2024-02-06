@@ -2,4 +2,4 @@
 !/dist/*
 !package.json
 !README.md
-**/*.tsbuildinfo
+*.tsbuildinfo

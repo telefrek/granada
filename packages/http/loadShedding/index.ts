@@ -10,7 +10,7 @@ import { HttpPipelineTransform } from "../pipeline"
 
 export function enableLoadShedding(
   thresholdMs = 1_000,
-  limiter: Limiter | undefined = undefined,
+  limiter: Limiter | undefined = undefined
 ): HttpPipelineTransform {
   // Get the limiter
   const limit =
@@ -21,7 +21,7 @@ export function enableLoadShedding(
         .on("changed", (l) => {
           console.log(`new limit: ${l}`)
         }),
-      10,
+      10
     )
 
   return (request) => {
