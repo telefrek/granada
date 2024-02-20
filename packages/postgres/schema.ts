@@ -28,8 +28,17 @@ export type PostgresEnum<T extends Record<string | number, string>> = T[keyof T]
 export interface PostgresColumn {
   // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-explicit-any
   type: PostgresColumnTypes | PostgresEnum<any> | PostgresArray<any> | undefined
-  defaultValue?: unknown
 }
+
+export type PrimaryKey<
+  T extends PostgresTable,
+  C extends keyof T["columns"]
+> = C[]
+
+export type ForeignKey<
+  T extends PostgresTable,
+  C extends keyof T["columns"]
+> = C
 
 /**
  * Represents an array of {@link PostgresColumnTypes}
@@ -42,7 +51,9 @@ export interface PostgresArray<T extends PostgresColumnTypes> {
  * Utility type for indicating a table schema as a column name and {@link PostgresColumn} definition
  */
 export interface PostgresTable {
-  columns: Record<string, PostgresColumn | undefined>
+  columns: Partial<{
+    [key: string]: PostgresColumn
+  }>
 }
 /**
  * Represents the definition for a given schema (collection of objects)
@@ -78,6 +89,6 @@ export type PostgresColumnType<T extends PostgresColumn | undefined> =
       T["type"] extends PostgresArray<any>
       ? PostgresTypeMapping[T["type"]["itemType"]][]
       : T["type"] extends keyof PostgresTypeMapping
-        ? PostgresTypeMapping[T["type"]]
-        : string
+      ? PostgresTypeMapping[T["type"]]
+      : string
     : never

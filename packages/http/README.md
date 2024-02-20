@@ -1,3 +1,14 @@
+```
+ _   _ _   _
+| | | | | | |
+| |_| | |_| |_ _ __
+|  _  | __| __| '_ \
+| | | | |_| |_| |_) |
+\_| |_/\__|\__| .__/
+              | |
+              |_|
+```
+
 # HTTP
 
 This package provides common patterns for working with the HTTP stack including:

@@ -16,8 +16,43 @@ export interface ParameterizedQuery extends PostgresQuery {
   parameters: string[]
 }
 
+/**
+ *
+ * @param name The name of the query
+ * @param text The query text
+ * @returns
+ */
+export function createQuery(
+  name: string,
+  text: string
+): PostgresQuery | ParameterizedQuery {
+  const parameters: string[] = []
+
+  // Need to parse out all of the parameters from the query
+  const tokens = text.split(/[\s,()=]|::+/g).filter(Boolean)
+
+  // Process all the tokens to build a valid string
+  for (const token of tokens) {
+    // Check if it starts with : and is a valid parameter name
+    if (token.startsWith(":")) {
+      // Check if the parameter exists
+      const idx = parameters.indexOf(token.substring(1))
+      if (idx >= 0) {
+        text = text.replace(token, `$${idx}`)
+      } else {
+        parameters.push(token.substring(1))
+        text = text.replace(token, `$${parameters.length}`)
+      }
+    } else if (token.startsWith("$") && parameters.length > 0) {
+      throw new Error("Cannot mix named parameters and indices!")
+    }
+  }
+
+  return parameters.length > 0 ? { name, text, parameters } : { name, text }
+}
+
 export function isParameterizedQuery(
-  query: PostgresQuery,
+  query: PostgresQuery
 ): query is ParameterizedQuery {
   return "parameters" in query && Array.isArray(query.parameters)
 }
@@ -30,9 +65,10 @@ export function isBoundQuery(query: PostgresQuery): query is BoundQuery {
   return "args" in query && Array.isArray(query.args)
 }
 
+// We need to consider what is a valid query here as well...
 export function bind(
-  query: PostgresQuery,
-  args: Record<string, unknown> | [],
+  query: PostgresQuery | ParameterizedQuery,
+  args: Record<string, unknown> | []
 ): BoundQuery {
   // If we got an array, just pass it through, difficult to validate all cases otherwise
   if (Array.isArray(args)) {
@@ -42,32 +78,22 @@ export function bind(
     }
   }
 
-  const parameters = []
-  let text = query.text
-
-  // Need to parse out all of the parameters from the query
-  const tokens = query.text.split(/[\s,()=]|::+/g).filter(Boolean)
-  for (const token of tokens) {
-    // Check if it starts with : and is a valid parameter name
-    if (token.startsWith(":")) {
-      parameters.push(token.substring(1))
-      text = text.replace(token, `$${parameters.length}`)
-    } else if (token.startsWith("$") && parameters.length > 0) {
-      throw new Error("Cannot mix named parameters and indices!")
+  // This should be the most common case
+  if (isParameterizedQuery(query)) {
+    return {
+      ...query,
+      args: query.parameters.map((p) => (p in args ? args[p] : undefined)),
     }
   }
 
+  // Assume the object is the only argument, probably should just throw...
   return {
-    name: query.name,
-    text,
-    args: parameters.map((p) => (p in args ? args[p] : undefined)),
+    ...query,
+    args: [args],
   }
 }
 
-export interface PostgresQueryResult<
-  T extends PostgresTable,
-  R extends Partial<PostgresRow<T>>,
-> {
+export interface PostgresQueryResult<R extends any = any> {
   hasRows: boolean
   query: PostgresQuery
   rows: R[] | AsyncIterable<R>

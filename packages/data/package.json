@@ -1,22 +1,23 @@
 {
-  "name": "@telefrek/http",
+  "name": "@telefrek/data",
   "version": "1.0.0-alpha.12",
-  "description": "This package standardizes how HTTP clients and servers interact at a low level",
+  "description": "This package contains the data abstractions that are referenced throughout the Granada framework",
   "scripts": {
     "compile": "rm -rf dist/* && tsc -p tsconfig.compile.json",
     "upgrade": "npx npm-check-updates -u && npm install",
     "build": "tsc"
   },
-  "keywords": [
-    "granada",
-    "framework",
-    "http"
-  ],
   "files": [
     "dist/**/*.js",
     "dist/**/*.d.ts",
     "dist/**/*.json"
   ],
+  "keywords": [],
+  "author": "nathan@telefrek.com",
+  "license": "MIT",
+  "dependencies": {
+    "@telefrek/core": "^1.0.0-alpha.12"
+  },
   "exports": {
     ".": "./dist/index.js",
     "./*": [
@@ -25,10 +26,5 @@
     ],
     "./*.js": "./dist/*.js"
   },
-  "author": "nathan@telefrek.com",
-  "license": "MIT",
-  "dependencies": {
-    "@telefrek/core": "*"
-  },
-  "gitHead": "730d8573af6f7e7edf7187ab6f1a082f52d224e0"
+  "devDependencies": {}
 }

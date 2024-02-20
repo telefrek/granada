@@ -4,7 +4,8 @@
   "description": "This package makes creating new services easier than working with the raw HTTP stack",
   "scripts": {
     "compile": "rm -rf dist/* && tsc -p tsconfig.compile.json",
-    "upgrade": "npx npm-check-updates -u && npm install"
+    "upgrade": "npx npm-check-updates -u && npm install",
+    "build": "tsc"
   },
   "keywords": [
     "granada",

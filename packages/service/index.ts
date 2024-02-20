@@ -174,15 +174,15 @@ export function routableApi(options: RoutableApiOptions) {
                   if (request.path.parameters && info.options.parameters) {
                     args.push(
                       ...info.options.parameters.map(
-                        (p) => request.path.parameters!.get(p) ?? undefined,
-                      ),
+                        (p) => request.path.parameters!.get(p) ?? undefined
+                      )
                     )
                   }
 
                   // Invoke the method
                   const resp: unknown = await info.method.call(
                     this,
-                    args.length === 1 ? args[0] : args,
+                    args.length === 1 ? args[0] : args
                   )
 
                   if (
@@ -195,7 +195,7 @@ export function routableApi(options: RoutableApiOptions) {
                       body: {
                         mediaType: parseMediaType("application/json"),
                         contents: Readable.from(
-                          Buffer.from(JSON.stringify(resp), "utf-8"),
+                          Buffer.from(JSON.stringify(resp), "utf-8")
                         ),
                       },
                     })
@@ -231,7 +231,7 @@ export function route(options: RouteOptions) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     classPrototype: any,
     methodName: string,
-    descriptor: PropertyDescriptor,
+    descriptor: PropertyDescriptor
   ): void => {
     // Check to see if our symbol is already loaded
     const data = getRoutingData(classPrototype)

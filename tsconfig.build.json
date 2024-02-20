@@ -13,6 +13,8 @@
     "noImplicitOverride": true,
     "experimentalDecorators": true,
     "outDir": "./dist",
+    "sourceMap": true,
+    "composite": true,
     "jsx": "react-jsx"
   }
 }
