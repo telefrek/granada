@@ -23,6 +23,8 @@ export interface QueryOperation<In extends QueryNode, Out extends QueryNode>
 /**
  * Represents a source of values and their types
  */
-export interface QuerySource<T> extends QueryNode {
-  columns: (keyof T)[]
+export interface QuerySource<T, K extends keyof T, R = Pick<T, K>>
+  extends QueryNode {
+  columns: K[]
+  defaults?: R
 }

@@ -3,6 +3,7 @@
  */
 
 import type { OptionalProperties } from "@telefrek/core/type/utils"
+import type { RelationalDataStore } from "."
 import type { QueryNode, QuerySource } from "../query/ast"
 
 export enum RelationalNodeTypes {
@@ -25,7 +26,7 @@ export interface RelationalQueryNode<T extends RelationalNodeTypes>
  * @param node The {@link QueryNode} to check
  * @returns True if the node is a {@link RelationalQueryNode}
  */
-function isRelationalQueryNode(
+export function isRelationalQueryNode(
   node: QueryNode
 ): node is RelationalQueryNode<RelationalNodeTypes> {
   return typeof node === "object" && node !== null && "nodeType" in node
@@ -121,7 +122,7 @@ export function isFilterGroup<T>(filter: unknown): filter is FilterGroup<T> {
  */
 export interface WhereClause<T>
   extends RelationalQueryNode<RelationalNodeTypes.WHERE> {
-  where: FilterGroup<T> | FilterTypes<T>
+  filter: FilterGroup<T> | FilterTypes<T>
 }
 
 /**
@@ -139,8 +140,8 @@ export function isWhereClause<T>(node: QueryNode): node is WhereClause<T> {
 /**
  * Rename to match nomenclature
  */
-export interface SelectClause<T>
-  extends QuerySource<T>,
+export interface SelectClause<T, K extends keyof T, R = Pick<T, K>>
+  extends QuerySource<T, K, R>,
     RelationalQueryNode<RelationalNodeTypes.SELECT> {}
 
 /**
@@ -149,7 +150,9 @@ export interface SelectClause<T>
  * @param node The {@link QueryNode} to inspect
  * @returns True if the node is a {@link SelectClause}
  */
-export function isSelectClause<T>(node: QueryNode): node is SelectClause<T> {
+export function isSelectClause<T, K extends keyof T, R = Pick<T, K>>(
+  node: QueryNode
+): node is SelectClause<T, K, R> {
   return (
     isRelationalQueryNode(node) && node.nodeType === RelationalNodeTypes.SELECT
   )
@@ -158,10 +161,15 @@ export function isSelectClause<T>(node: QueryNode): node is SelectClause<T> {
 /**
  * Represents a query against a table
  */
-export interface TableQueryNode<T>
-  extends RelationalQueryNode<RelationalNodeTypes.TABLE> {
-  select?: SelectClause<T>
-  where?: WhereClause<T>
+export interface TableQueryNode<
+  D extends RelationalDataStore,
+  T extends keyof D["tables"],
+  K extends keyof D["tables"][T],
+  R extends Pick<D["tables"][T], K>
+> extends RelationalQueryNode<RelationalNodeTypes.TABLE> {
+  table: T
+  select?: SelectClause<D["tables"][T], K, R>
+  where?: WhereClause<R>
 }
 
 /**
@@ -170,9 +178,12 @@ export interface TableQueryNode<T>
  * @param node The {@link QueryNode} to inspect
  * @returns True if the node is a {@link TableQueryNode}
  */
-export function isTableQueryNode<T>(
-  node: QueryNode
-): node is TableQueryNode<T> {
+export function isTableQueryNode<
+  D extends RelationalDataStore,
+  T extends keyof D["tables"],
+  K extends keyof D["tables"][T],
+  R extends Pick<D["tables"][T], K>
+>(node: QueryNode): node is TableQueryNode<D, T, K, R> {
   return (
     isRelationalQueryNode(node) && node.nodeType === RelationalNodeTypes.TABLE
   )

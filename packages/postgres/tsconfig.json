@@ -5,5 +5,12 @@
     "experimentalDecorators": true
   },
   "include": ["./**/*.ts"],
-  "exclude": ["./dist/**/*"]
+  "exclude": ["./dist/**/*"],
+  "paths": {
+    "@telefrek/core": "../core",
+    "@telefrek/core/*": "../core/*",
+    "@telefrek/data": "../data",
+    "@telefrek/data/*": "../data/*"
+  },
+  "references": [{ "path": "../core" }, { "path": "../data" }]
 }

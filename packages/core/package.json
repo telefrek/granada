@@ -16,8 +16,8 @@
   "author": "nathan@telefrek.com",
   "license": "MIT",
   "dependencies": {
-    "@opentelemetry/api": "^1.7.0",
-    "@opentelemetry/semantic-conventions": "^1.21.0"
+    "@opentelemetry/api": "^1.8.0",
+    "@opentelemetry/semantic-conventions": "^1.22.0"
   },
   "exports": {
     ".": "./dist/index.js",
@@ -28,7 +28,7 @@
     "./*.js": "./dist/*.js"
   },
   "devDependencies": {
-    "@opentelemetry/core": "^1.21.0"
+    "@opentelemetry/core": "^1.22.0"
   },
   "gitHead": "730d8573af6f7e7edf7187ab6f1a082f52d224e0"
 }

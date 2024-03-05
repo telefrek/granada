@@ -9,20 +9,24 @@ import type { QueryNode } from "./ast"
 /**
  * Defines the generatl structure for a {@link Query} builder
  */
-export interface QueryBuilder {
+export interface QueryBuilder<T> {
   /**
    * Build the {@link Query} with the information already provided
    *
    * @returns A {@link Query} that is ready to execute
    */
-  build<T>(): Query<T>
+  build(): Query<T>
 }
 
 /**
  * An abstract builder that uses the {@link QueryNode} AST
  */
-export abstract class QueryBuilderBase implements QueryBuilder {
+export abstract class QueryBuilderBase<T> implements QueryBuilder<T> {
   protected ast: QueryNode = {}
+
+  constructor(root: QueryNode = {}) {
+    this.ast = root
+  }
 
   /**
    * Protected method for allowing builders to translate between an
@@ -34,7 +38,7 @@ export abstract class QueryBuilderBase implements QueryBuilder {
    */
   protected abstract buildQuery<T>(ast: QueryNode): Query<T>
 
-  build<T>(): Query<T> {
+  build(): Query<T> {
     return this.buildQuery(this.ast)
   }
 }
