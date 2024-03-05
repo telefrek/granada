@@ -3,6 +3,6 @@
   "compilerOptions": {
     "outDir": "./dist/"
   },
-  "include": ["**/*.ts"],
+  "include": ["./**/*.ts", "./content/mimeTypes.json"],
   "exclude": ["./dist/**/*", "./testUtils.ts", "./**/*.test.ts"]
 }
