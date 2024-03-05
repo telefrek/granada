@@ -7,7 +7,7 @@
     "format": "npx prettier --write .",
     "package": "npm run upgrade-all & npm run test & npm run compile --workspaces --if-present",
     "upgrade-all": "npx npm-check-updates -u & npm install & npm run upgrade --workspaces --if-present",
-    "tsc-diagnostics": "tsc --extendedDiagnostics --diagnostics"
+    "tsc-diagnostics": "rm -rf ./dist & tsc --extendedDiagnostics --diagnostics"
   },
   "jest": {
     "projects": [
@@ -17,12 +17,11 @@
   "devDependencies": {
     "@types/jest": "^29.5.12",
     "@types/node": "^20.11.24",
-    "@typescript-eslint/eslint-plugin": "^7.1.0",
-    "@typescript-eslint/parser": "^7.1.0",
+    "@typescript-eslint/eslint-plugin": "^7.1.1",
+    "@typescript-eslint/parser": "^7.1.1",
     "eslint": "^8.57.0",
     "identity-obj-proxy": "^3.0.0",
     "jest": "^29.7.0",
-    "jest-environment-jsdom": "^29.7.0",
     "lerna": "^8.1.2",
     "ts-jest": "^29.1.2",
     "ts-node": "^10.9.2",

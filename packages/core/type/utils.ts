@@ -15,3 +15,18 @@ export type RequiredProperties<T extends object> = keyof {
 export type OptionalProperties<T> = {
   [K in keyof T]-?: {} extends { [P in K]: T[K] } ? K : never
 }[keyof T]
+
+/**
+ * Type that extracts keys that are arrays
+ */
+export type ArrayProperty<T> = {
+  [K in keyof T]: T[K] extends Array<any> ? K : never
+}[keyof T]
+
+/**
+ * Type that extracts the type of element at the array property of T
+ */
+export type ArrayItemType<
+  T,
+  K extends ArrayProperty<T>,
+> = T[K] extends (infer U)[] ? U : never

@@ -3,10 +3,14 @@
  */
 
 import type { RelationalDataStore } from "."
+import type { Query } from "../query"
 import { QueryBuilderBase } from "../query/builder"
 import {
+  ContainmentOp,
   FilterOp,
   RelationalNodeTypes,
+  type ContainmentItemType,
+  type ContainmentProperty,
   type RelationalQueryNode,
   type SelectClause,
   type TableQueryNode,
@@ -35,7 +39,7 @@ abstract class RelationalTableBuilder<
     this.clause = clause
   }
 
-  where(clause: WhereClause<R>): RelationalQueryNodeBuilder<R> {
+  where(clause: WhereClause<D["tables"][T]>): RelationalQueryNodeBuilder<R> {
     return new RelationalQueryNodeBuilder({
       ...this.clause,
       where: clause,
@@ -48,12 +52,12 @@ abstract class RelationalTableBuilder<
    * @param ctor A class the implements the given constructor
    * @returns A new {@link RelationalQueryBuilder} for the table
    */
-  builder(
+  build(
     ctor: new (
       node: RelationalQueryNode<RelationalNodeTypes>
     ) => RelationalQueryBuilder<R>
-  ): RelationalQueryBuilder<R> {
-    return new ctor(this.clause)
+  ): Query<R> {
+    return new ctor(this.clause).build()
   }
 }
 
@@ -132,13 +136,35 @@ type ColumnFilterFn = <R, C extends keyof R, V extends R[C]>(
   value: V
 ) => WhereClause<R>
 
-export const columns: Record<keyof typeof FilterOp, ColumnFilterFn> = {
+type ColumnInFilterRn = <
+  R,
+  C extends ContainmentProperty<R>,
+  V extends ContainmentItemType<R, C>
+>(
+  column: C,
+  value: V
+) => WhereClause<R>
+
+export const columns: {
+  [key in keyof typeof FilterOp]: ColumnFilterFn
+} & {
+  [key in keyof typeof ContainmentOp]: ColumnInFilterRn
+} = {
   GT: (c, v) => cf(c, v, FilterOp.GT),
   LT: (c, v) => cf(c, v, FilterOp.LT),
   GTE: (c, v) => cf(c, v, FilterOp.GTE),
   LTE: (c, v) => cf(c, v, FilterOp.LTE),
   EQ: (c, v) => cf(c, v, FilterOp.EQ),
-  IN: (c, v) => cf(c, v, FilterOp.IN),
+  IN: (column, value) => {
+    return {
+      nodeType: RelationalNodeTypes.WHERE,
+      filter: {
+        column,
+        value,
+        op: ContainmentOp.IN,
+      },
+    }
+  },
 }
 
 function cf<R, C extends keyof R, V extends R[C]>(
@@ -172,11 +198,11 @@ class RelationalQueryNodeBuilder<R> {
    * @param ctor A class the implements the given constructor
    * @returns A new {@link RelationalQueryBuilder} for the table
    */
-  builder(
+  build(
     ctor: new (
       node: RelationalQueryNode<RelationalNodeTypes>
     ) => RelationalQueryBuilder<R>
-  ): RelationalQueryBuilder<R> {
-    return new ctor(this.clause)
+  ): Query<R> {
+    return new ctor(this.clause).build()
   }
 }

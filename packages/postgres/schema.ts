@@ -32,12 +32,12 @@ export interface PostgresColumn {
 
 export type PrimaryKey<
   T extends PostgresTable,
-  C extends keyof T["columns"]
+  C extends keyof T["columns"],
 > = C[]
 
 export type ForeignKey<
   T extends PostgresTable,
-  C extends keyof T["columns"]
+  C extends keyof T["columns"],
 > = C
 
 /**
@@ -89,6 +89,6 @@ export type PostgresColumnType<T extends PostgresColumn | undefined> =
       T["type"] extends PostgresArray<any>
       ? PostgresTypeMapping[T["type"]["itemType"]][]
       : T["type"] extends keyof PostgresTypeMapping
-      ? PostgresTypeMapping[T["type"]]
-      : string
+        ? PostgresTypeMapping[T["type"]]
+        : string
     : never

@@ -11,7 +11,7 @@ import { Client } from "pg"
  */
 export interface Database {
   runQuery<R extends any = any>(
-    query: PostgresQuery
+    query: PostgresQuery,
   ): Promise<PostgresQueryResult<R>>
 }
 
@@ -23,7 +23,7 @@ class TestDatabase implements Database {
   #client: Client | undefined
 
   async runQuery<R extends any = any>(
-    query: PostgresQuery
+    query: PostgresQuery,
   ): Promise<PostgresQueryResult<R>> {
     if (this.#client === undefined) {
       this.#client = new Client({
@@ -40,7 +40,7 @@ class TestDatabase implements Database {
 
     const result = await this.#client.query(
       query.text,
-      isBoundQuery(query) ? query.args : undefined
+      isBoundQuery(query) ? query.args : undefined,
     )
 
     const ret = {

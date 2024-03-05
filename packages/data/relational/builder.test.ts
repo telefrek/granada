@@ -1,18 +1,34 @@
 import { columns, from } from "./builder"
-import { InMemoryQueryExecutor, InMemoryRelationalQueryBuilder } from "./memory"
+import {
+  InMemoryQueryExecutor,
+  InMemoryRelationalQueryBuilder,
+  type InMemoryRelationalDataStore,
+} from "./memory"
 
-interface TestTable {
+enum Category {
+  TEST,
+  PURCHASE,
+}
+
+interface OrderTable {
   id: number
   name: string
   createdAt: number
+  categories: Category[]
   removedAt?: number
 }
 
 interface TestDataStore {
   tables: {
-    test: TestTable
+    orders: OrderTable
   }
 }
+
+const STORE: InMemoryRelationalDataStore<TestDataStore> = {
+  orders: [],
+}
+
+const executor = new InMemoryQueryExecutor<TestDataStore>(STORE)
 
 // Take a type T
 // Get alias type A as { [subset of keyof T]: string }
@@ -20,41 +36,82 @@ interface TestDataStore {
 // the alias value of that as the name of the type R
 
 describe("Relational query builder should support basic functionality", () => {
+  // Ensure that we reset the local store to the same state for all tests
+  beforeEach(() => {
+    STORE.orders = [
+      {
+        id: 1,
+        name: "record1",
+        createdAt: Date.now(),
+        categories: [Category.TEST, Category.PURCHASE],
+      },
+      { id: 2, name: "record2", createdAt: Date.now() - 1000, categories: [] },
+      {
+        id: 3,
+        name: "record3",
+        createdAt: Date.now(),
+        categories: [Category.PURCHASE],
+      },
+    ]
+  })
+
   it("should support a simple select * style query", async () => {
     // Create the builders
-    const fromBuilder = from<TestDataStore>("test").builder(
+    const query = from<TestDataStore>("orders").build(
       InMemoryRelationalQueryBuilder
     )
 
-    const selectBuilder = from<TestDataStore>("test")
-      .select(["name", "createdAt"])
-      .where(columns.GTE("createdAt", Date.now()))
-      .builder(InMemoryRelationalQueryBuilder)
-    expect(selectBuilder).not.toBeUndefined()
-
-    const executor = new InMemoryQueryExecutor<TestDataStore>({
-      test: [
-        { id: 1, name: "record1", createdAt: Date.now() },
-        { id: 2, name: "record2", createdAt: Date.now() - 1000 },
-      ],
-    })
-
     // This should get the full row back
-    const result = await executor.run(fromBuilder.build())
+    const result = await executor.run(query)
     expect(result).not.toBeUndefined()
     if (Array.isArray(result.rows)) {
-      expect(result.rows.length).toBe(2)
-      console.log(JSON.stringify(result.rows, undefined, 2))
-      expect(Object.keys(result.rows[0]).length).toEqual(3)
+      expect(result.rows.length).toBe(STORE.orders.length)
+      expect(Object.keys(result.rows[0]).length).toEqual(4)
     }
+  })
+
+  it("should allow filtering rows via a simple where clause", async () => {
+    const query = from<TestDataStore>("orders")
+      .where(columns.IN("name", "ord3"))
+      .build(InMemoryRelationalQueryBuilder)
 
     // This should get the projected row with only 2 columns back
-    const selectResult = await executor.run(selectBuilder.build())
-    expect(selectResult).not.toBeUndefined()
-    if (Array.isArray(selectResult.rows)) {
-      expect(selectResult.rows.length).toBe(1)
-      console.log(JSON.stringify(selectResult.rows, undefined, 2))
-      expect(Object.keys(selectResult.rows[0]).length).toEqual(2)
+    const result = await executor.run(query)
+    expect(result).not.toBeUndefined()
+    if (Array.isArray(result.rows)) {
+      expect(result.rows.length).toBe(1)
+      expect(Object.keys(result.rows[0]).length).toEqual(
+        Object.keys(STORE.orders[0]).length
+      )
+    }
+  })
+
+  it("should allow for projections of rows via a simple select clause", async () => {
+    const query = from<TestDataStore>("orders")
+      .select(["name", "createdAt"])
+      .build(InMemoryRelationalQueryBuilder)
+
+    // This should get the projected row with only 2 columns back
+    const result = await executor.run(query)
+    expect(result).not.toBeUndefined()
+    if (Array.isArray(result.rows)) {
+      expect(result.rows.length).toBe(STORE.orders.length)
+      expect(Object.keys(result.rows[0]).length).toEqual(2)
+    }
+  })
+
+  it("should allow for projections of rows via a simple select clause in addition to row filtering via where clause", async () => {
+    const query = from<TestDataStore>("orders")
+      .select(["name", "createdAt"])
+      .where(columns.IN("name", "ord3"))
+      .build(InMemoryRelationalQueryBuilder)
+
+    // This should get the projected row with only 2 columns back
+    const result = await executor.run(query)
+    expect(result).not.toBeUndefined()
+    if (Array.isArray(result.rows)) {
+      expect(result.rows.length).toBe(1)
+      expect(Object.keys(result.rows[0]).length).toEqual(2)
     }
   })
 })

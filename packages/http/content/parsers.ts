@@ -41,8 +41,8 @@ export function getContentType(headers: HttpHeaders): MediaType | undefined {
   return typeof value === "string"
     ? parseMediaType(value)
     : typeof value === "object" && Array.isArray(value)
-    ? parseMediaType(value[0])
-    : undefined
+      ? parseMediaType(value[0])
+      : undefined
 }
 
 export type ContentTypeParser = (body: HttpBody) => MaybeAwaitable<void>
@@ -69,7 +69,7 @@ export const CONTENT_PARSERS: Partial<
  * @param body The {@link HttpBody} to parse
  */
 export const JSON_CONTENT_PARSER: ContentTypeParser = (
-  body: HttpBody
+  body: HttpBody,
 ): MaybeAwaitable<void> => {
   // Verify we have a body
   if (body.contents) {
@@ -109,7 +109,7 @@ export const JSON_CONTENT_PARSER: ContentTypeParser = (
  * @returns A {@link ReadableStream} of {@link HttpRequest} where body contents are parsed
  */
 export const CONTENT_PARSING_TRANSFORM: HttpPipelineTransform = async (
-  request: HttpRequest
+  request: HttpRequest,
 ) => {
   // Check if there is a body and if so process the contents
   if (request.body) {

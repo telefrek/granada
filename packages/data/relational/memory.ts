@@ -14,12 +14,17 @@ import {
 import type { QueryNode } from "../query/ast"
 import { QueryError } from "../query/error"
 import {
+  ContainmentOp,
   FilterOp,
   RelationalNodeTypes,
   isColumnFilter,
+  isContainmentFilter,
   isRelationalQueryNode,
   isTableQueryNode,
   type ColumnFilter,
+  type ContainmentFilter,
+  type ContainmentItemType,
+  type ContainmentProperty,
   type RelationalQueryNode,
 } from "./ast"
 import { RelationalQueryBuilder } from "./builder"
@@ -35,7 +40,7 @@ export type InMemoryRelationalDataStore<T extends RelationalDataStore> = Record<
 >
 
 export function createInMemoryStore<
-  T extends RelationalDataStore
+  T extends RelationalDataStore,
 >(): InMemoryRelationalDataStore<T> {
   return {
     sources: {},
@@ -43,7 +48,7 @@ export function createInMemoryStore<
 }
 
 type InMemoryQuerySourceFn<D extends RelationalDataStore, T> = (
-  store: InMemoryRelationalDataStore<D>
+  store: InMemoryRelationalDataStore<D>,
 ) => T[]
 
 class InMemoryQuery<D extends RelationalDataStore, T> implements Query<T> {
@@ -54,7 +59,7 @@ class InMemoryQuery<D extends RelationalDataStore, T> implements Query<T> {
   constructor(
     name: string,
     s: InMemoryQuerySourceFn<D, T>,
-    mode: ExecutionMode = ExecutionMode.Normal
+    mode: ExecutionMode = ExecutionMode.Normal,
   ) {
     this.name = name
     this.mode = mode
@@ -63,7 +68,7 @@ class InMemoryQuery<D extends RelationalDataStore, T> implements Query<T> {
 }
 
 function isInMemoryQuery<D extends RelationalDataStore, T>(
-  query: Query<T>
+  query: Query<T>,
 ): query is InMemoryQuery<D, T> {
   return (
     typeof query === "object" &&
@@ -97,7 +102,7 @@ export class InMemoryQueryExecutor<D extends RelationalDataStore>
 
 export class InMemoryRelationalQueryBuilder<
   D extends RelationalDataStore,
-  T
+  T,
 > extends RelationalQueryBuilder<T> {
   constructor(queryNode: RelationalQueryNode<RelationalNodeTypes>) {
     super(queryNode)
@@ -107,11 +112,22 @@ export class InMemoryRelationalQueryBuilder<
     // Verify we have a relational node
     if (isRelationalQueryNode(ast) && isTableQueryNode(ast)) {
       return new InMemoryQuery<D, T>("name", (source) => {
+        let rows = source[ast.table] ?? []
         let ret: T[] = []
+
+        // Check for any filters to apply
+        if (ast.where !== undefined) {
+          // Simple column filter
+          if (isColumnFilter(ast.where.filter)) {
+            rows = rows.filter(buildFilter(ast.where.filter))
+          } else if (isContainmentFilter(ast.where.filter)) {
+            rows = rows.filter(buildContainsFilter(ast.where.filter))
+          }
+        }
 
         // Apply any select projections on the set firts
         if (ast.select !== undefined) {
-          ret = (source[ast.table] ?? []).map((r) => {
+          ret = rows.map((r) => {
             const entries: Array<readonly [PropertyKey, any]> = []
 
             // TODO: handle aliasing
@@ -119,15 +135,7 @@ export class InMemoryRelationalQueryBuilder<
             return Object.fromEntries(entries) as T
           })
         } else {
-          ret = (source[ast.table] ?? []) as T[]
-        }
-
-        // Check for any filters to apply
-        if (ast.where !== undefined) {
-          // Simple column filter
-          if (isColumnFilter(ast.where.filter)) {
-            ret = ret.filter(buildFilter(ast.where.filter))
-          }
+          ret = rows as T[]
         }
 
         return ret
@@ -138,8 +146,31 @@ export class InMemoryRelationalQueryBuilder<
   }
 }
 
+function buildContainsFilter<T>(
+  columnFilter: ContainmentFilter<
+    T,
+    ContainmentProperty<T>,
+    ContainmentItemType<T, ContainmentProperty<T>>
+  >,
+): (input: T) => boolean {
+  switch (columnFilter.op) {
+    case ContainmentOp.IN:
+      return (row) => {
+        const v = row[columnFilter.column]
+
+        if (typeof v === "string") {
+          return v.indexOf(columnFilter.value as string) >= 0
+        } else if (Array.isArray(v)) {
+          return v.includes(columnFilter.value)
+        }
+
+        return false
+      }
+  }
+}
+
 function buildFilter<T>(
-  columnFilter: ColumnFilter<T, keyof T>
+  columnFilter: ColumnFilter<T, keyof T>,
 ): (input: T) => boolean {
   switch (columnFilter.op) {
     case FilterOp.EQ:
@@ -152,7 +183,5 @@ function buildFilter<T>(
       return (row) => row[columnFilter.column] < columnFilter.value
     case FilterOp.LTE:
       return (row) => row[columnFilter.column] <= columnFilter.value
-    case FilterOp.IN:
-      return (row) => false // TODO: need to move this...doesn't make sense unless value is string or array...
   }
 }

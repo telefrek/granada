@@ -5,7 +5,7 @@
   "scripts": {
     "compile": "rm -rf dist/* && tsc -p tsconfig.compile.json",
     "upgrade": "npx npm-check-updates -u && npm install",
-    "build": "tsc"
+    "build": "tsc --extendedDiagnostics --diagnostics"
   },
   "keywords": [
     "granada",

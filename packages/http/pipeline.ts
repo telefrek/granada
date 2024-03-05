@@ -94,7 +94,7 @@ class HttpPipelineBuilder {
 
   constructor(
     source: RequestSource,
-    unhandled: UnhandledRequestConsumer = NOT_FOUND_CONSUMER
+    unhandled: UnhandledRequestConsumer = NOT_FOUND_CONSUMER,
   ) {
     this.#source = source
     this.#unhandled = unhandled
@@ -127,7 +127,7 @@ class HttpPipelineBuilder {
 
       this.#routing.apiRouting.addRouter(
         routable.prefix ?? "/",
-        routable.router
+        routable.router,
       )
     }
 
@@ -188,7 +188,7 @@ export type RequestSource = Iterable<HttpRequest> | AsyncIterable<HttpRequest>
  * @param request The {@link HttpRequest} to finish
  */
 export type UnhandledRequestConsumer = (
-  request: HttpRequest
+  request: HttpRequest,
 ) => MaybeAwaitable<void>
 
 /**
@@ -208,7 +208,7 @@ export const NOT_FOUND_CONSUMER: UnhandledRequestConsumer = (request) =>
  */
 export const createPipeline = (
   source: RequestSource,
-  unhandledRequest: UnhandledRequestConsumer = NOT_FOUND_CONSUMER
+  unhandledRequest: UnhandledRequestConsumer = NOT_FOUND_CONSUMER,
 ): HttpPipelineBuilder => new HttpPipelineBuilder(source, unhandledRequest)
 
 class DefaultPipeline extends EventEmitter implements HttpPipeline {
@@ -219,7 +219,7 @@ class DefaultPipeline extends EventEmitter implements HttpPipeline {
   constructor(
     source: RequestSource,
     stages: StagedPipeline,
-    unhandledRequest: UnhandledRequestConsumer
+    unhandledRequest: UnhandledRequestConsumer,
   ) {
     super()
 
@@ -253,13 +253,13 @@ class DefaultPipeline extends EventEmitter implements HttpPipeline {
         this.#reader.on("error", (err) => this.emit("error", err)),
 
         createTransform(transform).once("error", (err) =>
-          this.emit("error", err)
+          this.emit("error", err),
         ),
         unhandled,
         {
           signal: this.#abort.signal,
           end: true,
-        }
+        },
       )
     } else {
       this.#pipelineCompletion = promisify(pipeline)(this.#reader, unhandled, {

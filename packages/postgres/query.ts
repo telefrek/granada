@@ -24,7 +24,7 @@ export interface ParameterizedQuery extends PostgresQuery {
  */
 export function createQuery(
   name: string,
-  text: string
+  text: string,
 ): PostgresQuery | ParameterizedQuery {
   const parameters: string[] = []
 
@@ -52,7 +52,7 @@ export function createQuery(
 }
 
 export function isParameterizedQuery(
-  query: PostgresQuery
+  query: PostgresQuery,
 ): query is ParameterizedQuery {
   return "parameters" in query && Array.isArray(query.parameters)
 }
@@ -68,7 +68,7 @@ export function isBoundQuery(query: PostgresQuery): query is BoundQuery {
 // We need to consider what is a valid query here as well...
 export function bind(
   query: PostgresQuery | ParameterizedQuery,
-  args: Record<string, unknown> | []
+  args: Record<string, unknown> | [],
 ): BoundQuery {
   // If we got an array, just pass it through, difficult to validate all cases otherwise
   if (Array.isArray(args)) {
