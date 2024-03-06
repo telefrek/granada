@@ -193,25 +193,22 @@ export function isWhereClause<T>(node: QueryNode): node is WhereClause<T> {
   )
 }
 
-export type ColumnAlias<T, K extends keyof T, N extends string> = {
+export interface ColumnAlias<T, K extends keyof T, N extends string> {
   column: K
   alias: N
 }
 
-export type AliasedValues<T, K extends keyof T, N extends string> = Omit<T, K> &
+export type AliasedType<T, K extends keyof T, N extends string> = Omit<T, K> &
   Record<N, T[K]>
 
 /**
  * Rename to match nomenclature
  */
-export interface SelectClause<
-  T,
-  K extends keyof T,
-  R = Pick<T, K>,
-  C extends keyof R = keyof R
-> extends QuerySource<T, K, R>,
+export interface SelectClause<T, K extends keyof T, R>
+  extends QuerySource<R>,
     RelationalQueryNode<RelationalNodeTypes.SELECT> {
-  alias?: ColumnAlias<R, keyof R, string>
+  columns: K[]
+  alias?: ColumnAlias<T, K, string>
 }
 
 /**
@@ -234,11 +231,10 @@ export function isSelectClause<T, K extends keyof T, R = Pick<T, K>>(
 export interface TableQueryNode<
   D extends RelationalDataStore,
   T extends keyof D["tables"],
-  K extends keyof D["tables"][T],
-  R extends Pick<D["tables"][T], K>
+  R
 > extends RelationalQueryNode<RelationalNodeTypes.TABLE> {
   table: T
-  select?: SelectClause<D["tables"][T], K, R>
+  select?: SelectClause<D["tables"][T], keyof D["tables"][T], R>
   where?: WhereClause<D["tables"][T]>
 }
 
@@ -251,9 +247,8 @@ export interface TableQueryNode<
 export function isTableQueryNode<
   D extends RelationalDataStore,
   T extends keyof D["tables"],
-  K extends keyof D["tables"][T],
-  R extends Pick<D["tables"][T], K>
->(node: QueryNode): node is TableQueryNode<D, T, K, R> {
+  R
+>(node: QueryNode): node is TableQueryNode<D, T, R> {
   return (
     isRelationalQueryNode(node) && node.nodeType === RelationalNodeTypes.TABLE
   )

@@ -9,7 +9,7 @@ import {
   ContainmentOp,
   FilterOp,
   RelationalNodeTypes,
-  type AliasedValues,
+  type AliasedType,
   type ContainmentItemType,
   type ContainmentProperty,
   type RelationalQueryNode,
@@ -34,12 +34,11 @@ export abstract class RelationalQueryBuilder<T> extends QueryBuilderBase<T> {
 abstract class RelationalTableBuilder<
   D extends RelationalDataStore,
   T extends keyof D["tables"],
-  K extends keyof D["tables"][T] = keyof D["tables"][T],
-  R extends Pick<D["tables"][T], K> = Pick<D["tables"][T], K>
+  R
 > {
-  protected clause: TableQueryNode<D, T, K, R>
+  protected clause: TableQueryNode<D, T, R>
 
-  constructor(clause: TableQueryNode<D, T, K, R>) {
+  constructor(clause: TableQueryNode<D, T, R>) {
     this.clause = clause
   }
 
@@ -47,7 +46,7 @@ abstract class RelationalTableBuilder<
     return new RelationalQueryNodeBuilder({
       ...this.clause,
       where: clause,
-    } as TableQueryNode<D, T, K, R>)
+    } as TableQueryNode<D, T, R>)
   }
 
   /**
@@ -85,7 +84,7 @@ export function from<
 class FromBuilder<
   D extends RelationalDataStore,
   T extends keyof D["tables"]
-> extends RelationalTableBuilder<D, T> {
+> extends RelationalTableBuilder<D, T, D["tables"][T]> {
   constructor(table: T) {
     super({ table, nodeType: RelationalNodeTypes.TABLE })
   }
@@ -97,7 +96,7 @@ class FromBuilder<
    */
   select<K extends keyof D["tables"][T], R extends Pick<D["tables"][T], K>>(
     columns: K[]
-  ): SelectBuilder<D, T, K, R> {
+  ): SelectBuilder<D, T, R> {
     return new SelectBuilder(
       {
         table: this.clause.table,
@@ -115,16 +114,18 @@ class FromBuilder<
 class SelectBuilder<
   D extends RelationalDataStore,
   T extends keyof D["tables"],
-  K extends keyof D["tables"][T],
-  R extends Pick<D["tables"][T], K>
-> extends RelationalTableBuilder<D, T, K, R> {
+  R
+> extends RelationalTableBuilder<D, T, R> {
   /**
    * Create the builder
    *
    * @param table The required table
    * @param columns The optional columns (undefined or empty is interpreted as all)
    */
-  constructor(clause: TableQueryNode<D, T, K, R>, columns?: K[]) {
+  constructor(
+    clause: TableQueryNode<D, T, R>,
+    columns?: (keyof D["tables"][T])[]
+  ) {
     super({
       ...clause,
       select: {
@@ -134,10 +135,10 @@ class SelectBuilder<
     })
   }
 
-  alias<O extends keyof R, N extends string>(
+  alias<O extends keyof R & keyof D["tables"][T], N extends string>(
     column: O,
     alias: N
-  ): RelationalQueryNodeBuilder<AliasedValues<R, O, N>> {
+  ): RelationalQueryNodeBuilder<AliasedType<R, O, N>> {
     this.clause.select!.alias = { column, alias }
     return new RelationalQueryNodeBuilder(this.clause)
   }

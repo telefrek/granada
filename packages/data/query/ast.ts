@@ -3,6 +3,8 @@
  * queries used in the framework
  */
 
+import type { OptionalProperties } from "@telefrek/core/type/utils.js"
+
 /**
  * Represents the basic information about a node in the query AST
  */
@@ -21,10 +23,8 @@ export interface QueryOperation<In extends QueryNode, Out extends QueryNode>
 }
 
 /**
- * Represents a source of values and their types
+ * Represents a source of values and their types as well as optional default values
  */
-export interface QuerySource<T, K extends keyof T, R = Pick<T, K>>
-  extends QueryNode {
-  columns: K[]
-  defaults?: R
+export interface QuerySource<T> extends QueryNode {
+  defaults?: Partial<OptionalProperties<T>>
 }
