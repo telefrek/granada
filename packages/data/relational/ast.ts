@@ -27,7 +27,7 @@ export interface RelationalQueryNode<T extends RelationalNodeTypes>
  * @returns True if the node is a {@link RelationalQueryNode}
  */
 export function isRelationalQueryNode(
-  node: QueryNode,
+  node: QueryNode
 ): node is RelationalQueryNode<RelationalNodeTypes> {
   return typeof node === "object" && node !== null && "nodeType" in node
 }
@@ -77,7 +77,7 @@ export type ContainmentProperty<T> = {
  */
 export type ContainmentItemType<
   T,
-  K extends ContainmentProperty<T>,
+  K extends ContainmentProperty<T>
 > = T[K] extends (infer U)[] ? U : T[K] extends string ? T[K] : never
 
 /**
@@ -86,7 +86,7 @@ export type ContainmentItemType<
 export interface ContainmentFilter<
   T,
   K extends ContainmentProperty<T>,
-  V extends ContainmentItemType<T, K>,
+  V extends ContainmentItemType<T, K>
 > {
   column: K
   op: ContainmentOp
@@ -100,7 +100,7 @@ export interface ContainmentFilter<
  * @returns True if the filter is a {@link ColumnFilter}
  */
 export function isColumnFilter<T>(
-  filter: unknown,
+  filter: unknown
 ): filter is ColumnFilter<T, keyof T> {
   return (
     typeof filter === "object" &&
@@ -114,7 +114,7 @@ export function isColumnFilter<T>(
 }
 
 export function isContainmentFilter<T>(
-  filter: unknown,
+  filter: unknown
 ): filter is ContainmentFilter<
   T,
   ContainmentProperty<T>,
@@ -193,12 +193,26 @@ export function isWhereClause<T>(node: QueryNode): node is WhereClause<T> {
   )
 }
 
+export type ColumnAlias<T, K extends keyof T, N extends string> = {
+  column: K
+  alias: N
+}
+
+export type AliasedValues<T, K extends keyof T, N extends string> = Omit<T, K> &
+  Record<N, T[K]>
+
 /**
  * Rename to match nomenclature
  */
-export interface SelectClause<T, K extends keyof T, R = Pick<T, K>>
-  extends QuerySource<T, K, R>,
-    RelationalQueryNode<RelationalNodeTypes.SELECT> {}
+export interface SelectClause<
+  T,
+  K extends keyof T,
+  R = Pick<T, K>,
+  C extends keyof R = keyof R
+> extends QuerySource<T, K, R>,
+    RelationalQueryNode<RelationalNodeTypes.SELECT> {
+  alias?: ColumnAlias<R, keyof R, string>
+}
 
 /**
  * Type guard for {@link SelectClause} identification
@@ -207,7 +221,7 @@ export interface SelectClause<T, K extends keyof T, R = Pick<T, K>>
  * @returns True if the node is a {@link SelectClause}
  */
 export function isSelectClause<T, K extends keyof T, R = Pick<T, K>>(
-  node: QueryNode,
+  node: QueryNode
 ): node is SelectClause<T, K, R> {
   return (
     isRelationalQueryNode(node) && node.nodeType === RelationalNodeTypes.SELECT
@@ -221,7 +235,7 @@ export interface TableQueryNode<
   D extends RelationalDataStore,
   T extends keyof D["tables"],
   K extends keyof D["tables"][T],
-  R extends Pick<D["tables"][T], K>,
+  R extends Pick<D["tables"][T], K>
 > extends RelationalQueryNode<RelationalNodeTypes.TABLE> {
   table: T
   select?: SelectClause<D["tables"][T], K, R>
@@ -238,7 +252,7 @@ export function isTableQueryNode<
   D extends RelationalDataStore,
   T extends keyof D["tables"],
   K extends keyof D["tables"][T],
-  R extends Pick<D["tables"][T], K>,
+  R extends Pick<D["tables"][T], K>
 >(node: QueryNode): node is TableQueryNode<D, T, K, R> {
   return (
     isRelationalQueryNode(node) && node.nodeType === RelationalNodeTypes.TABLE

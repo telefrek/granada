@@ -9,6 +9,7 @@ import {
   ContainmentOp,
   FilterOp,
   RelationalNodeTypes,
+  type AliasedValues,
   type ContainmentItemType,
   type ContainmentProperty,
   type RelationalQueryNode,
@@ -27,6 +28,9 @@ export abstract class RelationalQueryBuilder<T> extends QueryBuilderBase<T> {
   }
 }
 
+/**
+ * Handles building out {@link TableQueryNode} instances
+ */
 abstract class RelationalTableBuilder<
   D extends RelationalDataStore,
   T extends keyof D["tables"],
@@ -128,6 +132,14 @@ class SelectBuilder<
         nodeType: RelationalNodeTypes.SELECT,
       },
     })
+  }
+
+  alias<O extends keyof R, N extends string>(
+    column: O,
+    alias: N
+  ): RelationalQueryNodeBuilder<AliasedValues<R, O, N>> {
+    this.clause.select!.alias = { column, alias }
+    return new RelationalQueryNodeBuilder(this.clause)
   }
 }
 

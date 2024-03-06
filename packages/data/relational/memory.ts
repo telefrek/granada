@@ -40,7 +40,7 @@ export type InMemoryRelationalDataStore<T extends RelationalDataStore> = Record<
 >
 
 export function createInMemoryStore<
-  T extends RelationalDataStore,
+  T extends RelationalDataStore
 >(): InMemoryRelationalDataStore<T> {
   return {
     sources: {},
@@ -48,7 +48,7 @@ export function createInMemoryStore<
 }
 
 type InMemoryQuerySourceFn<D extends RelationalDataStore, T> = (
-  store: InMemoryRelationalDataStore<D>,
+  store: InMemoryRelationalDataStore<D>
 ) => T[]
 
 class InMemoryQuery<D extends RelationalDataStore, T> implements Query<T> {
@@ -59,7 +59,7 @@ class InMemoryQuery<D extends RelationalDataStore, T> implements Query<T> {
   constructor(
     name: string,
     s: InMemoryQuerySourceFn<D, T>,
-    mode: ExecutionMode = ExecutionMode.Normal,
+    mode: ExecutionMode = ExecutionMode.Normal
   ) {
     this.name = name
     this.mode = mode
@@ -68,7 +68,7 @@ class InMemoryQuery<D extends RelationalDataStore, T> implements Query<T> {
 }
 
 function isInMemoryQuery<D extends RelationalDataStore, T>(
-  query: Query<T>,
+  query: Query<T>
 ): query is InMemoryQuery<D, T> {
   return (
     typeof query === "object" &&
@@ -102,7 +102,7 @@ export class InMemoryQueryExecutor<D extends RelationalDataStore>
 
 export class InMemoryRelationalQueryBuilder<
   D extends RelationalDataStore,
-  T,
+  T
 > extends RelationalQueryBuilder<T> {
   constructor(queryNode: RelationalQueryNode<RelationalNodeTypes>) {
     super(queryNode)
@@ -131,7 +131,13 @@ export class InMemoryRelationalQueryBuilder<
             const entries: Array<readonly [PropertyKey, any]> = []
 
             // TODO: handle aliasing
-            ast.select!.columns.map((c) => entries.push([c, r[c]]))
+            const transform = new Map<string, string>()
+            if (ast.select?.alias) {
+              transform.set(ast.select!.alias.column, ast.select!.alias.alias)
+            }
+            ast.select!.columns.map((c) =>
+              entries.push([transform.has(c) ? transform.get(c)! : c, r[c]])
+            )
             return Object.fromEntries(entries) as T
           })
         } else {
@@ -151,7 +157,7 @@ function buildContainsFilter<T>(
     T,
     ContainmentProperty<T>,
     ContainmentItemType<T, ContainmentProperty<T>>
-  >,
+  >
 ): (input: T) => boolean {
   switch (columnFilter.op) {
     case ContainmentOp.IN:
@@ -170,7 +176,7 @@ function buildContainsFilter<T>(
 }
 
 function buildFilter<T>(
-  columnFilter: ColumnFilter<T, keyof T>,
+  columnFilter: ColumnFilter<T, keyof T>
 ): (input: T) => boolean {
   switch (columnFilter.op) {
     case FilterOp.EQ:
