@@ -28,5 +28,14 @@ export type ArrayProperty<T> = {
  */
 export type ArrayItemType<
   T,
-  K extends ArrayProperty<T>,
+  K extends ArrayProperty<T>
 > = T[K] extends (infer U)[] ? U : never
+
+/**
+ * Type that allows aliasing a property with a different name
+ */
+export type AliasedType<
+  Original,
+  Property extends keyof Original,
+  Alias extends string
+> = Omit<Original, Property> & Record<Alias, Original[Property]>

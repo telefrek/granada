@@ -6,18 +6,21 @@ import type { OptionalProperties } from "@telefrek/core/type/utils"
 import type { RelationalDataStore } from "."
 import type { QueryNode, QuerySource } from "../query/ast"
 
-export enum RelationalNodeTypes {
+/**
+ * The supported types a {@link RelationalQueryNode} can have
+ */
+export enum RelationalNodeType {
   TABLE = "table",
   WHERE = "where",
   SELECT = "select",
 }
 
 /**
- * Internal
+ * Represents an internal {@link QueryNode} use for building relational queries
  */
-export interface RelationalQueryNode<T extends RelationalNodeTypes>
+export interface RelationalQueryNode<NodeType extends RelationalNodeType>
   extends QueryNode {
-  nodeType: T
+  nodeType: NodeType
 }
 
 /**
@@ -28,14 +31,14 @@ export interface RelationalQueryNode<T extends RelationalNodeTypes>
  */
 export function isRelationalQueryNode(
   node: QueryNode
-): node is RelationalQueryNode<RelationalNodeTypes> {
+): node is RelationalQueryNode<RelationalNodeType> {
   return typeof node === "object" && node !== null && "nodeType" in node
 }
 
 /**
  * Represents different types of filters available
  */
-export enum FilterOp {
+export enum ColumnFilteringOperation {
   EQ = "=",
   LT = "<",
   GT = ">",
@@ -43,14 +46,14 @@ export enum FilterOp {
   GTE = ">=",
 }
 
-export enum ContainmentOp {
+export enum ColumnValueContainsOperation {
   IN = "in",
 }
 
 /**
  * Represents different boolean operations available
  */
-export enum BooleanOp {
+export enum BooleanOperation {
   AND = "and",
   OR = "or",
   NOT = "not",
@@ -59,49 +62,58 @@ export enum BooleanOp {
 /**
  * Represents a filter on a given column like:`table.column {op} value`
  */
-export interface ColumnFilter<T, K extends keyof T> {
-  column: K
-  op: FilterOp
-  value: T[K]
+export interface ColumnFilter<TableType, Column extends keyof TableType> {
+  column: Column
+  op: ColumnFilteringOperation
+  value: TableType[Column]
 }
 
 /**
- * Type that extracts keys that are arrays or strings
+ * Type that extracts keys that are arrays or strings which are valid for
+ * {@link ColumnValueContainsOperation} filters
  */
-export type ContainmentProperty<T> = {
-  [K in keyof T]: T[K] extends Array<any> ? K : T[K] extends string ? K : never
-}[keyof T]
+export type ContainmentProperty<TableType> = {
+  [K in keyof TableType]: TableType[K] extends Array<any>
+    ? K
+    : TableType[K] extends string
+    ? K
+    : never
+}[keyof TableType]
 
 /**
- * Type that extracts the type of element at the containment property of T
+ * Helps to extract the type from the given {@link ContainmentProperty}
  */
 export type ContainmentItemType<
-  T,
-  K extends ContainmentProperty<T>
-> = T[K] extends (infer U)[] ? U : T[K] extends string ? T[K] : never
+  TableType,
+  Column extends ContainmentProperty<TableType>
+> = TableType[Column] extends (infer ItemType)[]
+  ? ItemType
+  : TableType[Column] extends string
+  ? TableType[Column]
+  : never
 
 /**
  * Special filter for containment operations
  */
 export interface ContainmentFilter<
-  T,
-  K extends ContainmentProperty<T>,
-  V extends ContainmentItemType<T, K>
+  TableType,
+  Column extends ContainmentProperty<TableType>,
+  ColumnItemType extends ContainmentItemType<TableType, Column>
 > {
-  column: K
-  op: ContainmentOp
-  value: V
+  column: Column
+  op: ColumnValueContainsOperation
+  value: ColumnItemType
 }
 
 /**
- * Type guard for column filtering
+ * Type guard for column filtering via {@link ColumnFilteringOperation}
  *
- * @param filter The object to check
+ * @param filter The {@link FilterTypes} to check
  * @returns True if the filter is a {@link ColumnFilter}
  */
-export function isColumnFilter<T>(
-  filter: unknown
-): filter is ColumnFilter<T, keyof T> {
+export function isColumnFilter<TableType>(
+  filter: FilterTypes<TableType> | FilterGroup<TableType>
+): filter is ColumnFilter<TableType, keyof TableType> {
   return (
     typeof filter === "object" &&
     filter !== null &&
@@ -109,16 +121,24 @@ export function isColumnFilter<T>(
     "value" in filter &&
     "op" in filter &&
     typeof filter.op === "string" &&
-    Object.values(FilterOp).includes(filter.op as FilterOp)
+    Object.values(ColumnFilteringOperation).includes(
+      filter.op as ColumnFilteringOperation
+    )
   )
 }
 
-export function isContainmentFilter<T>(
-  filter: unknown
+/**
+ * Type guard for column filtering via {@link ColumnValueContainsOperation}
+ *
+ * @param filter The {@link FilterTypes} to check
+ * @returns True if the filter is a {@link ContainmentFilter}
+ */
+export function isContainmentFilter<TableType>(
+  filter: FilterTypes<TableType> | FilterGroup<TableType>
 ): filter is ContainmentFilter<
-  T,
-  ContainmentProperty<T>,
-  ContainmentItemType<T, ContainmentProperty<T>>
+  TableType,
+  ContainmentProperty<TableType>,
+  ContainmentItemType<TableType, ContainmentProperty<TableType>>
 > {
   return (
     typeof filter === "object" &&
@@ -127,35 +147,40 @@ export function isContainmentFilter<T>(
     "value" in filter &&
     "op" in filter &&
     typeof filter.op === "string" &&
-    Object.values(ContainmentOp).includes(filter.op as ContainmentOp)
+    Object.values(ColumnValueContainsOperation).includes(
+      filter.op as ColumnValueContainsOperation
+    )
   )
 }
 
 /**
- *
+ * Filter for columns that are nullable
  */
-export interface NullColumnFilter<T, K extends keyof OptionalProperties<T>> {
-  column: K
+export interface NullColumnFilter<
+  TableType,
+  Column extends keyof OptionalProperties<TableType>
+> {
+  column: Column
 }
 
 /**
  * Map of valid filter types for grouping
  */
-type FilterTypes<T> =
-  | ColumnFilter<T, keyof T>
-  | NullColumnFilter<T, keyof OptionalProperties<T>>
+type FilterTypes<TableType> =
+  | ColumnFilter<TableType, keyof TableType>
+  | NullColumnFilter<TableType, keyof OptionalProperties<TableType>>
   | ContainmentFilter<
-      T,
-      ContainmentProperty<T>,
-      ContainmentItemType<T, ContainmentProperty<T>>
+      TableType,
+      ContainmentProperty<TableType>,
+      ContainmentItemType<TableType, ContainmentProperty<TableType>>
     >
 
 /**
- * Represents a group of filters
+ * Represents a group of filters that are bound by a {@link BooleanOperation}
  */
-export interface FilterGroup<T> {
-  filters: FilterTypes<T>[]
-  op: BooleanOp
+export interface FilterGroup<TableType> {
+  filters: FilterTypes<TableType>[]
+  op: BooleanOperation
 }
 
 /**
@@ -164,7 +189,9 @@ export interface FilterGroup<T> {
  * @param filter The filter to inspect
  * @returns True if the filter is a {@link FilterGroup}
  */
-export function isFilterGroup<T>(filter: unknown): filter is FilterGroup<T> {
+export function isFilterGroup<TableType>(
+  filter: unknown
+): filter is FilterGroup<TableType> {
   return (
     typeof filter === "object" &&
     filter !== null &&
@@ -176,9 +203,9 @@ export function isFilterGroup<T>(filter: unknown): filter is FilterGroup<T> {
 /**
  * Represents a where clause
  */
-export interface WhereClause<T>
-  extends RelationalQueryNode<RelationalNodeTypes.WHERE> {
-  filter: FilterGroup<T> | FilterTypes<T>
+export interface WhereClause<TableType>
+  extends RelationalQueryNode<RelationalNodeType.WHERE> {
+  filter: FilterGroup<TableType> | FilterTypes<TableType>
 }
 
 /**
@@ -187,9 +214,11 @@ export interface WhereClause<T>
  * @param node The {@link QueryNode} to inspect
  * @returns True if the node is a {@link WhereClause}
  */
-export function isWhereClause<T>(node: QueryNode): node is WhereClause<T> {
+export function isWhereClause<TableType>(
+  node: QueryNode
+): node is WhereClause<TableType> {
   return (
-    isRelationalQueryNode(node) && node.nodeType === RelationalNodeTypes.WHERE
+    isRelationalQueryNode(node) && node.nodeType === RelationalNodeType.WHERE
   )
 }
 
@@ -198,15 +227,12 @@ export interface ColumnAlias<T, K extends keyof T, N extends string> {
   alias: N
 }
 
-export type AliasedType<T, K extends keyof T, N extends string> = Omit<T, K> &
-  Record<N, T[K]>
-
 /**
  * Rename to match nomenclature
  */
 export interface SelectClause<T, K extends keyof T, R>
   extends QuerySource<R>,
-    RelationalQueryNode<RelationalNodeTypes.SELECT> {
+    RelationalQueryNode<RelationalNodeType.SELECT> {
   columns: K[]
   alias?: ColumnAlias<T, K, string>[]
 }
@@ -221,7 +247,7 @@ export function isSelectClause<T, K extends keyof T, R = Pick<T, K>>(
   node: QueryNode
 ): node is SelectClause<T, K, R> {
   return (
-    isRelationalQueryNode(node) && node.nodeType === RelationalNodeTypes.SELECT
+    isRelationalQueryNode(node) && node.nodeType === RelationalNodeType.SELECT
   )
 }
 
@@ -232,7 +258,7 @@ export interface TableQueryNode<
   D extends RelationalDataStore,
   T extends keyof D["tables"],
   R
-> extends RelationalQueryNode<RelationalNodeTypes.TABLE> {
+> extends RelationalQueryNode<RelationalNodeType.TABLE> {
   table: T
   select?: SelectClause<D["tables"][T], keyof D["tables"][T], R>
   where?: WhereClause<D["tables"][T]>
@@ -250,6 +276,6 @@ export function isTableQueryNode<
   R
 >(node: QueryNode): node is TableQueryNode<D, T, R> {
   return (
-    isRelationalQueryNode(node) && node.nodeType === RelationalNodeTypes.TABLE
+    isRelationalQueryNode(node) && node.nodeType === RelationalNodeType.TABLE
   )
 }

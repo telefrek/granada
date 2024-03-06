@@ -2,14 +2,14 @@
  * Extensions for creating relational queries
  */
 
+import type { AliasedType } from "@telefrek/core/type/utils"
 import type { RelationalDataStore } from "."
 import type { Query } from "../query"
 import { QueryBuilderBase } from "../query/builder"
 import {
-  ContainmentOp,
-  FilterOp,
-  RelationalNodeTypes,
-  type AliasedType,
+  ColumnFilteringOperation,
+  ColumnValueContainsOperation,
+  RelationalNodeType,
   type ContainmentItemType,
   type ContainmentProperty,
   type RelationalQueryNode,
@@ -23,30 +23,39 @@ import {
  * database queries
  */
 export abstract class RelationalQueryBuilder<T> extends QueryBuilderBase<T> {
-  constructor(queryNode: RelationalQueryNode<RelationalNodeTypes>) {
+  constructor(queryNode: RelationalQueryNode<RelationalNodeType>) {
     super(queryNode)
   }
 }
 
 /**
+ * Constructor type
+ */
+type QueryBuilderCtor<RowType> = new (
+  node: RelationalQueryNode<RelationalNodeType>
+) => RelationalQueryBuilder<RowType>
+
+/**
  * Handles building out {@link TableQueryNode} instances
  */
 abstract class RelationalTableBuilder<
-  D extends RelationalDataStore,
-  T extends keyof D["tables"],
-  R
+  DataStoreType extends RelationalDataStore,
+  TargetTable extends keyof DataStoreType["tables"],
+  RowType
 > {
-  protected clause: TableQueryNode<D, T, R>
+  protected clause: TableQueryNode<DataStoreType, TargetTable, RowType>
 
-  constructor(clause: TableQueryNode<D, T, R>) {
+  constructor(clause: TableQueryNode<DataStoreType, TargetTable, RowType>) {
     this.clause = clause
   }
 
-  where(clause: WhereClause<D["tables"][T]>): RelationalQueryNodeBuilder<R> {
+  where(
+    clause: WhereClause<DataStoreType["tables"][TargetTable]>
+  ): RelationalQueryNodeBuilder<RowType> {
     return new RelationalQueryNodeBuilder({
       ...this.clause,
       where: clause,
-    } as TableQueryNode<D, T, R>)
+    } as TableQueryNode<DataStoreType, TargetTable, RowType>)
   }
 
   /**
@@ -55,11 +64,7 @@ abstract class RelationalTableBuilder<
    * @param ctor A class the implements the given constructor
    * @returns A new {@link RelationalQueryBuilder} for the table
    */
-  build(
-    ctor: new (
-      node: RelationalQueryNode<RelationalNodeTypes>
-    ) => RelationalQueryBuilder<R>
-  ): Query<R> {
+  build(ctor: QueryBuilderCtor<RowType>): Query<RowType> {
     return new ctor(this.clause).build()
   }
 }
@@ -72,9 +77,9 @@ abstract class RelationalTableBuilder<
  * {@link SelectClause} instances
  */
 export function from<
-  D extends RelationalDataStore,
-  T extends keyof D["tables"] = keyof D["tables"]
->(table: T): FromBuilder<D, T> {
+  DataStoreType extends RelationalDataStore,
+  TargetTable extends keyof DataStoreType["tables"] = keyof DataStoreType["tables"]
+>(table: TargetTable): FromBuilder<DataStoreType, TargetTable> {
   return new FromBuilder(table)
 }
 
@@ -82,11 +87,15 @@ export function from<
  * Utility class for managing relational table transformations
  */
 class FromBuilder<
-  D extends RelationalDataStore,
-  T extends keyof D["tables"]
-> extends RelationalTableBuilder<D, T, D["tables"][T]> {
-  constructor(table: T) {
-    super({ table, nodeType: RelationalNodeTypes.TABLE })
+  DataStoreType extends RelationalDataStore,
+  TargetTable extends keyof DataStoreType["tables"]
+> extends RelationalTableBuilder<
+  DataStoreType,
+  TargetTable,
+  DataStoreType["tables"][TargetTable]
+> {
+  constructor(table: TargetTable) {
+    super({ table, nodeType: RelationalNodeType.TABLE })
   }
 
   /**
@@ -94,13 +103,14 @@ class FromBuilder<
    * @param columns The set of columns to select
    * @returns An updated {@link SelectBuilder}
    */
-  select<K extends keyof D["tables"][T], R extends Pick<D["tables"][T], K>>(
-    columns: K[]
-  ): SelectBuilder<D, T, R> {
+  select<
+    Column extends keyof DataStoreType["tables"][TargetTable],
+    RowType extends Pick<DataStoreType["tables"][TargetTable], Column>
+  >(columns: Column[]): SelectBuilder<DataStoreType, TargetTable, RowType> {
     return new SelectBuilder(
       {
         table: this.clause.table,
-        nodeType: RelationalNodeTypes.TABLE,
+        nodeType: RelationalNodeType.TABLE,
       },
       columns
     )
@@ -112,10 +122,10 @@ class FromBuilder<
  * builders
  */
 class SelectBuilder<
-  D extends RelationalDataStore,
-  T extends keyof D["tables"],
-  R
-> extends RelationalTableBuilder<D, T, R> {
+  DataStoreType extends RelationalDataStore,
+  TargetTable extends keyof DataStoreType["tables"],
+  RowType
+> extends RelationalTableBuilder<DataStoreType, TargetTable, RowType> {
   /**
    * Create the builder
    *
@@ -123,30 +133,42 @@ class SelectBuilder<
    * @param columns The optional columns (undefined or empty is interpreted as all)
    */
   constructor(
-    clause: TableQueryNode<D, T, R>,
-    columns?: (keyof D["tables"][T])[]
+    clause: TableQueryNode<DataStoreType, TargetTable, RowType>,
+    columns?: (keyof DataStoreType["tables"][TargetTable])[]
   ) {
     super({
       ...clause,
       select: {
         columns: columns ?? clause.select?.columns ?? [],
-        nodeType: RelationalNodeTypes.SELECT,
+        nodeType: RelationalNodeType.SELECT,
         alias: clause.select?.alias,
       },
     })
   }
 
-  alias<O extends keyof R & keyof D["tables"][T], N extends string>(
-    column: O,
-    alias: N
-  ): SelectBuilder<D, T, AliasedType<R, O, N>> {
+  alias<
+    OldColumn extends keyof RowType &
+      keyof DataStoreType["tables"][TargetTable],
+    AliasColumn extends string
+  >(
+    column: OldColumn,
+    alias: AliasColumn
+  ): SelectBuilder<
+    DataStoreType,
+    TargetTable,
+    AliasedType<RowType, OldColumn, AliasColumn>
+  > {
     // Build the new clause
-    const aliasedClause: TableQueryNode<D, T, AliasedType<R, O, N>> = {
+    const aliasedClause: TableQueryNode<
+      DataStoreType,
+      TargetTable,
+      AliasedType<RowType, OldColumn, AliasColumn>
+    > = {
       nodeType: this.clause.nodeType,
       where: this.clause.where,
       table: this.clause.table,
       select: {
-        nodeType: RelationalNodeTypes.SELECT,
+        nodeType: RelationalNodeType.SELECT,
         columns: this.clause.select?.columns ?? [],
         alias: this.clause.select?.alias ?? [],
       },
@@ -159,49 +181,59 @@ class SelectBuilder<
   }
 }
 
-type ColumnFilterFn = <R, C extends keyof R, V extends R[C]>(
-  column: C,
-  value: V
-) => WhereClause<R>
+type ColumnFilterFn = <
+  RowType,
+  Column extends keyof RowType,
+  ColumnType extends RowType[Column]
+>(
+  column: Column,
+  value: ColumnType
+) => WhereClause<RowType>
 
 type ColumnInFilterRn = <
-  R,
-  C extends ContainmentProperty<R>,
-  V extends ContainmentItemType<R, C>
+  RowType,
+  ContainingColumn extends ContainmentProperty<RowType>,
+  ColumnValue extends ContainmentItemType<RowType, ContainingColumn>
 >(
-  column: C,
-  value: V
-) => WhereClause<R>
+  column: ContainingColumn,
+  value: ColumnValue
+) => WhereClause<RowType>
 
-export const columns: {
-  [key in keyof typeof FilterOp]: ColumnFilterFn
+type FilterOperations = {
+  [key in keyof typeof ColumnFilteringOperation]: ColumnFilterFn
 } & {
-  [key in keyof typeof ContainmentOp]: ColumnInFilterRn
-} = {
-  GT: (c, v) => cf(c, v, FilterOp.GT),
-  LT: (c, v) => cf(c, v, FilterOp.LT),
-  GTE: (c, v) => cf(c, v, FilterOp.GTE),
-  LTE: (c, v) => cf(c, v, FilterOp.LTE),
-  EQ: (c, v) => cf(c, v, FilterOp.EQ),
+  [key in keyof typeof ColumnValueContainsOperation]: ColumnInFilterRn
+}
+
+export const columns: FilterOperations = {
+  GT: (c, v) => ColumnFilterBuilder(c, v, ColumnFilteringOperation.GT),
+  LT: (c, v) => ColumnFilterBuilder(c, v, ColumnFilteringOperation.LT),
+  GTE: (c, v) => ColumnFilterBuilder(c, v, ColumnFilteringOperation.GTE),
+  LTE: (c, v) => ColumnFilterBuilder(c, v, ColumnFilteringOperation.LTE),
+  EQ: (c, v) => ColumnFilterBuilder(c, v, ColumnFilteringOperation.EQ),
   IN: (column, value) => {
     return {
-      nodeType: RelationalNodeTypes.WHERE,
+      nodeType: RelationalNodeType.WHERE,
       filter: {
         column,
         value,
-        op: ContainmentOp.IN,
+        op: ColumnValueContainsOperation.IN,
       },
     }
   },
 }
 
-function cf<R, C extends keyof R, V extends R[C]>(
-  column: C,
-  value: V,
-  op: FilterOp
-): WhereClause<R> {
+function ColumnFilterBuilder<
+  RowType,
+  Column extends keyof RowType,
+  ColumnType extends RowType[Column]
+>(
+  column: Column,
+  value: ColumnType,
+  op: ColumnFilteringOperation
+): WhereClause<RowType> {
   return {
-    nodeType: RelationalNodeTypes.WHERE,
+    nodeType: RelationalNodeType.WHERE,
     filter: {
       column,
       value,
@@ -213,24 +245,20 @@ function cf<R, C extends keyof R, V extends R[C]>(
 /**
  * Class that holds the materialized {@link RelationalQueryNode} clause
  */
-class RelationalQueryNodeBuilder<R> {
-  private clause: RelationalQueryNode<RelationalNodeTypes>
+class RelationalQueryNodeBuilder<RowType> {
+  private clause: RelationalQueryNode<RelationalNodeType>
 
-  constructor(clause: RelationalQueryNode<RelationalNodeTypes>) {
+  constructor(clause: RelationalQueryNode<RelationalNodeType>) {
     this.clause = clause
   }
 
   /**
    * Retrieve a builder that can be used to create {@link Query} objects
    *
-   * @param ctor A class the implements the given constructor
+   * @param ctor A class the implements the given {@link QueryBuilderCtor}
    * @returns A new {@link RelationalQueryBuilder} for the table
    */
-  build(
-    ctor: new (
-      node: RelationalQueryNode<RelationalNodeTypes>
-    ) => RelationalQueryBuilder<R>
-  ): Query<R> {
+  build(ctor: QueryBuilderCtor<RowType>): Query<RowType> {
     return new ctor(this.clause).build()
   }
 }

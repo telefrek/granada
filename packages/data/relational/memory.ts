@@ -14,11 +14,12 @@ import {
 import type { QueryNode } from "../query/ast"
 import { QueryError } from "../query/error"
 import {
-  ContainmentOp,
-  FilterOp,
-  RelationalNodeTypes,
+  ColumnFilteringOperation,
+  ColumnValueContainsOperation,
+  RelationalNodeType,
   isColumnFilter,
   isContainmentFilter,
+  isFilterGroup,
   isRelationalQueryNode,
   isTableQueryNode,
   type ColumnFilter,
@@ -29,36 +30,45 @@ import {
 } from "./ast"
 import { RelationalQueryBuilder } from "./builder"
 
-export type InMemoryTable<T> = T[]
+/**
+ * Define an in memory table as an array of the given {@link TableType}
+ */
+export type InMemoryTable<TableType> = TableType[]
 
 /**
- * Provide an in memory data store
+ * Define an in memory {@link RelationalDataStore} as a collection of table
+ * name, {@link InMemoryTable} for the given type
  */
-export type InMemoryRelationalDataStore<T extends RelationalDataStore> = Record<
-  keyof T["tables"],
-  InMemoryTable<T["tables"][keyof T["tables"]]>
+export type InMemoryRelationalDataStore<
+  DataStoreType extends RelationalDataStore
+> = Record<
+  keyof DataStoreType["tables"],
+  InMemoryTable<DataStoreType["tables"][keyof DataStoreType["tables"]]>
 >
 
 export function createInMemoryStore<
-  T extends RelationalDataStore
->(): InMemoryRelationalDataStore<T> {
+  DataStoreType extends RelationalDataStore
+>(): InMemoryRelationalDataStore<DataStoreType> {
   return {
     sources: {},
-  } as InMemoryRelationalDataStore<T>
+  } as InMemoryRelationalDataStore<DataStoreType>
 }
 
-type InMemoryQuerySourceFn<D extends RelationalDataStore, T> = (
-  store: InMemoryRelationalDataStore<D>
-) => T[]
+type InMemoryQuerySourceFn<
+  DataStoreType extends RelationalDataStore,
+  RowType
+> = (store: InMemoryRelationalDataStore<DataStoreType>) => RowType[]
 
-class InMemoryQuery<D extends RelationalDataStore, T> implements Query<T> {
+class InMemoryQuery<DataStoreType extends RelationalDataStore, RowType>
+  implements Query<RowType>
+{
   name: string
   mode: ExecutionMode
-  s: InMemoryQuerySourceFn<D, T>
+  s: InMemoryQuerySourceFn<DataStoreType, RowType>
 
   constructor(
     name: string,
-    s: InMemoryQuerySourceFn<D, T>,
+    s: InMemoryQuerySourceFn<DataStoreType, RowType>,
     mode: ExecutionMode = ExecutionMode.Normal
   ) {
     this.name = name
@@ -67,9 +77,9 @@ class InMemoryQuery<D extends RelationalDataStore, T> implements Query<T> {
   }
 }
 
-function isInMemoryQuery<D extends RelationalDataStore, T>(
-  query: Query<T>
-): query is InMemoryQuery<D, T> {
+function isInMemoryQuery<DataStoreType extends RelationalDataStore, RowType>(
+  query: Query<RowType>
+): query is InMemoryQuery<DataStoreType, RowType> {
   return (
     typeof query === "object" &&
     query !== null &&
@@ -78,22 +88,24 @@ function isInMemoryQuery<D extends RelationalDataStore, T>(
   )
 }
 
-export class InMemoryQueryExecutor<D extends RelationalDataStore>
+export class InMemoryQueryExecutor<DataStoreType extends RelationalDataStore>
   implements QueryExecutor
 {
-  store: InMemoryRelationalDataStore<D>
+  store: InMemoryRelationalDataStore<DataStoreType>
 
-  constructor(inMemoryStore?: InMemoryRelationalDataStore<D>) {
+  constructor(inMemoryStore?: InMemoryRelationalDataStore<DataStoreType>) {
     this.store = inMemoryStore ?? createInMemoryStore()
   }
 
-  run<T>(query: Query<T>): Promise<QueryResult<T> | StreamingQueryResult<T>> {
+  run<RowType>(
+    query: Query<RowType>
+  ): Promise<QueryResult<RowType> | StreamingQueryResult<RowType>> {
     if (isInMemoryQuery(query)) {
       const res = query.s(this.store)
       return Promise.resolve({
-        rows: res as T[],
+        rows: res as RowType[],
         duration: Duration.ZERO,
-      } as QueryResult<T>)
+      } as QueryResult<RowType>)
     }
 
     throw new Error("Method not implemented.")
@@ -101,27 +113,29 @@ export class InMemoryQueryExecutor<D extends RelationalDataStore>
 }
 
 export class InMemoryRelationalQueryBuilder<
-  D extends RelationalDataStore,
-  T
-> extends RelationalQueryBuilder<T> {
-  constructor(queryNode: RelationalQueryNode<RelationalNodeTypes>) {
+  DataStoreType extends RelationalDataStore,
+  RowType
+> extends RelationalQueryBuilder<RowType> {
+  constructor(queryNode: RelationalQueryNode<RelationalNodeType>) {
     super(queryNode)
   }
 
   protected override buildQuery<T>(ast: QueryNode): Query<T> {
     // Verify we have a relational node
     if (isRelationalQueryNode(ast) && isTableQueryNode(ast)) {
-      return new InMemoryQuery<D, T>("name", (source) => {
+      return new InMemoryQuery<DataStoreType, T>("name", (source) => {
         let rows = source[ast.table] ?? []
         let ret: T[] = []
 
         // Check for any filters to apply
         if (ast.where !== undefined) {
-          // Simple column filter
-          if (isColumnFilter(ast.where.filter)) {
-            rows = rows.filter(buildFilter(ast.where.filter))
-          } else if (isContainmentFilter(ast.where.filter)) {
-            rows = rows.filter(buildContainsFilter(ast.where.filter))
+          if (!isFilterGroup(ast.where.filter)) {
+            // Simple column filter
+            if (isColumnFilter(ast.where.filter)) {
+              rows = rows.filter(buildFilter(ast.where.filter))
+            } else if (isContainmentFilter(ast.where.filter)) {
+              rows = rows.filter(buildContainsFilter(ast.where.filter))
+            }
           }
         }
 
@@ -153,15 +167,15 @@ export class InMemoryRelationalQueryBuilder<
   }
 }
 
-function buildContainsFilter<T>(
+function buildContainsFilter<TableType>(
   columnFilter: ContainmentFilter<
-    T,
-    ContainmentProperty<T>,
-    ContainmentItemType<T, ContainmentProperty<T>>
+    TableType,
+    ContainmentProperty<TableType>,
+    ContainmentItemType<TableType, ContainmentProperty<TableType>>
   >
-): (input: T) => boolean {
+): (input: TableType) => boolean {
   switch (columnFilter.op) {
-    case ContainmentOp.IN:
+    case ColumnValueContainsOperation.IN:
       return (row) => {
         const v = row[columnFilter.column]
 
@@ -176,19 +190,19 @@ function buildContainsFilter<T>(
   }
 }
 
-function buildFilter<T>(
-  columnFilter: ColumnFilter<T, keyof T>
-): (input: T) => boolean {
+function buildFilter<TableType>(
+  columnFilter: ColumnFilter<TableType, keyof TableType>
+): (input: TableType) => boolean {
   switch (columnFilter.op) {
-    case FilterOp.EQ:
+    case ColumnFilteringOperation.EQ:
       return (row) => row[columnFilter.column] === columnFilter.value
-    case FilterOp.GT:
+    case ColumnFilteringOperation.GT:
       return (row) => row[columnFilter.column] > columnFilter.value
-    case FilterOp.GTE:
+    case ColumnFilteringOperation.GTE:
       return (row) => row[columnFilter.column] >= columnFilter.value
-    case FilterOp.LT:
+    case ColumnFilteringOperation.LT:
       return (row) => row[columnFilter.column] < columnFilter.value
-    case FilterOp.LTE:
+    case ColumnFilteringOperation.LTE:
       return (row) => row[columnFilter.column] <= columnFilter.value
   }
 }
