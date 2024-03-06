@@ -44,11 +44,11 @@ export type InMemoryTable<TableType> = TableType[]
  */
 export type InMemoryRelationalDataStore<
   DataStoreType extends RelationalDataStore
-> = Record<
-  keyof DataStoreType["tables"],
-  InMemoryTable<DataStoreType["tables"][keyof DataStoreType["tables"]]>
->
-
+> = {
+  [key in keyof DataStoreType["tables"]]: InMemoryTable<
+    DataStoreType["tables"][key]
+  >
+}
 export function createInMemoryStore<
   DataStoreType extends RelationalDataStore
 >(): InMemoryRelationalDataStore<DataStoreType> {

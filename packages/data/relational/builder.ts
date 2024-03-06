@@ -139,6 +139,16 @@ class RelationalTableBuilder<
   }
 }
 
+export const query = <DataStoreType extends RelationalDataStore>(): {
+  from<TargetTable extends keyof DataStoreType["tables"]>(
+    table: TargetTable
+  ): RelationalTableBuilder<DataStoreType, TargetTable>
+} => {
+  return {
+    from,
+  }
+}
+
 /**
  * Utility method for creating a {@link SelectClause}
  *
@@ -146,10 +156,12 @@ class RelationalTableBuilder<
  * @returns A {@link SelectBuilder} that helps with composition of
  * {@link SelectClause} instances
  */
-export function from<
+const from = <
   DataStoreType extends RelationalDataStore,
-  TargetTable extends keyof DataStoreType["tables"] = keyof DataStoreType["tables"]
->(table: TargetTable): RelationalTableBuilder<DataStoreType, TargetTable> {
+  TargetTable extends keyof DataStoreType["tables"]
+>(
+  table: TargetTable
+): RelationalTableBuilder<DataStoreType, TargetTable> => {
   return new RelationalTableBuilder({
     table,
     nodeType: RelationalNodeType.TABLE,

@@ -1,4 +1,4 @@
-import { and, contains, eq, from, gt, gte, not } from "./builder"
+import { and, contains, eq, gt, gte, not, query } from "./builder"
 import {
   InMemoryQueryExecutor,
   InMemoryRelationalQueryBuilder,
@@ -33,11 +33,13 @@ interface Customer extends NumericIdentiry, TimeTrackedObject {
 interface TestDataStore {
   tables: {
     orders: Order
+    customers: Customer
   }
 }
 
 const STORE: InMemoryRelationalDataStore<TestDataStore> = {
   orders: [],
+  customers: [],
 }
 
 const executor = new InMemoryQueryExecutor<TestDataStore>(STORE)
@@ -76,13 +78,12 @@ describe("Relational query builder should support basic functionality", () => {
   })
 
   it("should support a simple select * style query", async () => {
-    // Create the builders
-    const query = from<TestDataStore>("orders").build(
-      InMemoryRelationalQueryBuilder
-    )
-
     // This should get the full row back
-    const result = await executor.run(query)
+    const result = await executor.run(
+      query<TestDataStore>()
+        .from("orders")
+        .build(InMemoryRelationalQueryBuilder)
+    )
     expect(result).not.toBeUndefined()
     if (Array.isArray(result.rows)) {
       expect(result.rows.length).toBe(STORE.orders.length)
@@ -91,7 +92,8 @@ describe("Relational query builder should support basic functionality", () => {
 
   it("should allow filtering rows via a simple where clause", async () => {
     let result = await executor.run(
-      from<TestDataStore>("orders")
+      query<TestDataStore>()
+        .from("orders")
         .where(gt("id", 2))
         .build(InMemoryRelationalQueryBuilder)
     )
@@ -101,7 +103,8 @@ describe("Relational query builder should support basic functionality", () => {
     }
 
     result = await executor.run(
-      from<TestDataStore>("orders")
+      query<TestDataStore>()
+        .from("orders")
         .where(gte("id", 2))
         .build(InMemoryRelationalQueryBuilder)
     )
@@ -114,7 +117,8 @@ describe("Relational query builder should support basic functionality", () => {
   it("should allow filtering via containment where clauses", async () => {
     // This should get the projected row with only 2 columns back
     let result = await executor.run(
-      from<TestDataStore>("orders")
+      query<TestDataStore>()
+        .from("orders")
         .where(contains("name", "ord3"))
         .build(InMemoryRelationalQueryBuilder)
     )
@@ -124,7 +128,8 @@ describe("Relational query builder should support basic functionality", () => {
     }
 
     result = await executor.run(
-      from<TestDataStore>("orders")
+      query<TestDataStore>()
+        .from("orders")
         .where(contains("categories", Category.TEST))
         .build(InMemoryRelationalQueryBuilder)
     )
@@ -134,7 +139,8 @@ describe("Relational query builder should support basic functionality", () => {
     }
 
     result = await executor.run(
-      from<TestDataStore>("orders")
+      query<TestDataStore>()
+        .from("orders")
         .where(contains("categories", Category.PURCHASE))
         .build(InMemoryRelationalQueryBuilder)
     )
@@ -145,12 +151,13 @@ describe("Relational query builder should support basic functionality", () => {
   })
 
   it("should allow for projections of rows via a simple select clause", async () => {
-    const query = from<TestDataStore>("orders")
-      .select("name", "createdAt")
-      .build(InMemoryRelationalQueryBuilder)
-
     // This should get the projected row with only 2 columns back
-    const result = await executor.run(query)
+    const result = await executor.run(
+      query<TestDataStore>()
+        .from("orders")
+        .select("name", "createdAt")
+        .build(InMemoryRelationalQueryBuilder)
+    )
     expect(result).not.toBeUndefined()
     if (Array.isArray(result.rows)) {
       expect(result.rows.length).toBe(STORE.orders.length)
@@ -160,12 +167,14 @@ describe("Relational query builder should support basic functionality", () => {
 
   it("should allow for projections of rows via a simple select clause in addition to row filtering via where clause", async () => {
     // Query order shouldn't matter
-    const query1 = from<TestDataStore>("orders")
+    const query1 = query<TestDataStore>()
+      .from("orders")
       .select("name", "createdAt")
       .where(contains("name", "ord3"))
       .build(InMemoryRelationalQueryBuilder)
 
-    const query2 = from<TestDataStore>("orders")
+    const query2 = query<TestDataStore>()
+      .from("orders")
       .where(contains("name", "ord3"))
       .select("name", "createdAt")
       .build(InMemoryRelationalQueryBuilder)
@@ -182,13 +191,14 @@ describe("Relational query builder should support basic functionality", () => {
   })
 
   it("should allow complex grouped where clauses", async () => {
-    const query = from<TestDataStore>("orders")
-      .select("name")
-      .where(and(contains("categories", Category.PURCHASE), not(eq("id", 1))))
-      .build(InMemoryRelationalQueryBuilder)
-
     // This should get the projected row with only 1 columns back
-    const result = await executor.run(query)
+    const result = await executor.run(
+      query<TestDataStore>()
+        .from("orders")
+        .select("name")
+        .where(and(contains("categories", Category.PURCHASE), not(eq("id", 1))))
+        .build(InMemoryRelationalQueryBuilder)
+    )
     expect(result).not.toBeUndefined()
     if (Array.isArray(result.rows)) {
       expect(result.rows.length).toBe(1)
@@ -197,14 +207,15 @@ describe("Relational query builder should support basic functionality", () => {
   })
 
   it("should allow columns to be aliased", async () => {
-    const query = from<TestDataStore>("orders")
-      .select("name", "createdAt")
-      .alias("name", "foo")
-      .alias("createdAt", "date")
-      .build(InMemoryRelationalQueryBuilder)
-
     // This should get the projected row with only 2 columns back
-    const result = await executor.run(query)
+    const result = await executor.run(
+      query<TestDataStore>()
+        .from("orders")
+        .select("name", "createdAt")
+        .alias("name", "foo")
+        .alias("createdAt", "date")
+        .build(InMemoryRelationalQueryBuilder)
+    )
     expect(result).not.toBeUndefined()
     if (Array.isArray(result.rows)) {
       expect(result.rows.length).toBe(STORE.orders.length)
