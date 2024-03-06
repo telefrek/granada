@@ -159,17 +159,25 @@ describe("Relational query builder should support basic functionality", () => {
   })
 
   it("should allow for projections of rows via a simple select clause in addition to row filtering via where clause", async () => {
-    const query = from<TestDataStore>("orders")
+    // Query order shouldn't matter
+    const query1 = from<TestDataStore>("orders")
       .select("name", "createdAt")
       .where(contains("name", "ord3"))
       .build(InMemoryRelationalQueryBuilder)
 
+    const query2 = from<TestDataStore>("orders")
+      .where(contains("name", "ord3"))
+      .select("name", "createdAt")
+      .build(InMemoryRelationalQueryBuilder)
+
     // This should get the projected row with only 2 columns back
-    const result = await executor.run(query)
-    expect(result).not.toBeUndefined()
-    if (Array.isArray(result.rows)) {
-      expect(result.rows.length).toBe(1)
-      expect(Object.keys(result.rows[0]).length).toEqual(2)
+    for (const query of [query1, query2]) {
+      const result = await executor.run(query)
+      expect(result).not.toBeUndefined()
+      if (Array.isArray(result.rows)) {
+        expect(result.rows.length).toBe(1)
+        expect(Object.keys(result.rows[0]).length).toEqual(2)
+      }
     }
   })
 

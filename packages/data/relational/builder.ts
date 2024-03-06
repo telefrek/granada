@@ -40,22 +40,92 @@ type QueryBuilderCtor<RowType> = new (
 /**
  * Handles building out {@link TableQueryNode} instances
  */
-abstract class RelationalTableBuilder<
+class RelationalTableBuilder<
   DataStoreType extends RelationalDataStore,
   TargetTable extends keyof DataStoreType["tables"],
-  RowType
+  RowType = DataStoreType["tables"][TargetTable]
 > {
-  protected clause: TableQueryNode<DataStoreType, TargetTable, RowType>
+  private clause: TableQueryNode<DataStoreType, TargetTable, RowType>
 
   constructor(clause: TableQueryNode<DataStoreType, TargetTable, RowType>) {
     this.clause = clause
   }
 
+  /**
+   * Alias a column to have a different name on the returned row type
+   *
+   * @param column The column to rename
+   * @param alias The new column alias
+   * @returns A new {@link SelectBuilder} with the modified types
+   */
+  alias<
+    OldColumn extends keyof RowType &
+      keyof DataStoreType["tables"][TargetTable],
+    AliasColumn extends string
+  >(
+    column: OldColumn,
+    alias: AliasColumn
+  ): RelationalTableBuilder<
+    DataStoreType,
+    TargetTable,
+    AliasedType<RowType, OldColumn, AliasColumn>
+  > {
+    // Build the new clause based on the altered return type
+    const aliasedClause: TableQueryNode<
+      DataStoreType,
+      TargetTable,
+      AliasedType<RowType, OldColumn, AliasColumn>
+    > = {
+      nodeType: this.clause.nodeType,
+      where: this.clause.where,
+      table: this.clause.table,
+      select: {
+        nodeType: RelationalNodeType.SELECT,
+        columns: this.clause.select?.columns ?? [],
+        alias: this.clause.select?.alias ?? [],
+      },
+    }
+
+    // Add the new alias
+    aliasedClause.select?.alias?.push({ column, alias })
+
+    return new RelationalTableBuilder(aliasedClause)
+  }
+
   where(
     clause: WhereClause<DataStoreType["tables"][TargetTable]>
-  ): RelationalTableBuilder<DataStoreType, TargetTable, RowType> {
+  ): Omit<
+    RelationalTableBuilder<DataStoreType, TargetTable, RowType>,
+    "where"
+  > {
     this.clause.where = clause
     return this
+  }
+
+  /**
+   *
+   * @param columns The set of columns to select
+   * @returns An updated {@link SelectBuilder}
+   */
+  select<
+    Column extends keyof DataStoreType["tables"][TargetTable],
+    SelectType extends Pick<DataStoreType["tables"][TargetTable], Column>
+  >(
+    ...columns: Column[]
+  ): Omit<
+    RelationalTableBuilder<DataStoreType, TargetTable, SelectType>,
+    "select"
+  > {
+    return new RelationalTableBuilder({
+      table: this.clause.table,
+      nodeType: RelationalNodeType.TABLE,
+      select: {
+        columns: columns ?? [],
+        nodeType: RelationalNodeType.SELECT,
+        alias: this.clause.select?.alias,
+      },
+      where: this.clause.where,
+    })
   }
 
   /**
@@ -79,106 +149,11 @@ abstract class RelationalTableBuilder<
 export function from<
   DataStoreType extends RelationalDataStore,
   TargetTable extends keyof DataStoreType["tables"] = keyof DataStoreType["tables"]
->(table: TargetTable): FromBuilder<DataStoreType, TargetTable> {
-  return new FromBuilder(table)
-}
-
-/**
- * Utility class for managing relational table transformations
- */
-class FromBuilder<
-  DataStoreType extends RelationalDataStore,
-  TargetTable extends keyof DataStoreType["tables"]
-> extends RelationalTableBuilder<
-  DataStoreType,
-  TargetTable,
-  DataStoreType["tables"][TargetTable]
-> {
-  constructor(table: TargetTable) {
-    super({ table, nodeType: RelationalNodeType.TABLE })
-  }
-
-  /**
-   *
-   * @param columns The set of columns to select
-   * @returns An updated {@link SelectBuilder}
-   */
-  select<
-    Column extends keyof DataStoreType["tables"][TargetTable],
-    RowType extends Pick<DataStoreType["tables"][TargetTable], Column>
-  >(...columns: Column[]): SelectBuilder<DataStoreType, TargetTable, RowType> {
-    return new SelectBuilder(
-      {
-        table: this.clause.table,
-        nodeType: RelationalNodeType.TABLE,
-      },
-      columns
-    )
-  }
-}
-
-/**
- * Handles manipulations of the {@link SelectClause} used by internal query
- * builders
- */
-class SelectBuilder<
-  DataStoreType extends RelationalDataStore,
-  TargetTable extends keyof DataStoreType["tables"],
-  RowType
-> extends RelationalTableBuilder<DataStoreType, TargetTable, RowType> {
-  /**
-   * Create the builder
-   *
-   * @param table The required table
-   * @param columns The optional columns (undefined or empty is interpreted as all)
-   */
-  constructor(
-    clause: TableQueryNode<DataStoreType, TargetTable, RowType>,
-    columns?: (keyof DataStoreType["tables"][TargetTable])[]
-  ) {
-    super({
-      ...clause,
-      select: {
-        columns: columns ?? clause.select?.columns ?? [],
-        nodeType: RelationalNodeType.SELECT,
-        alias: clause.select?.alias,
-      },
-    })
-  }
-
-  alias<
-    OldColumn extends keyof RowType &
-      keyof DataStoreType["tables"][TargetTable],
-    AliasColumn extends string
-  >(
-    column: OldColumn,
-    alias: AliasColumn
-  ): SelectBuilder<
-    DataStoreType,
-    TargetTable,
-    AliasedType<RowType, OldColumn, AliasColumn>
-  > {
-    // Build the new clause
-    const aliasedClause: TableQueryNode<
-      DataStoreType,
-      TargetTable,
-      AliasedType<RowType, OldColumn, AliasColumn>
-    > = {
-      nodeType: this.clause.nodeType,
-      where: this.clause.where,
-      table: this.clause.table,
-      select: {
-        nodeType: RelationalNodeType.SELECT,
-        columns: this.clause.select?.columns ?? [],
-        alias: this.clause.select?.alias ?? [],
-      },
-    }
-
-    // Add the new alias
-    aliasedClause.select?.alias?.push({ column, alias })
-
-    return new SelectBuilder(aliasedClause)
-  }
+>(table: TargetTable): RelationalTableBuilder<DataStoreType, TargetTable> {
+  return new RelationalTableBuilder({
+    table,
+    nodeType: RelationalNodeType.TABLE,
+  })
 }
 
 type BooleanFilter = <RowType>(
