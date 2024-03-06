@@ -14,6 +14,7 @@ import {
 import type { QueryNode } from "../query/ast"
 import { QueryError } from "../query/error"
 import {
+  BooleanOperation,
   ColumnFilteringOperation,
   ColumnValueContainsOperation,
   RelationalNodeType,
@@ -26,6 +27,8 @@ import {
   type ContainmentFilter,
   type ContainmentItemType,
   type ContainmentProperty,
+  type FilterGroup,
+  type FilterTypes,
   type RelationalQueryNode,
 } from "./ast"
 import { RelationalQueryBuilder } from "./builder"
@@ -129,14 +132,7 @@ export class InMemoryRelationalQueryBuilder<
 
         // Check for any filters to apply
         if (ast.where !== undefined) {
-          if (!isFilterGroup(ast.where.filter)) {
-            // Simple column filter
-            if (isColumnFilter(ast.where.filter)) {
-              rows = rows.filter(buildFilter(ast.where.filter))
-            } else if (isContainmentFilter(ast.where.filter)) {
-              rows = rows.filter(buildContainsFilter(ast.where.filter))
-            }
-          }
+          rows = rows.filter(buildFilter(ast.where.filter))
         }
 
         // Apply any select projections on the set firts
@@ -167,6 +163,33 @@ export class InMemoryRelationalQueryBuilder<
   }
 }
 
+function buildFilter<TableType>(
+  clause: FilterGroup<TableType> | FilterTypes<TableType>
+): (input: TableType) => boolean {
+  if (isFilterGroup(clause)) {
+    const filters = clause.filters.map((f) => buildFilter(f))
+    switch (clause.op) {
+      case BooleanOperation.AND:
+        return (row) => {
+          for (const filter of filters) {
+            if (!filter(row)) return false
+          }
+          return true
+        }
+      case BooleanOperation.OR:
+        return (row) => filters.some((f) => f(row))
+      case BooleanOperation.NOT:
+        return (row) => !filters.some((f) => f(row))
+    }
+  } else if (isContainmentFilter(clause)) {
+    return buildContainsFilter(clause)
+  } else if (isColumnFilter(clause)) {
+    return buildColumnFilter(clause)
+  }
+
+  return (_) => false
+}
+
 function buildContainsFilter<TableType>(
   columnFilter: ContainmentFilter<
     TableType,
@@ -190,7 +213,7 @@ function buildContainsFilter<TableType>(
   }
 }
 
-function buildFilter<TableType>(
+function buildColumnFilter<TableType>(
   columnFilter: ColumnFilter<TableType, keyof TableType>
 ): (input: TableType) => boolean {
   switch (columnFilter.op) {

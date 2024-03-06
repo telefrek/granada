@@ -1,4 +1,4 @@
-import { columns, from } from "./builder"
+import { and, columns, from, not } from "./builder"
 import {
   InMemoryQueryExecutor,
   InMemoryRelationalQueryBuilder,
@@ -170,6 +170,26 @@ describe("Relational query builder should support basic functionality", () => {
     if (Array.isArray(result.rows)) {
       expect(result.rows.length).toBe(1)
       expect(Object.keys(result.rows[0]).length).toEqual(2)
+    }
+  })
+
+  it("should allow complex grouped where clauses", async () => {
+    const query = from<TestDataStore>("orders")
+      .select("name")
+      .where(
+        and(
+          columns.IN("categories", Category.PURCHASE),
+          not(columns.EQ("id", 1))
+        )
+      )
+      .build(InMemoryRelationalQueryBuilder)
+
+    // This should get the projected row with only 1 columns back
+    const result = await executor.run(query)
+    expect(result).not.toBeUndefined()
+    if (Array.isArray(result.rows)) {
+      expect(result.rows.length).toBe(1)
+      expect(result.rows[0].name).toBe("record3")
     }
   })
 

@@ -7,11 +7,13 @@ import type { RelationalDataStore } from "."
 import type { Query } from "../query"
 import { QueryBuilderBase } from "../query/builder"
 import {
+  BooleanOperation,
   ColumnFilteringOperation,
   ColumnValueContainsOperation,
   RelationalNodeType,
   type ContainmentItemType,
   type ContainmentProperty,
+  type FilterGroup,
   type RelationalQueryNode,
   type SelectClause,
   type TableQueryNode,
@@ -51,11 +53,9 @@ abstract class RelationalTableBuilder<
 
   where(
     clause: WhereClause<DataStoreType["tables"][TargetTable]>
-  ): RelationalQueryNodeBuilder<RowType> {
-    return new RelationalQueryNodeBuilder({
-      ...this.clause,
-      where: clause,
-    } as TableQueryNode<DataStoreType, TargetTable, RowType>)
+  ): RelationalTableBuilder<DataStoreType, TargetTable, RowType> {
+    this.clause.where = clause
+    return this
   }
 
   /**
@@ -190,7 +190,7 @@ type ColumnFilterFn = <
   value: ColumnType
 ) => WhereClause<RowType>
 
-type ColumnInFilterRn = <
+type ColumnInFilterFn = <
   RowType,
   ContainingColumn extends ContainmentProperty<RowType>,
   ColumnValue extends ContainmentItemType<RowType, ContainingColumn>
@@ -202,7 +202,33 @@ type ColumnInFilterRn = <
 type FilterOperations = {
   [key in keyof typeof ColumnFilteringOperation]: ColumnFilterFn
 } & {
-  [key in keyof typeof ColumnValueContainsOperation]: ColumnInFilterRn
+  [key in keyof typeof ColumnValueContainsOperation]: ColumnInFilterFn
+}
+
+type ColumnGroupFn = <RowType>(
+  ...clauses: WhereClause<RowType>[]
+) => WhereClause<RowType>
+
+export const and = <RowType>(
+  ...clauses: WhereClause<RowType>[]
+): WhereClause<RowType> =>
+  ColumnGroupFilterBuilder(BooleanOperation.AND, ...clauses)
+
+export const or = <RowType>(
+  ...clauses: WhereClause<RowType>[]
+): WhereClause<RowType> =>
+  ColumnGroupFilterBuilder(BooleanOperation.OR, ...clauses)
+
+export const not = <RowType>(
+  clause: WhereClause<RowType>
+): WhereClause<RowType> => {
+  return {
+    nodeType: RelationalNodeType.WHERE,
+    filter: {
+      op: BooleanOperation.NOT,
+      filters: [clause.filter],
+    } as FilterGroup<RowType>,
+  }
 }
 
 export const columns: FilterOperations = {
@@ -223,6 +249,19 @@ export const columns: FilterOperations = {
   },
 }
 
+function ColumnGroupFilterBuilder<RowType>(
+  op: BooleanOperation,
+  ...clauses: WhereClause<RowType>[]
+): WhereClause<RowType> {
+  return {
+    nodeType: RelationalNodeType.WHERE,
+    filter: {
+      op,
+      filters: clauses.map((c) => c.filter),
+    } as FilterGroup<RowType>,
+  }
+}
+
 function ColumnFilterBuilder<
   RowType,
   Column extends keyof RowType,
@@ -239,26 +278,5 @@ function ColumnFilterBuilder<
       value,
       op,
     },
-  }
-}
-
-/**
- * Class that holds the materialized {@link RelationalQueryNode} clause
- */
-class RelationalQueryNodeBuilder<RowType> {
-  private clause: RelationalQueryNode<RelationalNodeType>
-
-  constructor(clause: RelationalQueryNode<RelationalNodeType>) {
-    this.clause = clause
-  }
-
-  /**
-   * Retrieve a builder that can be used to create {@link Query} objects
-   *
-   * @param ctor A class the implements the given {@link QueryBuilderCtor}
-   * @returns A new {@link RelationalQueryBuilder} for the table
-   */
-  build(ctor: QueryBuilderCtor<RowType>): Query<RowType> {
-    return new ctor(this.clause).build()
   }
 }

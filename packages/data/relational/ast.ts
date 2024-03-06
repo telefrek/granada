@@ -166,7 +166,7 @@ export interface NullColumnFilter<
 /**
  * Map of valid filter types for grouping
  */
-type FilterTypes<TableType> =
+export type FilterTypes<TableType> =
   | ColumnFilter<TableType, keyof TableType>
   | NullColumnFilter<TableType, keyof OptionalProperties<TableType>>
   | ContainmentFilter<
@@ -179,7 +179,7 @@ type FilterTypes<TableType> =
  * Represents a group of filters that are bound by a {@link BooleanOperation}
  */
 export interface FilterGroup<TableType> {
-  filters: FilterTypes<TableType>[]
+  filters: (FilterTypes<TableType> | FilterGroup<TableType>)[]
   op: BooleanOperation
 }
 
