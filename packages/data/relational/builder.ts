@@ -181,76 +181,41 @@ class SelectBuilder<
   }
 }
 
-export const and = <RowType>(
+type BooleanFilter = <RowType>(
   ...clauses: WhereClause<RowType>[]
-): WhereClause<RowType> =>
+) => WhereClause<RowType>
+
+export const and: BooleanFilter = (...clauses) =>
   ColumnGroupFilterBuilder(BooleanOperation.AND, ...clauses)
 
-export const or = <RowType>(
-  ...clauses: WhereClause<RowType>[]
-): WhereClause<RowType> =>
+export const or: BooleanFilter = (...clauses) =>
   ColumnGroupFilterBuilder(BooleanOperation.OR, ...clauses)
 
-export const not = <RowType>(
-  clause: WhereClause<RowType>
-): WhereClause<RowType> => {
-  return {
-    nodeType: RelationalNodeType.WHERE,
-    filter: {
-      op: BooleanOperation.NOT,
-      filters: [clause.filter],
-    } as FilterGroup<RowType>,
-  }
-}
+export const not: BooleanFilter = (...clauses) =>
+  ColumnGroupFilterBuilder(BooleanOperation.NOT, ...clauses)
 
-export const eq = <
+type ColumnFilter = <
   RowType,
   Column extends keyof RowType,
   ColumnType extends RowType[Column]
 >(
   column: Column,
   value: ColumnType
-): WhereClause<RowType> =>
+) => WhereClause<RowType>
+
+export const eq: ColumnFilter = (column, value) =>
   ColumnFilterBuilder(column, value, ColumnFilteringOperation.EQ)
 
-export const gt = <
-  RowType,
-  Column extends keyof RowType,
-  ColumnType extends RowType[Column]
->(
-  column: Column,
-  value: ColumnType
-): WhereClause<RowType> =>
+export const gt: ColumnFilter = (column, value) =>
   ColumnFilterBuilder(column, value, ColumnFilteringOperation.GT)
 
-export const gte = <
-  RowType,
-  Column extends keyof RowType,
-  ColumnType extends RowType[Column]
->(
-  column: Column,
-  value: ColumnType
-): WhereClause<RowType> =>
+export const gte: ColumnFilter = (column, value) =>
   ColumnFilterBuilder(column, value, ColumnFilteringOperation.GTE)
 
-export const lt = <
-  RowType,
-  Column extends keyof RowType,
-  ColumnType extends RowType[Column]
->(
-  column: Column,
-  value: ColumnType
-): WhereClause<RowType> =>
+export const lt: ColumnFilter = (column, value) =>
   ColumnFilterBuilder(column, value, ColumnFilteringOperation.LT)
 
-export const lte = <
-  RowType,
-  Column extends keyof RowType,
-  ColumnType extends RowType[Column]
->(
-  column: Column,
-  value: ColumnType
-): WhereClause<RowType> =>
+export const lte: ColumnFilter = (column, value) =>
   ColumnFilterBuilder(column, value, ColumnFilteringOperation.LTE)
 
 export const contains = <
