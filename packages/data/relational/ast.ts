@@ -208,7 +208,7 @@ export interface SelectClause<T, K extends keyof T, R>
   extends QuerySource<R>,
     RelationalQueryNode<RelationalNodeTypes.SELECT> {
   columns: K[]
-  alias?: ColumnAlias<T, K, string>
+  alias?: ColumnAlias<T, K, string>[]
 }
 
 /**

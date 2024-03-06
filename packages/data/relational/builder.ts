@@ -129,8 +129,9 @@ class SelectBuilder<
     super({
       ...clause,
       select: {
-        columns: columns ?? [],
+        columns: columns ?? clause.select?.columns ?? [],
         nodeType: RelationalNodeTypes.SELECT,
+        alias: clause.select?.alias,
       },
     })
   }
@@ -138,9 +139,23 @@ class SelectBuilder<
   alias<O extends keyof R & keyof D["tables"][T], N extends string>(
     column: O,
     alias: N
-  ): RelationalQueryNodeBuilder<AliasedType<R, O, N>> {
-    this.clause.select!.alias = { column, alias }
-    return new RelationalQueryNodeBuilder(this.clause)
+  ): SelectBuilder<D, T, AliasedType<R, O, N>> {
+    // Build the new clause
+    const aliasedClause: TableQueryNode<D, T, AliasedType<R, O, N>> = {
+      nodeType: this.clause.nodeType,
+      where: this.clause.where,
+      table: this.clause.table,
+      select: {
+        nodeType: RelationalNodeTypes.SELECT,
+        columns: this.clause.select?.columns ?? [],
+        alias: this.clause.select?.alias ?? [],
+      },
+    }
+
+    // Add the new alias
+    aliasedClause.select?.alias?.push({ column, alias })
+
+    return new SelectBuilder(aliasedClause)
   }
 }
 

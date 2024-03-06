@@ -177,6 +177,7 @@ describe("Relational query builder should support basic functionality", () => {
     const query = from<TestDataStore>("orders")
       .select(["name", "createdAt"])
       .alias("name", "foo")
+      .alias("createdAt", "date")
       .build(InMemoryRelationalQueryBuilder)
 
     // This should get the projected row with only 2 columns back
@@ -188,6 +189,7 @@ describe("Relational query builder should support basic functionality", () => {
 
       // Ensure aliasing works in intellisense and value is not mangled
       expect(result.rows[0].foo).toBe(STORE.orders[0].name)
+      expect(result.rows[0].date).toBe(STORE.orders[0].createdAt)
     }
   })
 })

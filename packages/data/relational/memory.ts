@@ -132,9 +132,10 @@ export class InMemoryRelationalQueryBuilder<
 
             // TODO: handle aliasing
             const transform = new Map<string, string>()
-            if (ast.select?.alias) {
-              transform.set(ast.select!.alias.column, ast.select!.alias.alias)
+            for (const alias of ast.select?.alias ?? []) {
+              transform.set(alias.column, alias.alias)
             }
+
             ast.select!.columns.map((c) =>
               entries.push([transform.has(c) ? transform.get(c)! : c, r[c]])
             )
