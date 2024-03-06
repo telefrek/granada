@@ -181,34 +181,6 @@ class SelectBuilder<
   }
 }
 
-type ColumnFilterFn = <
-  RowType,
-  Column extends keyof RowType,
-  ColumnType extends RowType[Column]
->(
-  column: Column,
-  value: ColumnType
-) => WhereClause<RowType>
-
-type ColumnInFilterFn = <
-  RowType,
-  ContainingColumn extends ContainmentProperty<RowType>,
-  ColumnValue extends ContainmentItemType<RowType, ContainingColumn>
->(
-  column: ContainingColumn,
-  value: ColumnValue
-) => WhereClause<RowType>
-
-type FilterOperations = {
-  [key in keyof typeof ColumnFilteringOperation]: ColumnFilterFn
-} & {
-  [key in keyof typeof ColumnValueContainsOperation]: ColumnInFilterFn
-}
-
-type ColumnGroupFn = <RowType>(
-  ...clauses: WhereClause<RowType>[]
-) => WhereClause<RowType>
-
 export const and = <RowType>(
   ...clauses: WhereClause<RowType>[]
 ): WhereClause<RowType> =>
@@ -231,22 +203,72 @@ export const not = <RowType>(
   }
 }
 
-export const columns: FilterOperations = {
-  GT: (c, v) => ColumnFilterBuilder(c, v, ColumnFilteringOperation.GT),
-  LT: (c, v) => ColumnFilterBuilder(c, v, ColumnFilteringOperation.LT),
-  GTE: (c, v) => ColumnFilterBuilder(c, v, ColumnFilteringOperation.GTE),
-  LTE: (c, v) => ColumnFilterBuilder(c, v, ColumnFilteringOperation.LTE),
-  EQ: (c, v) => ColumnFilterBuilder(c, v, ColumnFilteringOperation.EQ),
-  IN: (column, value) => {
-    return {
-      nodeType: RelationalNodeType.WHERE,
-      filter: {
-        column,
-        value,
-        op: ColumnValueContainsOperation.IN,
-      },
-    }
-  },
+export const eq = <
+  RowType,
+  Column extends keyof RowType,
+  ColumnType extends RowType[Column]
+>(
+  column: Column,
+  value: ColumnType
+): WhereClause<RowType> =>
+  ColumnFilterBuilder(column, value, ColumnFilteringOperation.EQ)
+
+export const gt = <
+  RowType,
+  Column extends keyof RowType,
+  ColumnType extends RowType[Column]
+>(
+  column: Column,
+  value: ColumnType
+): WhereClause<RowType> =>
+  ColumnFilterBuilder(column, value, ColumnFilteringOperation.GT)
+
+export const gte = <
+  RowType,
+  Column extends keyof RowType,
+  ColumnType extends RowType[Column]
+>(
+  column: Column,
+  value: ColumnType
+): WhereClause<RowType> =>
+  ColumnFilterBuilder(column, value, ColumnFilteringOperation.GTE)
+
+export const lt = <
+  RowType,
+  Column extends keyof RowType,
+  ColumnType extends RowType[Column]
+>(
+  column: Column,
+  value: ColumnType
+): WhereClause<RowType> =>
+  ColumnFilterBuilder(column, value, ColumnFilteringOperation.LT)
+
+export const lte = <
+  RowType,
+  Column extends keyof RowType,
+  ColumnType extends RowType[Column]
+>(
+  column: Column,
+  value: ColumnType
+): WhereClause<RowType> =>
+  ColumnFilterBuilder(column, value, ColumnFilteringOperation.LTE)
+
+export const contains = <
+  RowType,
+  ContainingColumn extends ContainmentProperty<RowType>,
+  ColumnValue extends ContainmentItemType<RowType, ContainingColumn>
+>(
+  column: ContainingColumn,
+  value: ColumnValue
+): WhereClause<RowType> => {
+  return {
+    nodeType: RelationalNodeType.WHERE,
+    filter: {
+      column,
+      value,
+      op: ColumnValueContainsOperation.IN,
+    },
+  }
 }
 
 function ColumnGroupFilterBuilder<RowType>(
