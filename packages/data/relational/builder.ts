@@ -106,7 +106,7 @@ class FromBuilder<
   select<
     Column extends keyof DataStoreType["tables"][TargetTable],
     RowType extends Pick<DataStoreType["tables"][TargetTable], Column>
-  >(columns: Column[]): SelectBuilder<DataStoreType, TargetTable, RowType> {
+  >(...columns: Column[]): SelectBuilder<DataStoreType, TargetTable, RowType> {
     return new SelectBuilder(
       {
         table: this.clause.table,

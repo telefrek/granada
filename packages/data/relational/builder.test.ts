@@ -146,7 +146,7 @@ describe("Relational query builder should support basic functionality", () => {
 
   it("should allow for projections of rows via a simple select clause", async () => {
     const query = from<TestDataStore>("orders")
-      .select(["name", "createdAt"])
+      .select("name", "createdAt")
       .build(InMemoryRelationalQueryBuilder)
 
     // This should get the projected row with only 2 columns back
@@ -160,7 +160,7 @@ describe("Relational query builder should support basic functionality", () => {
 
   it("should allow for projections of rows via a simple select clause in addition to row filtering via where clause", async () => {
     const query = from<TestDataStore>("orders")
-      .select(["name", "createdAt"])
+      .select("name", "createdAt")
       .where(columns.IN("name", "ord3"))
       .build(InMemoryRelationalQueryBuilder)
 
@@ -175,7 +175,7 @@ describe("Relational query builder should support basic functionality", () => {
 
   it("should allow columns to be aliased", async () => {
     const query = from<TestDataStore>("orders")
-      .select(["name", "createdAt"])
+      .select("name", "createdAt")
       .alias("name", "foo")
       .alias("createdAt", "date")
       .build(InMemoryRelationalQueryBuilder)
