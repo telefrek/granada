@@ -142,7 +142,7 @@ export class InMemoryRelationalQueryBuilder<
 
             // TODO: handle aliasing
             const transform = new Map<string, string>()
-            for (const alias of ast.select?.alias ?? []) {
+            for (const alias of ast.select?.aliasing ?? []) {
               transform.set(alias.column, alias.alias)
             }
 

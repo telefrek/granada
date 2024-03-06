@@ -82,12 +82,12 @@ class RelationalTableBuilder<
       select: {
         nodeType: RelationalNodeType.SELECT,
         columns: this.clause.select?.columns ?? [],
-        alias: this.clause.select?.alias ?? [],
+        aliasing: this.clause.select?.aliasing ?? [],
       },
     }
 
     // Add the new alias
-    aliasedClause.select?.alias?.push({ column, alias })
+    aliasedClause.select?.aliasing?.push({ column, alias })
 
     return new RelationalTableBuilder(aliasedClause)
   }
@@ -122,7 +122,7 @@ class RelationalTableBuilder<
       select: {
         columns: columns ?? [],
         nodeType: RelationalNodeType.SELECT,
-        alias: this.clause.select?.alias,
+        aliasing: this.clause.select?.aliasing,
       },
       where: this.clause.where,
     })
@@ -139,11 +139,15 @@ class RelationalTableBuilder<
   }
 }
 
-export const query = <DataStoreType extends RelationalDataStore>(): {
+type TableRelationalBuilder<DataStoreType extends RelationalDataStore> = {
   from<TargetTable extends keyof DataStoreType["tables"]>(
     table: TargetTable
   ): RelationalTableBuilder<DataStoreType, TargetTable>
-} => {
+}
+
+export const createRelationalBuilder = <
+  DataStoreType extends RelationalDataStore
+>(): TableRelationalBuilder<DataStoreType> => {
   return {
     from,
   }
