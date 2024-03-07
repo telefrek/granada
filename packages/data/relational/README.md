@@ -119,6 +119,10 @@ classDiagram
         select
         where
     }
+    class CteQueryNode{
+        source
+        name
+    }
     RelationalNodeType<--RelationalQueryNode
     ColumnFilteringOperation<--ColumnFilter
     ColumnValueContainsOperation<--ContainmentFilter
@@ -136,4 +140,5 @@ classDiagram
     RelationalQueryNode<|--TableQueryNode
     WhereClause<..TableQueryNode
     SelectClause<..TableQueryNode
+    TableQueryNode<..CteQueryNode
 ```

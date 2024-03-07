@@ -1,12 +1,4 @@
-import {
-  and,
-  contains,
-  createRelationalBuilder,
-  eq,
-  gt,
-  gte,
-  not,
-} from "./builder"
+import { and, contains, eq, gt, gte, not, useDataStore } from "./builder"
 import {
   InMemoryQueryExecutor,
   InMemoryRelationalQueryBuilder,
@@ -88,7 +80,7 @@ describe("Relational query builder should support basic functionality", () => {
   it("should support a simple select * style query", async () => {
     // This should get the full row back
     const result = await executor.run(
-      createRelationalBuilder<TestDataStore>()
+      useDataStore<TestDataStore>()
         .from("orders")
         .build(InMemoryRelationalQueryBuilder)
     )
@@ -100,7 +92,7 @@ describe("Relational query builder should support basic functionality", () => {
 
   it("should allow filtering rows via a simple where clause", async () => {
     let result = await executor.run(
-      createRelationalBuilder<TestDataStore>()
+      useDataStore<TestDataStore>()
         .from("orders")
         .where(gt("id", 2))
         .build(InMemoryRelationalQueryBuilder)
@@ -111,7 +103,7 @@ describe("Relational query builder should support basic functionality", () => {
     }
 
     result = await executor.run(
-      createRelationalBuilder<TestDataStore>()
+      useDataStore<TestDataStore>()
         .from("orders")
         .where(gte("id", 2))
         .build(InMemoryRelationalQueryBuilder)
@@ -125,7 +117,7 @@ describe("Relational query builder should support basic functionality", () => {
   it("should allow filtering via containment where clauses", async () => {
     // This should get the projected row with only 2 columns back
     let result = await executor.run(
-      createRelationalBuilder<TestDataStore>()
+      useDataStore<TestDataStore>()
         .from("orders")
         .where(contains("name", "ord3"))
         .build(InMemoryRelationalQueryBuilder)
@@ -136,7 +128,7 @@ describe("Relational query builder should support basic functionality", () => {
     }
 
     result = await executor.run(
-      createRelationalBuilder<TestDataStore>()
+      useDataStore<TestDataStore>()
         .from("orders")
         .where(contains("categories", Category.TEST))
         .build(InMemoryRelationalQueryBuilder)
@@ -147,7 +139,7 @@ describe("Relational query builder should support basic functionality", () => {
     }
 
     result = await executor.run(
-      createRelationalBuilder<TestDataStore>()
+      useDataStore<TestDataStore>()
         .from("orders")
         .where(contains("categories", Category.PURCHASE))
         .build(InMemoryRelationalQueryBuilder)
@@ -161,7 +153,7 @@ describe("Relational query builder should support basic functionality", () => {
   it("should allow for projections of rows via a simple select clause", async () => {
     // This should get the projected row with only 2 columns back
     const result = await executor.run(
-      createRelationalBuilder<TestDataStore>()
+      useDataStore<TestDataStore>()
         .from("orders")
         .select("name", "createdAt")
         .build(InMemoryRelationalQueryBuilder)
@@ -175,13 +167,13 @@ describe("Relational query builder should support basic functionality", () => {
 
   it("should allow for projections of rows via a simple select clause in addition to row filtering via where clause", async () => {
     // Query order shouldn't matter
-    const query1 = createRelationalBuilder<TestDataStore>()
+    const query1 = useDataStore<TestDataStore>()
       .from("orders")
       .select("name", "createdAt")
       .where(contains("name", "ord3"))
       .build(InMemoryRelationalQueryBuilder)
 
-    const query2 = createRelationalBuilder<TestDataStore>()
+    const query2 = useDataStore<TestDataStore>()
       .from("orders")
       .where(contains("name", "ord3"))
       .select("name", "createdAt")
@@ -201,7 +193,7 @@ describe("Relational query builder should support basic functionality", () => {
   it("should allow complex grouped where clauses", async () => {
     // This should get the projected row with only 1 columns back
     const result = await executor.run(
-      createRelationalBuilder<TestDataStore>()
+      useDataStore<TestDataStore>()
         .from("orders")
         .select("name")
         .where(and(contains("categories", Category.PURCHASE), not(eq("id", 1))))
@@ -217,14 +209,14 @@ describe("Relational query builder should support basic functionality", () => {
   it("should allow columns to be aliased", async () => {
     // This should get the projected row with only 2 columns back
     const result = await executor.run(
-      createRelationalBuilder<TestDataStore>()
+      useDataStore<TestDataStore>()
         .from("orders")
         .select("name", "createdAt")
         .alias("name", "foo")
         .alias("createdAt", "date")
         .build(InMemoryRelationalQueryBuilder)
     )
-    expect(result).not.toBeUndefined()
+
     if (Array.isArray(result.rows)) {
       expect(result.rows.length).toBe(STORE.orders.length)
       expect(Object.keys(result.rows[0]).length).toEqual(2)
@@ -232,6 +224,27 @@ describe("Relational query builder should support basic functionality", () => {
       // Ensure aliasing works in intellisense and value is not mangled
       expect(result.rows[0].foo).toBe(STORE.orders[0].name)
       expect(result.rows[0].date).toBe(STORE.orders[0].createdAt)
+    }
+  })
+
+  it("should allow cte clauses", async () => {
+    const store = useDataStore<TestDataStore>()
+
+    const result = await executor.run(
+      store
+        .with(
+          "foo",
+          store.from("orders").select("name", "categories").where(gt("id", 1))
+        )
+        .from("foo")
+        .select("name")
+        .where(contains("categories", Category.PURCHASE))
+        .build(InMemoryRelationalQueryBuilder)
+    )
+
+    if (Array.isArray(result.rows)) {
+      expect(result.rows.length).toBe(1)
+      expect(result.rows[0].name).toBe(STORE.orders[2].name)
     }
   })
 })

@@ -3,7 +3,7 @@
  */
 
 import type { OptionalProperties } from "@telefrek/core/type/utils"
-import type { RelationalDataStore } from "."
+import type { RelationalDataStore, RelationalDataTable } from "."
 import type { QueryNode, QuerySource } from "../query/ast"
 
 /**
@@ -13,6 +13,7 @@ export enum RelationalNodeType {
   TABLE = "table",
   WHERE = "where",
   SELECT = "select",
+  CTE = "cte",
 }
 
 /**
@@ -32,7 +33,14 @@ export interface RelationalQueryNode<NodeType extends RelationalNodeType>
 export function isRelationalQueryNode(
   node: QueryNode
 ): node is RelationalQueryNode<RelationalNodeType> {
-  return typeof node === "object" && node !== null && "nodeType" in node
+  return (
+    typeof node === "object" &&
+    node !== null &&
+    "nodeType" in node &&
+    Object.values(RelationalNodeType).includes(
+      node.nodeType as RelationalNodeType
+    )
+  )
 }
 
 /**
@@ -201,6 +209,23 @@ export function isFilterGroup<TableType>(
 }
 
 /**
+ * Defines a CTE clause
+ */
+export interface CteClause<
+  DataStoreType extends RelationalDataStore,
+  TargetTable extends keyof DataStoreType["tables"]
+> extends RelationalQueryNode<RelationalNodeType.CTE> {
+  source: TableQueryNode<DataStoreType, TargetTable>
+  tableName: TargetTable
+}
+
+export function isCteClause<DataStoreType extends RelationalDataStore>(
+  node: RelationalQueryNode<RelationalNodeType>
+): node is CteClause<DataStoreType, keyof DataStoreType["tables"]> {
+  return node.nodeType === RelationalNodeType.CTE
+}
+
+/**
  * Represents a where clause
  */
 export interface WhereClause<TableType>
@@ -222,19 +247,26 @@ export function isWhereClause<TableType>(
   )
 }
 
-export interface ColumnAlias<T, K extends keyof T, N extends string> {
-  column: K
-  alias: N
+export interface ColumnAlias<
+  TableType extends RelationalDataTable,
+  Column extends keyof TableType,
+  Alias extends string
+> {
+  column: Column
+  alias: Alias
 }
 
 /**
  * Rename to match nomenclature
  */
-export interface SelectClause<T, K extends keyof T, R>
-  extends QuerySource<R>,
+export interface SelectClause<
+  TableType extends RelationalDataTable,
+  Column extends keyof TableType,
+  RowType
+> extends QuerySource<RowType>,
     RelationalQueryNode<RelationalNodeType.SELECT> {
-  columns: K[]
-  aliasing?: ColumnAlias<T, K, string>[]
+  columns: Column[]
+  aliasing?: ColumnAlias<TableType, Column, string>[]
 }
 
 /**
@@ -243,9 +275,11 @@ export interface SelectClause<T, K extends keyof T, R>
  * @param node The {@link QueryNode} to inspect
  * @returns True if the node is a {@link SelectClause}
  */
-export function isSelectClause<T, K extends keyof T, R = Pick<T, K>>(
-  node: QueryNode
-): node is SelectClause<T, K, R> {
+export function isSelectClause<
+  TableType extends RelationalDataTable,
+  Column extends keyof TableType,
+  RowType = Pick<TableType, Column>
+>(node: QueryNode): node is SelectClause<TableType, Column, RowType> {
   return (
     isRelationalQueryNode(node) && node.nodeType === RelationalNodeType.SELECT
   )
@@ -255,13 +289,14 @@ export function isSelectClause<T, K extends keyof T, R = Pick<T, K>>(
  * Represents a query against a table
  */
 export interface TableQueryNode<
-  D extends RelationalDataStore,
-  T extends keyof D["tables"],
-  R
+  DataStoreType extends RelationalDataStore,
+  TargetTable extends keyof DataStoreType["tables"],
+  TableType extends RelationalDataTable = DataStoreType["tables"][TargetTable],
+  RowType = TableType
 > extends RelationalQueryNode<RelationalNodeType.TABLE> {
-  table: T
-  select?: SelectClause<D["tables"][T], keyof D["tables"][T], R>
-  where?: WhereClause<D["tables"][T]>
+  table: TargetTable
+  select?: SelectClause<TableType, keyof TableType, RowType>
+  where?: WhereClause<TableType>
 }
 
 /**
@@ -271,10 +306,13 @@ export interface TableQueryNode<
  * @returns True if the node is a {@link TableQueryNode}
  */
 export function isTableQueryNode<
-  D extends RelationalDataStore,
-  T extends keyof D["tables"],
-  R
->(node: QueryNode): node is TableQueryNode<D, T, R> {
+  DataStoreType extends RelationalDataStore,
+  TargetTable extends keyof DataStoreType["tables"],
+  TableType extends RelationalDataTable = DataStoreType["tables"][TargetTable],
+  RowType = TableType
+>(
+  node: QueryNode
+): node is TableQueryNode<DataStoreType, TargetTable, TableType, RowType> {
   return (
     isRelationalQueryNode(node) && node.nodeType === RelationalNodeType.TABLE
   )

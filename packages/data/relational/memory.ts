@@ -20,6 +20,7 @@ import {
   RelationalNodeType,
   isColumnFilter,
   isContainmentFilter,
+  isCteClause,
   isFilterGroup,
   isRelationalQueryNode,
   isTableQueryNode,
@@ -27,9 +28,11 @@ import {
   type ContainmentFilter,
   type ContainmentItemType,
   type ContainmentProperty,
+  type CteClause,
   type FilterGroup,
   type FilterTypes,
   type RelationalQueryNode,
+  type TableQueryNode,
 } from "./ast"
 import { RelationalQueryBuilder } from "./builder"
 
@@ -57,21 +60,34 @@ export function createInMemoryStore<
   } as InMemoryRelationalDataStore<DataStoreType>
 }
 
-type InMemoryQuerySourceFn<
+type InMemoryQuerySourceMaterializer<
   DataStoreType extends RelationalDataStore,
   RowType
 > = (store: InMemoryRelationalDataStore<DataStoreType>) => RowType[]
+
+/**
+ * Materialize a chunk of a query
+ */
+type InMemoryQuerySegmentMaterializer<
+  DataStoreType extends RelationalDataStore,
+  TableType extends Record<string, any> = Record<string, any>,
+  T = unknown
+> = (
+  store: InMemoryRelationalDataStore<DataStoreType>,
+  node: TableQueryNode<DataStoreType, keyof DataStoreType["tables"]>,
+  tempTables: Map<string, unknown[]>
+) => T[]
 
 class InMemoryQuery<DataStoreType extends RelationalDataStore, RowType>
   implements Query<RowType>
 {
   name: string
   mode: ExecutionMode
-  s: InMemoryQuerySourceFn<DataStoreType, RowType>
+  s: InMemoryQuerySourceMaterializer<DataStoreType, RowType>
 
   constructor(
     name: string,
-    s: InMemoryQuerySourceFn<DataStoreType, RowType>,
+    s: InMemoryQuerySourceMaterializer<DataStoreType, RowType>,
     mode: ExecutionMode = ExecutionMode.Normal
   ) {
     this.name = name
@@ -115,6 +131,55 @@ export class InMemoryQueryExecutor<DataStoreType extends RelationalDataStore>
   }
 }
 
+function createMaterializer<
+  DataStoreType extends RelationalDataStore,
+  T,
+  TargetTable extends keyof DataStoreType["tables"]
+>(
+  table: TargetTable
+): InMemoryQuerySegmentMaterializer<
+  DataStoreType,
+  DataStoreType["tables"][TargetTable],
+  T
+> {
+  return (store, node, tempTables) => {
+    let rows =
+      node.table in store
+        ? store[node.table]
+        : (tempTables.get(
+            node.table as string
+          ) as DataStoreType["tables"][TargetTable][]) ?? []
+    let ret: T[] = []
+
+    // Check for any filters to apply
+    if (node.where !== undefined) {
+      rows = rows.filter(buildFilter(node.where.filter))
+    }
+
+    // Apply any select projections on the set firts
+    if (node.select !== undefined) {
+      ret = rows.map((r) => {
+        const entries: Array<readonly [PropertyKey, any]> = []
+
+        // TODO: handle aliasing
+        const transform = new Map<string, string>()
+        for (const alias of node.select?.aliasing ?? []) {
+          transform.set(alias.column as string, alias.alias)
+        }
+
+        ;(node.select!.columns as string[]).map((c) =>
+          entries.push([transform.has(c) ? transform.get(c)! : c, r[c]])
+        )
+        return Object.fromEntries(entries) as T
+      })
+    } else {
+      ret = rows as T[]
+    }
+
+    return ret
+  }
+}
+
 export class InMemoryRelationalQueryBuilder<
   DataStoreType extends RelationalDataStore,
   RowType
@@ -127,35 +192,51 @@ export class InMemoryRelationalQueryBuilder<
     // Verify we have a relational node
     if (isRelationalQueryNode(ast) && isTableQueryNode(ast)) {
       return new InMemoryQuery<DataStoreType, T>("name", (source) => {
-        let rows = source[ast.table] ?? []
-        let ret: T[] = []
+        const tempTables: Map<string, unknown[]> = new Map()
 
-        // Check for any filters to apply
-        if (ast.where !== undefined) {
-          rows = rows.filter(buildFilter(ast.where.filter))
-        }
-
-        // Apply any select projections on the set firts
-        if (ast.select !== undefined) {
-          ret = rows.map((r) => {
-            const entries: Array<readonly [PropertyKey, any]> = []
-
-            // TODO: handle aliasing
-            const transform = new Map<string, string>()
-            for (const alias of ast.select?.aliasing ?? []) {
-              transform.set(alias.column, alias.alias)
-            }
-
-            ast.select!.columns.map((c) =>
-              entries.push([transform.has(c) ? transform.get(c)! : c, r[c]])
+        if (ast.parent !== undefined) {
+          // Climb the parent tree
+          if (
+            isRelationalQueryNode(ast) &&
+            isCteClause(ast.parent as RelationalQueryNode<RelationalNodeType>)
+          ) {
+            console.log(
+              `found something fun...\n${JSON.stringify(ast, undefined, 2)}`
             )
-            return Object.fromEntries(entries) as T
-          })
-        } else {
-          ret = rows as T[]
+
+            const cte = ast.parent as CteClause<
+              DataStoreType,
+              keyof DataStoreType["tables"]
+            >
+            tempTables.set(
+              cte.tableName as string,
+              createMaterializer<
+                DataStoreType,
+                Record<string, any>,
+                typeof cte.tableName
+              >(cte.tableName)(source, cte.source, tempTables)
+            )
+
+            console.log(
+              `materialized (${cte.tableName as string}): \n\n${JSON.stringify(
+                tempTables.get(cte.tableName as string) ?? [],
+                undefined,
+                2
+              )}`
+            )
+          }
         }
 
-        return ret
+        const materializer = createMaterializer<
+          DataStoreType,
+          T,
+          typeof ast.table
+        >(ast.table)
+        return materializer(
+          source,
+          ast as TableQueryNode<DataStoreType, keyof DataStoreType["tables"]>,
+          tempTables
+        )
       })
     }
 
@@ -163,10 +244,12 @@ export class InMemoryRelationalQueryBuilder<
   }
 }
 
-function buildFilter<TableType>(
+function buildFilter<
+  TableType extends Record<string, any> = Record<string, any>
+>(
   clause: FilterGroup<TableType> | FilterTypes<TableType>
 ): (input: TableType) => boolean {
-  if (isFilterGroup(clause)) {
+  if (isFilterGroup<TableType>(clause)) {
     const filters = clause.filters.map((f) => buildFilter(f))
     switch (clause.op) {
       case BooleanOperation.AND:
@@ -190,7 +273,9 @@ function buildFilter<TableType>(
   return (_) => false
 }
 
-function buildContainsFilter<TableType>(
+function buildContainsFilter<
+  TableType extends Record<string, any> = Record<string, any>
+>(
   columnFilter: ContainmentFilter<
     TableType,
     ContainmentProperty<TableType>,
@@ -213,7 +298,9 @@ function buildContainsFilter<TableType>(
   }
 }
 
-function buildColumnFilter<TableType>(
+function buildColumnFilter<
+  TableType extends Record<string, any> = Record<string, any>
+>(
   columnFilter: ColumnFilter<TableType, keyof TableType>
 ): (input: TableType) => boolean {
   switch (columnFilter.op) {

@@ -15,7 +15,5 @@ export type RelationalDataTable = Record<string, any>
  * objects that can be useful for describing data sources and building valid queries
  */
 export interface RelationalDataStore extends DataStore {
-  tables: {
-    [name: string]: RelationalDataTable
-  }
+  tables: Record<string, RelationalDataTable>
 }
