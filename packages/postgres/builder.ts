@@ -42,7 +42,7 @@ export type PostgresRelationalDataStore<Database extends PostgresDatabase> = {
 }
 
 export function createRelationalQueryContext<
-  Database extends PostgresDatabase,
+  Database extends PostgresDatabase
 >(): RelationalQueryContext<PostgresRelationalDataStore<Database>> {
   return new RelationalQueryContextBase()
 }
@@ -55,7 +55,7 @@ export class PostgresRelationalQuery<RowType> implements Query<RowType> {
   constructor(
     name: string,
     queryText: string,
-    mode: ExecutionMode = ExecutionMode.Normal,
+    mode: ExecutionMode = ExecutionMode.Normal
   ) {
     this.name = name
     this.mode = mode
@@ -64,26 +64,26 @@ export class PostgresRelationalQuery<RowType> implements Query<RowType> {
 }
 
 export function isPostgresRelationalQuery<RowType>(
-  query: Query<RowType>,
+  query: Query<RowType>
 ): query is PostgresRelationalQuery<RowType> {
   return "queryText" in query && typeof query.queryText === "string"
 }
 
 export class ParameterizedPostgresRelationalQuery<
   ParameterType,
-  RowType,
+  RowType
 > extends PostgresRelationalQuery<RowType> {
   constructor(
     name: string,
     queryText: string,
-    mode: ExecutionMode = ExecutionMode.Normal,
+    mode: ExecutionMode = ExecutionMode.Normal
   ) {
     super(name, queryText, mode)
   }
 }
 
 export class BoundPostgresRelationalQuery<
-  RowType,
+  RowType
 > extends PostgresRelationalQuery<RowType> {
   readonly parameters: readonly PostgresColumnType<PostgresColumnTypes>[]
 
@@ -91,7 +91,7 @@ export class BoundPostgresRelationalQuery<
     name: string,
     queryText: string,
     parameters: readonly PostgresColumnType<PostgresColumnTypes>[],
-    mode: ExecutionMode = ExecutionMode.Normal,
+    mode: ExecutionMode = ExecutionMode.Normal
   ) {
     super(name, queryText, mode)
     this.parameters = parameters
@@ -99,7 +99,7 @@ export class BoundPostgresRelationalQuery<
 }
 
 export class PostgresQueryBuilder<
-  RowType,
+  RowType
 > extends RelationalQueryBuilder<RowType> {
   protected override buildQuery<T>(ast: QueryNode): Query<T> {
     if (isRelationalQueryNode(ast) && isTableQueryNode(ast)) {
@@ -114,13 +114,21 @@ function translateTableQuery(
   tableQueryNode: TableQueryNode<
     RelationalDataStore,
     keyof RelationalDataStore["tables"]
-  >,
+  >
 ): string {
-  if (tableQueryNode.select) {
-  }
+  const aliasing: Map<string, string> = tableQueryNode.select?.aliasing
+    ? tableQueryNode.select.aliasing.reduce(
+        (temp, alias) => temp.set(alias.column as string, alias.alias),
+        new Map<string, string>()
+      )
+    : new Map()
 
   return `SELECT ${
-    tableQueryNode.select ? tableQueryNode.select.columns.join(",") : "*"
+    tableQueryNode.select
+      ? tableQueryNode.select.columns
+          .map((c) => (aliasing.has(c) ? `${c} as ${aliasing.get(c)!}` : c))
+          .join(", ")
+      : "*"
   } FROM ${tableQueryNode.table} ${
     tableQueryNode.where
       ? `WHERE ${translateFilterGroup(tableQueryNode.where.filter)}`
@@ -129,7 +137,7 @@ function translateTableQuery(
 }
 
 function translateFilterGroup<RelationalDataTable>(
-  filter: FilterGroup<RelationalDataTable> | FilterTypes<RelationalDataTable>,
+  filter: FilterGroup<RelationalDataTable> | FilterTypes<RelationalDataTable>
 ): string {
   if (isFilterGroup(filter)) {
     return filter.filters
@@ -149,10 +157,10 @@ function wrap<T>(value: T): string {
   return typeof value === "string"
     ? `'${value}'`
     : value === "object"
-      ? value === null
-        ? "null"
-        : Array.isArray(value)
-          ? `{${value.map((i) => wrap(i))}}`
-          : `'${JSON.stringify(value)}'`
-      : (value as string)
+    ? value === null
+      ? "null"
+      : Array.isArray(value)
+      ? `{${value.map((i) => wrap(i))}}`
+      : `'${JSON.stringify(value)}'`
+    : (value as string)
 }

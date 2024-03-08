@@ -56,12 +56,13 @@ describe("Postgres query syntax should be translated correctly", () => {
     const query = context
       .from("orders")
       .select("id", "categories")
+      .alias("id", "order_id")
       .where(contains("categories", "purchase"))
       .build(PostgresQueryBuilder)
 
     if (isPostgresRelationalQuery(query)) {
       expect(query.queryText).toEqual(
-        "SELECT id,categories FROM orders WHERE 'purchase'=ANY(categories)",
+        "SELECT id as order_id, categories FROM orders WHERE 'purchase'=ANY(categories)"
       )
     }
   })
