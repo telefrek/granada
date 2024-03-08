@@ -28,7 +28,7 @@ export type ArrayProperty<T> = {
  */
 export type ArrayItemType<
   T,
-  K extends ArrayProperty<T>
+  K extends ArrayProperty<T>,
 > = T[K] extends (infer U)[] ? U : never
 
 /**
@@ -37,5 +37,5 @@ export type ArrayItemType<
 export type AliasedType<
   Original,
   Property extends keyof Original,
-  Alias extends string
+  Alias extends string,
 > = Omit<Original, Property> & Record<Alias, Original[Property]>

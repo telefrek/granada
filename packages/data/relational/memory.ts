@@ -46,14 +46,14 @@ export type InMemoryTable<TableType> = TableType[]
  * name, {@link InMemoryTable} for the given type
  */
 export type InMemoryRelationalDataStore<
-  DataStoreType extends RelationalDataStore
+  DataStoreType extends RelationalDataStore,
 > = {
   [key in keyof DataStoreType["tables"]]: InMemoryTable<
     DataStoreType["tables"][key]
   >
 }
 export function createInMemoryStore<
-  DataStoreType extends RelationalDataStore
+  DataStoreType extends RelationalDataStore,
 >(): InMemoryRelationalDataStore<DataStoreType> {
   return {
     sources: {},
@@ -62,7 +62,7 @@ export function createInMemoryStore<
 
 type InMemoryQuerySourceMaterializer<
   DataStoreType extends RelationalDataStore,
-  RowType
+  RowType,
 > = (store: InMemoryRelationalDataStore<DataStoreType>) => RowType[]
 
 /**
@@ -71,11 +71,11 @@ type InMemoryQuerySourceMaterializer<
 type InMemoryQuerySegmentMaterializer<
   DataStoreType extends RelationalDataStore,
   TableType extends Record<string, any> = Record<string, any>,
-  T = unknown
+  T = unknown,
 > = (
   store: InMemoryRelationalDataStore<DataStoreType>,
   node: TableQueryNode<DataStoreType, keyof DataStoreType["tables"]>,
-  tempTables: Map<string, unknown[]>
+  tempTables: Map<string, unknown[]>,
 ) => T[]
 
 class InMemoryQuery<DataStoreType extends RelationalDataStore, RowType>
@@ -88,7 +88,7 @@ class InMemoryQuery<DataStoreType extends RelationalDataStore, RowType>
   constructor(
     name: string,
     s: InMemoryQuerySourceMaterializer<DataStoreType, RowType>,
-    mode: ExecutionMode = ExecutionMode.Normal
+    mode: ExecutionMode = ExecutionMode.Normal,
   ) {
     this.name = name
     this.mode = mode
@@ -97,7 +97,7 @@ class InMemoryQuery<DataStoreType extends RelationalDataStore, RowType>
 }
 
 function isInMemoryQuery<DataStoreType extends RelationalDataStore, RowType>(
-  query: Query<RowType>
+  query: Query<RowType>,
 ): query is InMemoryQuery<DataStoreType, RowType> {
   return (
     typeof query === "object" &&
@@ -117,7 +117,7 @@ export class InMemoryQueryExecutor<DataStoreType extends RelationalDataStore>
   }
 
   run<RowType>(
-    query: Query<RowType>
+    query: Query<RowType>,
   ): Promise<QueryResult<RowType> | StreamingQueryResult<RowType>> {
     if (isInMemoryQuery(query)) {
       const res = query.s(this.store)
@@ -134,9 +134,9 @@ export class InMemoryQueryExecutor<DataStoreType extends RelationalDataStore>
 function createMaterializer<
   DataStoreType extends RelationalDataStore,
   T,
-  TargetTable extends keyof DataStoreType["tables"]
+  TargetTable extends keyof DataStoreType["tables"],
 >(
-  table: TargetTable
+  table: TargetTable,
 ): InMemoryQuerySegmentMaterializer<
   DataStoreType,
   DataStoreType["tables"][TargetTable],
@@ -147,7 +147,7 @@ function createMaterializer<
       node.table in store
         ? store[node.table]
         : (tempTables.get(
-            node.table as string
+            node.table as string,
           ) as DataStoreType["tables"][TargetTable][]) ?? []
     let ret: T[] = []
 
@@ -168,7 +168,7 @@ function createMaterializer<
         }
 
         ;(node.select!.columns as string[]).map((c) =>
-          entries.push([transform.has(c) ? transform.get(c)! : c, r[c]])
+          entries.push([transform.has(c) ? transform.get(c)! : c, r[c]]),
         )
         return Object.fromEntries(entries) as T
       })
@@ -182,7 +182,7 @@ function createMaterializer<
 
 export class InMemoryRelationalQueryBuilder<
   DataStoreType extends RelationalDataStore,
-  RowType
+  RowType,
 > extends RelationalQueryBuilder<RowType> {
   constructor(queryNode: RelationalQueryNode<RelationalNodeType>) {
     super(queryNode)
@@ -210,7 +210,7 @@ export class InMemoryRelationalQueryBuilder<
                 DataStoreType,
                 Record<string, any>,
                 typeof cte.tableName
-              >(cte.tableName)(source, cte.source, tempTables)
+              >(cte.tableName)(source, cte.source, tempTables),
             )
           }
         }
@@ -223,7 +223,7 @@ export class InMemoryRelationalQueryBuilder<
         return materializer(
           source,
           ast as TableQueryNode<DataStoreType, keyof DataStoreType["tables"]>,
-          tempTables
+          tempTables,
         )
       })
     }
@@ -233,9 +233,9 @@ export class InMemoryRelationalQueryBuilder<
 }
 
 function buildFilter<
-  TableType extends Record<string, any> = Record<string, any>
+  TableType extends Record<string, any> = Record<string, any>,
 >(
-  clause: FilterGroup<TableType> | FilterTypes<TableType>
+  clause: FilterGroup<TableType> | FilterTypes<TableType>,
 ): (input: TableType) => boolean {
   if (isFilterGroup<TableType>(clause)) {
     const filters = clause.filters.map((f) => buildFilter(f))
@@ -262,13 +262,13 @@ function buildFilter<
 }
 
 function buildContainsFilter<
-  TableType extends Record<string, any> = Record<string, any>
+  TableType extends Record<string, any> = Record<string, any>,
 >(
   columnFilter: ContainmentFilter<
     TableType,
     ContainmentProperty<TableType>,
     ContainmentItemType<TableType, ContainmentProperty<TableType>>
-  >
+  >,
 ): (input: TableType) => boolean {
   switch (columnFilter.op) {
     case ColumnValueContainsOperation.IN:
@@ -287,9 +287,9 @@ function buildContainsFilter<
 }
 
 function buildColumnFilter<
-  TableType extends Record<string, any> = Record<string, any>
+  TableType extends Record<string, any> = Record<string, any>,
 >(
-  columnFilter: ColumnFilter<TableType, keyof TableType>
+  columnFilter: ColumnFilter<TableType, keyof TableType>,
 ): (input: TableType) => boolean {
   switch (columnFilter.op) {
     case ColumnFilteringOperation.EQ:

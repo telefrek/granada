@@ -61,7 +61,7 @@ describe("Postgres query syntax should be translated correctly", () => {
 
     if (isPostgresRelationalQuery(query)) {
       expect(query.queryText).toEqual(
-        "SELECT id,categories FROM orders WHERE 'purchase'=ANY(categories)"
+        "SELECT id,categories FROM orders WHERE 'purchase'=ANY(categories)",
       )
     }
   })
