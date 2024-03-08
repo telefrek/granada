@@ -16,8 +16,8 @@ export enum ExecutionMode {
  * Represents the most basic query
  */
 export interface Query<T> {
-  name: string
-  mode: ExecutionMode
+  readonly name: string
+  readonly mode: ExecutionMode
 }
 
 /**

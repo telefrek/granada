@@ -38,7 +38,7 @@ export abstract class RelationalQueryBuilder<T> extends QueryBuilderBase<T> {
 export const useDataStore = <
   DataStoreType extends RelationalDataStore
 >(): RelationalQueryContext<DataStoreType> => {
-  return new RelationalQueryContextImpl()
+  return new RelationalQueryContextBase()
 }
 
 /**
@@ -178,8 +178,9 @@ export const contains = <
 /**
  * Class to manage some context around the current {@link RelationalDataStore}
  */
-class RelationalQueryContextImpl<DataStoreType extends RelationalDataStore>
-  implements RelationalQueryContext<DataStoreType>
+export class RelationalQueryContextBase<
+  DataStoreType extends RelationalDataStore
+> implements RelationalQueryContext<DataStoreType>
 {
   private current?: RelationalQueryNode<RelationalNodeType>
 
@@ -191,7 +192,7 @@ class RelationalQueryContextImpl<DataStoreType extends RelationalDataStore>
     name: TableName,
     query: RelationalQueryProvider<RowType>
   ): RelationalQueryContext<MergedStores<DataStoreType, TableName, RowType>> {
-    return new RelationalQueryContextImpl({
+    return new RelationalQueryContextBase({
       parent: this.current,
       nodeType: RelationalNodeType.CTE,
       source: query.node,

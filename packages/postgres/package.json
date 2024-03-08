@@ -28,7 +28,8 @@
   "author": "nathan@telefrek.com",
   "license": "MIT",
   "dependencies": {
-    "@telefrek/core": "*",
+    "@telefrek/core": "^1.0.0-alpha.12",
+    "@telefrek/data": "^1.0.0-alpha.12",
     "pg": "8.11.3"
   },
   "devDependencies": {

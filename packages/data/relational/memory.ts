@@ -200,10 +200,6 @@ export class InMemoryRelationalQueryBuilder<
             isRelationalQueryNode(ast) &&
             isCteClause(ast.parent as RelationalQueryNode<RelationalNodeType>)
           ) {
-            console.log(
-              `found something fun...\n${JSON.stringify(ast, undefined, 2)}`
-            )
-
             const cte = ast.parent as CteClause<
               DataStoreType,
               keyof DataStoreType["tables"]
@@ -215,14 +211,6 @@ export class InMemoryRelationalQueryBuilder<
                 Record<string, any>,
                 typeof cte.tableName
               >(cte.tableName)(source, cte.source, tempTables)
-            )
-
-            console.log(
-              `materialized (${cte.tableName as string}): \n\n${JSON.stringify(
-                tempTables.get(cte.tableName as string) ?? [],
-                undefined,
-                2
-              )}`
             )
           }
         }
