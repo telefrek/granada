@@ -31,15 +31,64 @@ export abstract class RelationalQueryBuilder<T> extends QueryBuilderBase<T> {
 }
 
 /**
+ * Constructor type
+ */
+type QueryBuilderCtor<RowType> = new (
+  node: RelationalQueryNode<RelationalNodeType>
+) => RelationalQueryBuilder<RowType>
+
+/**
  * Create a context for the given {@link DataStoreType}
  *
  * @returns A{@link RelationalQueryContext} for the given {@link DataStoreType}
  */
 export const useDataStore = <
-  DataStoreType extends RelationalDataStore,
+  DataStoreType extends RelationalDataStore
 >(): RelationalQueryContext<DataStoreType> => {
   return new RelationalQueryContextBase()
 }
+
+/**
+ * The valid set of join types supported
+ */
+export enum JoinType {
+  INNER = "inner",
+  LEFT = "left",
+  RIGHT = "right",
+  FULL = "full",
+}
+
+/**
+ * Helper interface for extracting the current {@link RelationalQueryNode}
+ */
+export interface RelationalQueryNodeBuilder {
+  readonly node: Readonly<RelationalQueryNode<RelationalNodeType>>
+}
+
+/**
+ * Represents a relational query that will return some value of {@link RowType}
+ * from the given {@link DataStoreType}
+ */
+export interface RelationalDataSource<
+  DataStoreType extends RelationalDataStore,
+  RowType
+> extends RelationalQueryNodeBuilder {
+  /**
+   * Retrieve a builder that can be used to create {@link Query} objects
+   *
+   * @param ctor A class the implements the given constructor
+   * @returns A new {@link RelationalQueryBuilder} for the table
+   */
+  build(ctor: QueryBuilderCtor<RowType>): Query<RowType>
+}
+
+// export const join = <
+//   JoinRowType,
+//   JoinSource extends RelationalDataSource<DataStoreType, JoinRowType>
+// >(
+//   joinSource: JoinSoure,
+//   joinType: JoinType
+// ): void
 
 /**
  * Handles building out {@link TableQueryNode} instances
@@ -48,8 +97,8 @@ export interface RelationalTableBuilder<
   DataStoreType extends RelationalDataStore,
   TargetTable extends keyof DataStoreType["tables"],
   TableType extends RelationalDataTable,
-  RowType,
-> extends RelationalQueryProvider<RowType> {
+  RowType
+> extends RelationalDataSource<DataStoreType, RowType> {
   /**
    * Alias a column to have a different name on the returned row type
    *
@@ -59,10 +108,10 @@ export interface RelationalTableBuilder<
    */
   alias<
     OldColumn extends keyof RowType & keyof TableType & string,
-    AliasColumn extends string,
+    AliasColumn extends string
   >(
     column: OldColumn,
-    alias: AliasColumn,
+    alias: AliasColumn
   ): RelationalTableBuilder<
     DataStoreType,
     TargetTable,
@@ -76,7 +125,7 @@ export interface RelationalTableBuilder<
    * @param clause The {@link WhereClause} to use for this query
    */
   where(
-    clause: WhereClause<TableType>,
+    clause: WhereClause<TableType>
   ): Omit<
     RelationalTableBuilder<DataStoreType, TargetTable, TableType, RowType>,
     "where"
@@ -89,7 +138,7 @@ export interface RelationalTableBuilder<
    */
   select<
     Column extends keyof TableType,
-    SelectType = { [key in Column]: TableType[key] },
+    SelectType = { [key in Column]: TableType[key] }
   >(
     ...columns: Column[]
   ): Omit<
@@ -102,7 +151,7 @@ export interface RelationalTableBuilder<
  * Class to manage some context around the current {@link RelationalDataStore}
  */
 export interface RelationalQueryContext<
-  DataStoreType extends RelationalDataStore,
+  DataStoreType extends RelationalDataStore
 > {
   /**
    * Starts a new CTE for the current query
@@ -113,7 +162,7 @@ export interface RelationalQueryContext<
    */
   with<TableName extends string, RowType extends Record<string, any>>(
     name: TableName,
-    query: RelationalQueryProvider<RowType>,
+    query: RelationalDataSource<DataStoreType, RowType>
   ): RelationalQueryContext<MergedStores<DataStoreType, TableName, RowType>>
 
   /**
@@ -124,7 +173,7 @@ export interface RelationalQueryContext<
    * @returns A new {@link RelationalTableBuilder}
    */
   from<TargetTable extends keyof DataStoreType["tables"]>(
-    table: TargetTable,
+    table: TargetTable
   ): RelationalTableBuilder<
     DataStoreType,
     TargetTable,
@@ -160,10 +209,10 @@ export const not: BooleanFilter = (...clauses) =>
 export const contains = <
   RowType,
   ContainingColumn extends ContainmentProperty<RowType>,
-  ColumnValue extends ContainmentItemType<RowType, ContainingColumn>,
+  ColumnValue extends ContainmentItemType<RowType, ContainingColumn>
 >(
   column: ContainingColumn,
-  value: ColumnValue,
+  value: ColumnValue
 ): WhereClause<RowType> => {
   return {
     nodeType: RelationalNodeType.WHERE,
@@ -179,7 +228,7 @@ export const contains = <
  * Class to manage some context around the current {@link RelationalDataStore}
  */
 export class RelationalQueryContextBase<
-  DataStoreType extends RelationalDataStore,
+  DataStoreType extends RelationalDataStore
 > implements RelationalQueryContext<DataStoreType>
 {
   private current?: RelationalQueryNode<RelationalNodeType>
@@ -190,7 +239,7 @@ export class RelationalQueryContextBase<
 
   with<TableName extends string, RowType extends Record<string, any>>(
     name: TableName,
-    query: RelationalQueryProvider<RowType>,
+    query: RelationalDataSource<DataStoreType, RowType>
   ): RelationalQueryContext<MergedStores<DataStoreType, TableName, RowType>> {
     return new RelationalQueryContextBase({
       parent: this.current,
@@ -201,7 +250,7 @@ export class RelationalQueryContextBase<
   }
 
   from<TargetTable extends keyof DataStoreType["tables"]>(
-    table: TargetTable,
+    table: TargetTable
   ): RelationalTableBuilder<
     DataStoreType,
     TargetTable,
@@ -217,39 +266,20 @@ export class RelationalQueryContextBase<
 }
 
 /**
- * Constructor type
- */
-type QueryBuilderCtor<RowType> = new (
-  node: RelationalQueryNode<RelationalNodeType>,
-) => RelationalQueryBuilder<RowType>
-
-export interface RelationalQueryProvider<RowType> {
-  node: Readonly<RelationalQueryNode<RelationalNodeType>>
-
-  /**
-   * Retrieve a builder that can be used to create {@link Query} objects
-   *
-   * @param ctor A class the implements the given constructor
-   * @returns A new {@link RelationalQueryBuilder} for the table
-   */
-  build(ctor: QueryBuilderCtor<RowType>): Query<RowType>
-}
-
-/**
  * Handles building out {@link TableQueryNode} instances
  */
 class RelationalTableBuilderImpl<
   DataStoreType extends RelationalDataStore,
   TargetTable extends keyof DataStoreType["tables"],
   TableType extends RelationalDataTable,
-  RowType,
+  RowType
 > implements
     RelationalTableBuilder<DataStoreType, TargetTable, TableType, RowType>
 {
   private clause: TableQueryNode<DataStoreType, TargetTable, TableType, RowType>
 
   constructor(
-    clause: TableQueryNode<DataStoreType, TargetTable, TableType, RowType>,
+    clause: TableQueryNode<DataStoreType, TargetTable, TableType, RowType>
   ) {
     this.clause = clause
   }
@@ -267,10 +297,10 @@ class RelationalTableBuilderImpl<
    */
   alias<
     OldColumn extends keyof RowType & keyof TableType & string,
-    AliasColumn extends string,
+    AliasColumn extends string
   >(
     column: OldColumn,
-    alias: AliasColumn,
+    alias: AliasColumn
   ): RelationalTableBuilder<
     DataStoreType,
     TargetTable,
@@ -302,7 +332,7 @@ class RelationalTableBuilderImpl<
   }
 
   where(
-    clause: WhereClause<TableType>,
+    clause: WhereClause<TableType>
   ): Omit<
     RelationalTableBuilder<DataStoreType, TargetTable, TableType, RowType>,
     "where"
@@ -318,7 +348,7 @@ class RelationalTableBuilderImpl<
    */
   select<
     Column extends keyof TableType,
-    SelectType = { [key in Column]: TableType[key] },
+    SelectType = { [key in Column]: TableType[key] }
   >(
     ...columns: Column[]
   ): Omit<
@@ -352,7 +382,7 @@ class RelationalTableBuilderImpl<
 type MergedStores<
   Left extends RelationalDataStore,
   N extends string,
-  RowType,
+  RowType
 > = {
   tables: { [key in keyof Left["tables"]]: Left["tables"][key] } & Record<
     N,
@@ -367,10 +397,10 @@ type BooleanFilter = <RowType>(
 type ColumnFilter = <
   RowType,
   Column extends keyof RowType,
-  ColumnType extends RowType[Column],
+  ColumnType extends RowType[Column]
 >(
   column: Column,
-  value: ColumnType,
+  value: ColumnType
 ) => WhereClause<RowType>
 
 function ColumnGroupFilterBuilder<RowType>(
@@ -389,11 +419,11 @@ function ColumnGroupFilterBuilder<RowType>(
 function ColumnFilterBuilder<
   RowType,
   Column extends keyof RowType,
-  ColumnType extends RowType[Column],
+  ColumnType extends RowType[Column]
 >(
   column: Column,
   value: ColumnType,
-  op: ColumnFilteringOperation,
+  op: ColumnFilteringOperation
 ): WhereClause<RowType> {
   return {
     nodeType: RelationalNodeType.WHERE,
