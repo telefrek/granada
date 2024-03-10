@@ -9,7 +9,7 @@ import type { QueryNode } from "./ast"
 /**
  * Defines the generatl structure for a {@link Query} builder
  */
-export interface QueryBuilder<T> {
+export type QueryBuilder<T> = {
   /**
    * Build the {@link Query} with the information already provided
    *

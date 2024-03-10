@@ -148,10 +148,10 @@ function createMaterializer<
 ): InMemoryQuerySegmentMaterializer<DataStoreType, TargetTable, T> {
   return (store, node, tempTables) => {
     let rows =
-      node.table in store
-        ? store[node.table]
+      node.tableName in store
+        ? store[node.tableName]
         : (tempTables.get(
-            node.table as string
+            node.tableName as string
           ) as DataStoreType["tables"][TargetTable][]) ?? []
     let ret: T[] = []
 
@@ -185,7 +185,6 @@ function createMaterializer<
 }
 
 export class InMemoryRelationalQueryBuilder<
-  DataStoreType extends RelationalDataStore,
   RowType extends RelationalDataTable
 > extends RelationalQueryBuilder<RowType> {
   constructor(queryNode: RelationalQueryNode<RelationalNodeType>) {
@@ -212,7 +211,7 @@ export class InMemoryRelationalQueryBuilder<
           }
         }
 
-        const materializer = createMaterializer(ast.table)
+        const materializer = createMaterializer(ast.tableName)
         return materializer(source, ast, tempTables)
       })
     }

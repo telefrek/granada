@@ -5,13 +5,16 @@
 import type { AliasedType } from "@telefrek/core/type/utils"
 import type { RelationalDataStore, RelationalDataTable } from "."
 import type { Query } from "../query"
+import type { QueryNode } from "../query/ast"
 import { QueryBuilderBase } from "../query/builder"
+import { QueryError } from "../query/error"
 import {
+  isTableQueryNode,
   type CteClause,
   type FilterGroup,
+  type FilterTypes,
   type RelationalQueryNode,
   type TableQueryNode,
-  type WhereClause,
 } from "./ast"
 import {
   BooleanOperation,
@@ -20,8 +23,6 @@ import {
   RelationalNodeType,
   type ContainmentItemType,
   type ContainmentProperty,
-  type JoinType,
-  type MatchingKey,
   type ModifiedStore,
 } from "./types"
 
@@ -45,31 +46,15 @@ type QueryBuilderCtor<RowType extends RelationalDataTable> = new (
 ) => RelationalQueryBuilder<RowType>
 
 /**
- * Create a context for the given {@link DataStoreType}
- *
- * @returns A{@link RelationalQueryContext} for the given {@link DataStoreType}
- */
-export const useDataStore = <
-  DataStoreType extends RelationalDataStore
->(): RelationalQueryContext<DataStoreType> => {
-  return new RelationalQueryContextBase()
-}
-
-/**
- * Helper interface for extracting the current {@link RelationalQueryNode}
- */
-export interface RelationalQueryNodeBuilder {
-  readonly node: Readonly<RelationalQueryNode<RelationalNodeType>>
-}
-
-/**
  * Represents a relational query that will return some value of {@link RowType}
  * from the given {@link DataStoreType}
  */
-export interface RelationalDataSource<
+export type RelationalDataSource<
   DataStoreType extends RelationalDataStore,
   RowType extends RelationalDataTable
-> extends RelationalQueryNodeBuilder {
+> = {
+  asNode(): RelationalQueryNode<RelationalNodeType>
+
   /**
    * Retrieve a builder that can be used to create {@link Query} objects
    *
@@ -79,117 +64,229 @@ export interface RelationalDataSource<
   build(ctor: QueryBuilderCtor<RowType>): Query<RowType>
 }
 
-export function testFrom<
-  DataStoreType extends RelationalDataStore,
-  TargetTable extends keyof DataStoreType["tables"]
->(table: TargetTable): RelationalTableBuilder<DataStoreType, TargetTable> {
-  return new RelationalTableBuilderImpl({
-    table,
-    nodeType: RelationalNodeType.TABLE,
-  })
-}
-
 /**
- * Handles building out {@link TableQueryNode} instances
+ * Type that is capable of buliding {@link RelationalQueryNode} trees
  */
-export interface RelationalTableBuilder<
+export type RelationalNodeBuilder<
   DataStoreType extends RelationalDataStore,
-  TargetTable extends keyof DataStoreType["tables"],
-  RowType extends RelationalDataTable = DataStoreType["tables"][TargetTable]
-> extends RelationalDataSource<DataStoreType, RowType> {
-  /**
-   * Alias a column to have a different name on the returned row type
-   *
-   * @param column The column to rename
-   * @param alias The new column alias
-   * @returns A new {@link SelectBuilder} with the modified types
-   */
-  alias<
-    OldColumn extends keyof RowType &
-      keyof DataStoreType["tables"][TargetTable] &
-      string,
-    AliasColumn extends string
-  >(
-    column: OldColumn,
-    alias: AliasColumn
-  ): RelationalTableBuilder<
-    DataStoreType,
-    TargetTable,
-    AliasedType<RowType, OldColumn, AliasColumn>
-  >
+  RowType extends RelationalDataTable = never
+> = RelationalDataSource<DataStoreType, RowType> &
+  CteNodeBuilder<DataStoreType> &
+  FromNodeBuilder<DataStoreType>
 
-  /**
-   * Attach the given {@link WhereClause} to the query
-   *
-   * @param clause The {@link WhereClause} to use for this query
-   */
-  where(
-    clause: WhereClause<DataStoreType["tables"][TargetTable]>
-  ): Omit<RelationalTableBuilder<DataStoreType, TargetTable, RowType>, "where">
-
-  /**
-   *
-   * @param columns The set of columns to select
-   * @returns An updated {@link SelectBuilder}
-   */
-  select<Column extends keyof DataStoreType["tables"][TargetTable]>(
+type TableNodeBuilder<
+  DataStoreType extends RelationalDataStore,
+  TableName extends keyof DataStoreType["tables"],
+  RowType extends RelationalDataTable = DataStoreType["tables"][TableName]
+> = RelationalDataSource<DataStoreType, RowType> & {
+  select<Column extends keyof DataStoreType["tables"][TableName] & string>(
     ...columns: Column[]
   ): Omit<
-    RelationalTableBuilder<
+    TableNodeBuilder<
       DataStoreType,
-      TargetTable,
-      { [key in Column]: DataStoreType["tables"][TargetTable][key] }
+      TableName,
+      Pick<DataStoreType["tables"][TableName], Column>
     >,
     "select"
   >
+
+  alias<
+    Column extends keyof RowType &
+      keyof DataStoreType["tables"][TableName] &
+      string,
+    Alias extends string
+  >(
+    column: Column,
+    alias: Alias
+  ): TableNodeBuilder<
+    DataStoreType,
+    TableName,
+    AliasedType<RowType, Column, Alias>
+  >
+
+  where(
+    filter:
+      | FilterGroup<DataStoreType["tables"][TableName]>
+      | FilterTypes<DataStoreType["tables"][TableName]>
+  ): Omit<TableNodeBuilder<DataStoreType, TableName, RowType>, "where">
 }
 
-/**
- * Class to manage some context around the current {@link RelationalDataStore}
- */
-export interface RelationalQueryContext<
+export function useDataStore<
   DataStoreType extends RelationalDataStore
-> {
-  /**
-   * Starts a new CTE for the current query
-   *
-   * @param name The name for the CTE
-   * @param query The {@link RelationalDataSource} that generates the CTE
-   * @returns
-   */
-  with<TableName extends string, RowType extends RelationalDataTable>(
-    name: TableName,
-    query: RelationalDataSource<DataStoreType, RowType>
-  ): RelationalQueryContext<ModifiedStore<DataStoreType, TableName, RowType>>
+>(): RelationalNodeBuilder<DataStoreType> {
+  return new DefaultRelationalNodeBuilder()
+}
 
-  /**
-   * Starts a new query fragment using the given table as a source
-   *
-   * @param table The {@link TargetTable} to use for this query segment
-   *
-   * @returns A new {@link RelationalTableBuilder}
-   */
-  from<TargetTable extends keyof DataStoreType["tables"]>(
-    table: TargetTable
-  ): RelationalTableBuilder<DataStoreType, TargetTable>
+export class DefaultRelationalNodeBuilder<
+  DataStoreType extends RelationalDataStore,
+  RowType extends RelationalDataTable = never
+> implements RelationalNodeBuilder<DataStoreType, RowType>
+{
+  #projections: Map<string, QueryNode>
 
-  join<
-    Left extends keyof DataStoreType["tables"],
-    Right extends keyof DataStoreType["tables"],
-    LeftColumn extends keyof DataStoreType["tables"][Left],
-    RightColumn extends keyof DataStoreType["tables"][Right] &
-      MatchingKey<
-        DataStoreType["tables"][Left],
-        DataStoreType["tables"][Right],
-        LeftColumn
-      >
+  asNode(): RelationalQueryNode<RelationalNodeType> {
+    throw new QueryError("cannot translate a RelationalNodeBuilder directly")
+  }
+
+  constructor(projections?: Map<string, QueryNode>) {
+    this.#projections = projections ?? new Map()
+  }
+
+  with<TableName extends string, TableRowType extends RelationalDataTable>(
+    tableName: TableName,
+    source: RelationalDataSource<DataStoreType, TableRowType>
+  ): RelationalNodeBuilder<
+    ModifiedStore<DataStoreType, TableName, TableRowType>,
+    never
+  > {
+    const node = source.asNode()
+    if (isTableQueryNode(node)) {
+      this.#projections.set(tableName, {
+        nodeType: RelationalNodeType.CTE,
+        tableName,
+        source: node,
+      } as CteClause<ModifiedStore<DataStoreType, TableName, TableRowType>, TableName>)
+
+      return new DefaultRelationalNodeBuilder(this.#projections)
+    }
+
+    throw new QueryError("cannot build CTE from non table source")
+  }
+
+  from<TableName extends keyof DataStoreType["tables"] & string>(
+    tableName: TableName
+  ): TableNodeBuilder<
+    DataStoreType,
+    TableName,
+    DataStoreType["tables"][TableName]
+  > {
+    return new DefaultTableNodeBuilder(tableName, {
+      parent: this.#projections.get(tableName),
+      nodeType: RelationalNodeType.TABLE,
+      tableName,
+    })
+  }
+
+  build(ctor: QueryBuilderCtor<RowType>): Query<RowType> {
+    throw new QueryError(
+      "invalid to build a query without a valid table clause"
+    )
+  }
+}
+
+class DefaultTableNodeBuilder<
+  DataStoreType extends RelationalDataStore,
+  TableName extends keyof DataStoreType["tables"] & string,
+  RowType extends RelationalDataTable = DataStoreType["tables"][TableName]
+> implements TableNodeBuilder<DataStoreType, TableName, RowType>
+{
+  #node: TableQueryNode<DataStoreType, TableName, RowType>
+
+  asNode(): RelationalQueryNode<RelationalNodeType> {
+    return this.#node
+  }
+
+  constructor(
+    tableName: TableName,
+    node?: TableQueryNode<DataStoreType, TableName, RowType>
+  ) {
+    this.#node = node ?? {
+      tableName: tableName,
+      nodeType: RelationalNodeType.TABLE,
+    }
+  }
+
+  build(ctor: QueryBuilderCtor<RowType>): Query<RowType> {
+    return new ctor(this.#node).build()
+  }
+
+  select<Column extends keyof DataStoreType["tables"][TableName] & string>(
+    ...columns: Column[]
+  ): Omit<
+    TableNodeBuilder<
+      DataStoreType,
+      TableName,
+      Pick<DataStoreType["tables"][TableName], Column>
+    >,
+    "select"
+  > {
+    return new DefaultTableNodeBuilder(this.#node.tableName, {
+      nodeType: RelationalNodeType.TABLE,
+      tableName: this.#node.tableName,
+      parent: this.#node.parent,
+      select: {
+        nodeType: RelationalNodeType.SELECT,
+        columns: columns,
+      },
+      where: this.#node.where,
+    })
+  }
+
+  alias<
+    Column extends keyof RowType &
+      keyof DataStoreType["tables"][TableName] &
+      string,
+    Alias extends string
   >(
-    left: Left,
-    right: Right,
-    leftColumn: LeftColumn,
-    rightColumn: RightColumn,
-    joinType: JoinType
-  ): void
+    column: Column,
+    alias: Alias
+  ): TableNodeBuilder<
+    DataStoreType,
+    TableName,
+    AliasedType<RowType, Column, Alias>
+  > {
+    return new DefaultTableNodeBuilder(this.#node.tableName, {
+      nodeType: RelationalNodeType.TABLE,
+      tableName: this.#node.tableName,
+      parent: this.#node.parent,
+      select: {
+        nodeType: RelationalNodeType.SELECT,
+        columns: this.#node.select?.columns ?? [],
+        aliasing: (this.#node.select?.aliasing ?? []).concat([
+          { column, alias },
+        ]),
+      },
+    })
+  }
+
+  where(
+    filter:
+      | FilterGroup<DataStoreType["tables"][TableName]>
+      | FilterTypes<DataStoreType["tables"][TableName]>
+  ): Omit<TableNodeBuilder<DataStoreType, TableName, RowType>, "where"> {
+    return new DefaultTableNodeBuilder(this.#node.tableName, {
+      nodeType: RelationalNodeType.TABLE,
+      tableName: this.#node.tableName,
+      select: this.#node.select,
+      parent: this.#node.parent,
+      where: {
+        nodeType: RelationalNodeType.WHERE,
+        filter,
+      },
+    })
+  }
+}
+
+type FromNodeBuilder<DataStoreType extends RelationalDataStore> = {
+  from<TableName extends keyof DataStoreType["tables"] & string>(
+    tableName: TableName
+  ): TableNodeBuilder<DataStoreType, TableName>
+}
+
+type CteNodeBuilder<DataStoreType extends RelationalDataStore> = {
+  with<TableName extends string, TableRowType extends RelationalDataTable>(
+    tableName: TableName,
+    source: RelationalDataSource<DataStoreType, TableRowType>
+  ): RelationalNodeBuilder<
+    ModifiedStore<DataStoreType, TableName, TableRowType>
+  >
+}
+
+export function from<
+  DataStoreType extends RelationalDataStore,
+  TableName extends keyof DataStoreType["tables"] & string
+>(tableName: TableName): TableNodeBuilder<DataStoreType, TableName> {
+  return new DefaultTableNodeBuilder(tableName)
 }
 
 export const eq: ColumnFilter = (column, value) =>
@@ -223,198 +320,17 @@ export const contains = <
 >(
   column: ContainingColumn,
   value: ColumnValue
-): WhereClause<RowType> => {
+): FilterTypes<RowType> => {
   return {
-    nodeType: RelationalNodeType.WHERE,
-    filter: {
-      column,
-      value,
-      op: ColumnValueContainsOperation.IN,
-    },
-  }
-}
-
-/**
- * Class to manage some context around the current {@link RelationalDataStore}
- */
-export class RelationalQueryContextBase<
-  DataStoreType extends RelationalDataStore
-> implements RelationalQueryContext<DataStoreType>
-{
-  private current?: RelationalQueryNode<RelationalNodeType>
-
-  constructor(node?: RelationalQueryNode<RelationalNodeType>) {
-    this.current = node
-  }
-
-  with<TableName extends string, RowType extends RelationalDataTable>(
-    name: TableName,
-    query: RelationalDataSource<DataStoreType, RowType>
-  ): RelationalQueryContext<ModifiedStore<DataStoreType, TableName, RowType>> {
-    return new RelationalQueryContextBase({
-      parent: this.current,
-      nodeType: RelationalNodeType.CTE,
-      source: query.node,
-      tableName: name,
-    } as CteClause<ModifiedStore<DataStoreType, TableName, RowType>, TableName>)
-  }
-
-  from<TargetTable extends keyof DataStoreType["tables"]>(
-    table: TargetTable
-  ): RelationalTableBuilder<DataStoreType, TargetTable> {
-    return new RelationalTableBuilderImpl({
-      parent: this.current,
-      table,
-      nodeType: RelationalNodeType.TABLE,
-    })
-  }
-
-  join<
-    Left extends keyof DataStoreType["tables"],
-    Right extends keyof DataStoreType["tables"],
-    LeftColumn extends keyof DataStoreType["tables"][Left],
-    RightColumn extends keyof DataStoreType["tables"][Right] &
-      MatchingKey<
-        DataStoreType["tables"][Left],
-        DataStoreType["tables"][Right],
-        LeftColumn
-      >
-  >(
-    left: Left,
-    right: Right,
-    leftColumn: LeftColumn,
-    rightColumn: RightColumn,
-    joinType: JoinType
-  ): void {}
-}
-
-/**
- * Handles building out {@link TableQueryNode} instances
- */
-class RelationalTableBuilderImpl<
-  DataStoreType extends RelationalDataStore,
-  TargetTable extends keyof DataStoreType["tables"],
-  RowType extends RelationalDataTable
-> implements RelationalTableBuilder<DataStoreType, TargetTable, RowType>
-{
-  private clause: TableQueryNode<
-    DataStoreType,
-    TargetTable,
-    DataStoreType["tables"][TargetTable],
-    RowType
-  >
-
-  constructor(
-    clause: TableQueryNode<
-      DataStoreType,
-      TargetTable,
-      DataStoreType["tables"][TargetTable],
-      RowType
-    >
-  ) {
-    this.clause = clause
-  }
-
-  get node(): Readonly<RelationalQueryNode<RelationalNodeType>> {
-    return this.clause
-  }
-
-  /**
-   * Alias a column to have a different name on the returned row type
-   *
-   * @param column The column to rename
-   * @param alias The new column alias
-   * @returns A new {@link SelectBuilder} with the modified types
-   */
-  alias<
-    OldColumn extends keyof RowType &
-      keyof DataStoreType["tables"][TargetTable],
-    AliasColumn extends string
-  >(
-    column: OldColumn,
-    alias: AliasColumn
-  ): RelationalTableBuilder<
-    DataStoreType,
-    TargetTable,
-    AliasedType<RowType, OldColumn, AliasColumn>
-  > {
-    // Build the new clause based on the altered return type
-    const aliasedClause: TableQueryNode<
-      DataStoreType,
-      TargetTable,
-      DataStoreType["tables"][TargetTable],
-      AliasedType<RowType, OldColumn, AliasColumn>
-    > = {
-      parent: this.clause.parent,
-      nodeType: this.clause.nodeType,
-      where: this.clause.where,
-      table: this.clause.table,
-      select: {
-        nodeType: RelationalNodeType.SELECT,
-        columns: this.clause.select?.columns ?? [],
-        aliasing: this.clause.select?.aliasing ?? [],
-      },
-    }
-
-    // Add the new alias
-    aliasedClause.select?.aliasing?.push({ column, alias })
-
-    return new RelationalTableBuilderImpl(aliasedClause)
-  }
-
-  where(
-    clause: WhereClause<DataStoreType["tables"][TargetTable]>
-  ): Omit<
-    RelationalTableBuilder<DataStoreType, TargetTable, RowType>,
-    "where"
-  > {
-    this.clause.where = clause
-    return this
-  }
-
-  /**
-   *
-   * @param columns The set of columns to select
-   * @returns An updated {@link SelectBuilder}
-   */
-  select<
-    Column extends keyof DataStoreType["tables"][TargetTable],
-    SelectType extends {
-      [key in Column]: DataStoreType["tables"][TargetTable][key]
-    }
-  >(
-    ...columns: Column[]
-  ): Omit<
-    RelationalTableBuilder<DataStoreType, TargetTable, SelectType>,
-    "select"
-  > {
-    return new RelationalTableBuilderImpl({
-      parent: this.clause.parent,
-      table: this.clause.table,
-      nodeType: RelationalNodeType.TABLE,
-      select: {
-        columns: columns ?? [],
-        nodeType: RelationalNodeType.SELECT,
-        aliasing: this.clause.select?.aliasing,
-      },
-      where: this.clause.where,
-    })
-  }
-
-  /**
-   * Retrieve a builder that can be used to create {@link Query} objects
-   *
-   * @param ctor A class the implements the given constructor
-   * @returns A new {@link RelationalQueryBuilder} for the table
-   */
-  build(ctor: QueryBuilderCtor<RowType>): Query<RowType> {
-    return new ctor(this.clause).build()
+    column,
+    value,
+    op: ColumnValueContainsOperation.IN,
   }
 }
 
 type BooleanFilter = <RowType>(
-  ...clauses: WhereClause<RowType>[]
-) => WhereClause<RowType>
+  ...clauses: (FilterGroup<RowType> | FilterTypes<RowType>)[]
+) => FilterGroup<RowType>
 
 type ColumnFilter = <
   RowType,
@@ -423,18 +339,15 @@ type ColumnFilter = <
 >(
   column: Column,
   value: ColumnType
-) => WhereClause<RowType>
+) => FilterTypes<RowType>
 
 function ColumnGroupFilterBuilder<RowType>(
   op: BooleanOperation,
-  ...clauses: WhereClause<RowType>[]
-): WhereClause<RowType> {
+  ...clauses: (FilterGroup<RowType> | FilterTypes<RowType>)[]
+): FilterGroup<RowType> {
   return {
-    nodeType: RelationalNodeType.WHERE,
-    filter: {
-      op,
-      filters: clauses.map((c) => c.filter),
-    } as FilterGroup<RowType>,
+    op,
+    filters: clauses,
   }
 }
 
@@ -446,13 +359,10 @@ function ColumnFilterBuilder<
   column: Column,
   value: ColumnType,
   op: ColumnFilteringOperation
-): WhereClause<RowType> {
+): FilterTypes<RowType> {
   return {
-    nodeType: RelationalNodeType.WHERE,
-    filter: {
-      column,
-      value,
-      op,
-    },
+    column,
+    value,
+    op,
   }
 }

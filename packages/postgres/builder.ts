@@ -16,11 +16,14 @@ import {
   type TableQueryNode,
 } from "@telefrek/data/relational/ast"
 import {
+  DefaultRelationalNodeBuilder,
   RelationalQueryBuilder,
-  RelationalQueryContextBase,
-  type RelationalQueryContext,
+  type RelationalNodeBuilder,
 } from "@telefrek/data/relational/builder"
-import type { RelationalDataStore } from "@telefrek/data/relational/index"
+import type {
+  RelationalDataStore,
+  RelationalDataTable,
+} from "@telefrek/data/relational/index"
 import type {
   PostgresColumnType,
   PostgresColumnTypeDebug,
@@ -43,8 +46,8 @@ export type PostgresRelationalDataStore<Database extends PostgresDatabase> = {
 
 export function createRelationalQueryContext<
   Database extends PostgresDatabase
->(): RelationalQueryContext<PostgresRelationalDataStore<Database>> {
-  return new RelationalQueryContextBase()
+>(): RelationalNodeBuilder<PostgresRelationalDataStore<Database>> {
+  return new DefaultRelationalNodeBuilder()
 }
 
 export class PostgresRelationalQuery<RowType> implements Query<RowType> {
@@ -99,14 +102,14 @@ export class BoundPostgresRelationalQuery<
 }
 
 export class PostgresQueryBuilder<
-  RowType
+  RowType extends RelationalDataTable
 > extends RelationalQueryBuilder<RowType> {
   protected override buildQuery<T>(ast: QueryNode): Query<T> {
     if (isRelationalQueryNode(ast) && isTableQueryNode(ast)) {
       return new PostgresRelationalQuery("foo", translateTableQuery(ast))
     }
 
-    throw new Error("Method not implemented.")
+    throw new QueryError("Invalid QueryNode, expected RelationalQueryNode.")
   }
 }
 
@@ -129,7 +132,7 @@ function translateTableQuery(
           .map((c) => (aliasing.has(c) ? `${c} as ${aliasing.get(c)!}` : c))
           .join(", ")
       : "*"
-  } FROM ${tableQueryNode.table} ${
+  } FROM ${tableQueryNode.tableName} ${
     tableQueryNode.where
       ? `WHERE ${translateFilterGroup(tableQueryNode.where.filter)}`
       : ""

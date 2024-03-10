@@ -74,6 +74,7 @@ export enum RelationalNodeType {
   SELECT = "select",
   CTE = "cte",
   JOIN = "join",
+  NONE = "none",
 }
 
 /**

@@ -20,10 +20,10 @@ import {
 /**
  * Represents an internal {@link QueryNode} use for building relational queries
  */
-export interface RelationalQueryNode<NodeType extends RelationalNodeType>
-  extends QueryNode {
-  nodeType: NodeType
-}
+export type RelationalQueryNode<NodeType extends RelationalNodeType> =
+  QueryNode & {
+    nodeType: NodeType
+  }
 
 /**
  * Type guard for {@link RelationalQueryNode}
@@ -47,7 +47,7 @@ export function isRelationalQueryNode(
 /**
  * Represents a filter on a given column like:`table.column {op} value`
  */
-export interface ColumnFilter<TableType, Column extends keyof TableType> {
+export type ColumnFilter<TableType, Column extends keyof TableType> = {
   column: Column
   op: ColumnFilteringOperation
   value: TableType[Column]
@@ -56,11 +56,11 @@ export interface ColumnFilter<TableType, Column extends keyof TableType> {
 /**
  * Special filter for containment operations
  */
-export interface ContainmentFilter<
+export type ContainmentFilter<
   TableType,
   Column extends ContainmentProperty<TableType>,
   ColumnItemType extends ContainmentItemType<TableType, Column>
-> {
+> = {
   column: Column
   op: ColumnValueContainsOperation
   value: ColumnItemType
@@ -117,10 +117,10 @@ export function isContainmentFilter<TableType>(
 /**
  * Filter for columns that are nullable
  */
-export interface NullColumnFilter<
+export type NullColumnFilter<
   TableType,
   Column extends keyof OptionalProperties<TableType>
-> {
+> = {
   column: Column
 }
 
@@ -139,7 +139,7 @@ export type FilterTypes<TableType> =
 /**
  * Represents a group of filters that are bound by a {@link BooleanOperation}
  */
-export interface FilterGroup<TableType> {
+export type FilterGroup<TableType> = {
   filters: (FilterTypes<TableType> | FilterGroup<TableType>)[]
   op: BooleanOperation
 }
@@ -166,10 +166,10 @@ export function isFilterGroup<TableType>(
 /**
  * Defines a CTE clause
  */
-export interface CteClause<
+export type CteClause<
   DataStoreType extends RelationalDataStore,
   TargetTable extends keyof DataStoreType["tables"]
-> extends RelationalQueryNode<RelationalNodeType.CTE> {
+> = RelationalQueryNode<RelationalNodeType.CTE> & {
   source: TableQueryNode<
     DataStoreType,
     TargetTable,
@@ -193,10 +193,10 @@ export function isCteClause<DataStoreType extends RelationalDataStore>(
 /**
  * Represents a where clause
  */
-export interface WhereClause<TableType>
-  extends RelationalQueryNode<RelationalNodeType.WHERE> {
-  filter: FilterGroup<TableType> | FilterTypes<TableType>
-}
+export type WhereClause<TableType> =
+  RelationalQueryNode<RelationalNodeType.WHERE> & {
+    filter: FilterGroup<TableType> | FilterTypes<TableType>
+  }
 
 /**
  * Type guard for {@link WhereClause} identification
@@ -213,11 +213,11 @@ export function isWhereClause<TableType>(
 /**
  * Reipresents a column alias value
  */
-export interface ColumnAlias<
+export type ColumnAlias<
   TableType extends RelationalDataTable,
   Column extends keyof TableType,
   Alias extends string
-> {
+> = {
   column: Column
   alias: Alias
 }
@@ -225,15 +225,15 @@ export interface ColumnAlias<
 /**
  * Rename to match nomenclature
  */
-export interface SelectClause<
+export type SelectClause<
   TableType extends RelationalDataTable,
   Column extends keyof TableType,
   RowType extends RelationalDataTable
-> extends QuerySource<RowType>,
-    RelationalQueryNode<RelationalNodeType.SELECT> {
-  columns: Column[]
-  aliasing?: ColumnAlias<TableType, Column, string>[]
-}
+> = QuerySource<RowType> &
+  RelationalQueryNode<RelationalNodeType.SELECT> & {
+    columns: Column[]
+    aliasing?: ColumnAlias<TableType, Column, string>[]
+  }
 
 /**
  * Type guard for {@link SelectClause} identification
@@ -254,18 +254,21 @@ export function isSelectClause<
 /**
  * Represents a query against a table
  */
-export interface TableQueryNode<
+export type TableQueryNode<
   DataStoreType extends RelationalDataStore,
-  TargetTable extends keyof DataStoreType["tables"],
-  TableType extends DataStoreType["tables"][TargetTable],
-  RowType extends RelationalDataTable = TableType
-> extends RelationalQueryNode<RelationalNodeType.TABLE> {
-  table: TargetTable
-  select?: SelectClause<TableType, keyof TableType, RowType>
-  where?: WhereClause<TableType>
+  TableName extends keyof DataStoreType["tables"],
+  RowType extends RelationalDataTable = DataStoreType["tables"][TableName]
+> = RelationalQueryNode<RelationalNodeType.TABLE> & {
+  tableName: TableName
+  select?: SelectClause<
+    DataStoreType["tables"][TableName],
+    keyof DataStoreType["tables"][TableName],
+    RowType
+  >
+  where?: WhereClause<DataStoreType["tables"][TableName]>
 }
 
-export interface JoinQueryNode<
+export type JoinQueryNode<
   DataStoreType extends RelationalDataStore,
   Left extends keyof DataStoreType["tables"],
   Right extends keyof DataStoreType["tables"],
@@ -282,14 +285,14 @@ export interface JoinQueryNode<
     DataStoreType["tables"][Left],
     DataStoreType["tables"][Right]
   >
-> extends QuerySource<RowType>,
-    RelationalQueryNode<RelationalNodeType.JOIN> {
-  left: Left
-  right: Right
-  leftColumn: LeftColumn
-  rightColumn: RightColumn
-  joinType: JoinType
-}
+> = QuerySource<RowType> &
+  RelationalQueryNode<RelationalNodeType.JOIN> & {
+    left: Left
+    right: Right
+    leftColumn: LeftColumn
+    rightColumn: RightColumn
+    joinType: JoinType
+  }
 
 /**
  * Type guard for {@link TableQueryNode} identification
@@ -304,6 +307,6 @@ export function isTableQueryNode<
   RowType extends RelationalDataTable = TableType
 >(
   node: RelationalQueryNode<RelationalNodeType>
-): node is TableQueryNode<DataStoreType, TargetTable, TableType, RowType> {
+): node is TableQueryNode<DataStoreType, TargetTable, RowType> {
   return node.nodeType === RelationalNodeType.TABLE
 }

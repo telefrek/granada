@@ -8,7 +8,7 @@ import type { OptionalProperties } from "@telefrek/core/type/utils.js"
 /**
  * Represents the basic information about a node in the query AST
  */
-export interface QueryNode {
+export type QueryNode = {
   parent?: QueryNode
   children?: QueryNode[]
 }
@@ -16,8 +16,10 @@ export interface QueryNode {
 /**
  * Represents an operation that changes inputs into outputs
  */
-export interface QueryOperation<In extends QueryNode, Out extends QueryNode>
-  extends QueryNode {
+export type QueryOperation<
+  In extends QueryNode,
+  Out extends QueryNode
+> = QueryNode & {
   inputs: In[]
   outputs: Out[]
 }
@@ -25,6 +27,6 @@ export interface QueryOperation<In extends QueryNode, Out extends QueryNode>
 /**
  * Represents a source of values and their types as well as optional default values
  */
-export interface QuerySource<T> extends QueryNode {
+export type QuerySource<T> = QueryNode & {
   defaults?: Partial<OptionalProperties<T>>
 }

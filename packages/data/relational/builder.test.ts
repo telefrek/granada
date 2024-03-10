@@ -1,10 +1,19 @@
-import { and, contains, eq, gt, gte, not, useDataStore } from "./builder"
+import {
+  DefaultRelationalNodeBuilder,
+  and,
+  contains,
+  eq,
+  from,
+  gt,
+  gte,
+  not,
+  useDataStore,
+} from "./builder"
 import {
   InMemoryQueryExecutor,
   InMemoryRelationalQueryBuilder,
   type InMemoryRelationalDataStore,
 } from "./memory"
-import { JoinType } from "./types"
 
 enum Category {
   TEST,
@@ -229,14 +238,11 @@ describe("Relational query builder should support basic functionality", () => {
   })
 
   it("should allow cte clauses", async () => {
-    const store = useDataStore<TestDataStore>()
-
     const result = await executor.run(
-      store
+      useDataStore<TestDataStore>()
         .with(
           "foo",
-          // testFrom("blah")
-          store.from("orders").select("name", "categories").where(gt("id", 1))
+          from("orders").select("name", "categories").where(gt("id", 1))
         )
         .from("foo")
         .select("name")
@@ -261,6 +267,12 @@ describe("Relational query builder should support basic functionality", () => {
       name2: string
     }
 
-    store.join("orders", "customers", "id", "id", JoinType.INNER)
+    new DefaultRelationalNodeBuilder<TestDataStore>().with(
+      "bar",
+      from("orders")
+    )
+
+    // TODO: Add filtering type (equality)
+    // store.join("orders", "customers", "id", "id", JoinType.INNER)
   })
 })
