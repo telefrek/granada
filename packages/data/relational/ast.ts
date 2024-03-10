@@ -5,16 +5,16 @@
 import type { OptionalProperties } from "@telefrek/core/type/utils"
 import type { RelationalDataStore, RelationalDataTable } from "."
 import type { QueryNode, QuerySource } from "../query/ast"
-
-/**
- * The supported types a {@link RelationalQueryNode} can have
- */
-export enum RelationalNodeType {
-  TABLE = "table",
-  WHERE = "where",
-  SELECT = "select",
-  CTE = "cte",
-}
+import {
+  BooleanOperation,
+  ColumnFilteringOperation,
+  ColumnValueContainsOperation,
+  RelationalNodeType,
+  type ContainmentItemType,
+  type ContainmentProperty,
+  type JoinType,
+  type MergedNonOverlappingType,
+} from "./types"
 
 /**
  * Represents an internal {@link QueryNode} use for building relational queries
@@ -31,40 +31,16 @@ export interface RelationalQueryNode<NodeType extends RelationalNodeType>
  * @returns True if the node is a {@link RelationalQueryNode}
  */
 export function isRelationalQueryNode(
-  node: QueryNode,
+  node: QueryNode
 ): node is RelationalQueryNode<RelationalNodeType> {
   return (
     typeof node === "object" &&
     node !== null &&
     "nodeType" in node &&
     Object.values(RelationalNodeType).includes(
-      node.nodeType as RelationalNodeType,
+      node.nodeType as RelationalNodeType
     )
   )
-}
-
-/**
- * Represents different types of filters available
- */
-export enum ColumnFilteringOperation {
-  EQ = "=",
-  LT = "<",
-  GT = ">",
-  LTE = "<=",
-  GTE = ">=",
-}
-
-export enum ColumnValueContainsOperation {
-  IN = "in",
-}
-
-/**
- * Represents different boolean operations available
- */
-export enum BooleanOperation {
-  AND = "and",
-  OR = "or",
-  NOT = "not",
 }
 
 /**
@@ -77,36 +53,12 @@ export interface ColumnFilter<TableType, Column extends keyof TableType> {
 }
 
 /**
- * Type that extracts keys that are arrays or strings which are valid for
- * {@link ColumnValueContainsOperation} filters
- */
-export type ContainmentProperty<TableType> = {
-  [K in keyof TableType]: TableType[K] extends Array<any>
-    ? K
-    : TableType[K] extends string
-      ? K
-      : never
-}[keyof TableType]
-
-/**
- * Helps to extract the type from the given {@link ContainmentProperty}
- */
-export type ContainmentItemType<
-  TableType,
-  Column extends ContainmentProperty<TableType>,
-> = TableType[Column] extends (infer ItemType)[]
-  ? ItemType
-  : TableType[Column] extends string
-    ? TableType[Column]
-    : never
-
-/**
  * Special filter for containment operations
  */
 export interface ContainmentFilter<
   TableType,
   Column extends ContainmentProperty<TableType>,
-  ColumnItemType extends ContainmentItemType<TableType, Column>,
+  ColumnItemType extends ContainmentItemType<TableType, Column>
 > {
   column: Column
   op: ColumnValueContainsOperation
@@ -120,7 +72,7 @@ export interface ContainmentFilter<
  * @returns True if the filter is a {@link ColumnFilter}
  */
 export function isColumnFilter<TableType>(
-  filter: FilterTypes<TableType> | FilterGroup<TableType>,
+  filter: FilterTypes<TableType> | FilterGroup<TableType>
 ): filter is ColumnFilter<TableType, keyof TableType> {
   return (
     typeof filter === "object" &&
@@ -130,7 +82,7 @@ export function isColumnFilter<TableType>(
     "op" in filter &&
     typeof filter.op === "string" &&
     Object.values(ColumnFilteringOperation).includes(
-      filter.op as ColumnFilteringOperation,
+      filter.op as ColumnFilteringOperation
     )
   )
 }
@@ -142,7 +94,7 @@ export function isColumnFilter<TableType>(
  * @returns True if the filter is a {@link ContainmentFilter}
  */
 export function isContainmentFilter<TableType>(
-  filter: FilterTypes<TableType> | FilterGroup<TableType>,
+  filter: FilterTypes<TableType> | FilterGroup<TableType>
 ): filter is ContainmentFilter<
   TableType,
   ContainmentProperty<TableType>,
@@ -156,7 +108,7 @@ export function isContainmentFilter<TableType>(
     "op" in filter &&
     typeof filter.op === "string" &&
     Object.values(ColumnValueContainsOperation).includes(
-      filter.op as ColumnValueContainsOperation,
+      filter.op as ColumnValueContainsOperation
     )
   )
 }
@@ -166,7 +118,7 @@ export function isContainmentFilter<TableType>(
  */
 export interface NullColumnFilter<
   TableType,
-  Column extends keyof OptionalProperties<TableType>,
+  Column extends keyof OptionalProperties<TableType>
 > {
   column: Column
 }
@@ -198,13 +150,15 @@ export interface FilterGroup<TableType> {
  * @returns True if the filter is a {@link FilterGroup}
  */
 export function isFilterGroup<TableType>(
-  filter: unknown,
+  filter: FilterTypes<TableType> | FilterGroup<TableType>
 ): filter is FilterGroup<TableType> {
   return (
     typeof filter === "object" &&
     filter !== null &&
     "filters" in filter &&
-    "op" in filter
+    Array.isArray(filter.filters) &&
+    typeof filter.op === "string" &&
+    Object.values(BooleanOperation).includes(filter.op as BooleanOperation)
   )
 }
 
@@ -213,14 +167,24 @@ export function isFilterGroup<TableType>(
  */
 export interface CteClause<
   DataStoreType extends RelationalDataStore,
-  TargetTable extends keyof DataStoreType["tables"],
+  TargetTable extends keyof DataStoreType["tables"]
 > extends RelationalQueryNode<RelationalNodeType.CTE> {
-  source: TableQueryNode<DataStoreType, TargetTable>
+  source: TableQueryNode<
+    DataStoreType,
+    TargetTable,
+    DataStoreType["tables"][TargetTable]
+  >
   tableName: TargetTable
 }
 
+/**
+ * Type guard for {@link WhereClause} identification
+ *
+ * @param node The {@link QueryNode} to inspect
+ * @returns True if the node is a {@link WhereClause}
+ */
 export function isCteClause<DataStoreType extends RelationalDataStore>(
-  node: RelationalQueryNode<RelationalNodeType>,
+  node: RelationalQueryNode<RelationalNodeType>
 ): node is CteClause<DataStoreType, keyof DataStoreType["tables"]> {
   return node.nodeType === RelationalNodeType.CTE
 }
@@ -236,21 +200,22 @@ export interface WhereClause<TableType>
 /**
  * Type guard for {@link WhereClause} identification
  *
- * @param node The {@link QueryNode} to inspect
+ * @param node The {@link RelationalQueryNode} to inspect
  * @returns True if the node is a {@link WhereClause}
  */
 export function isWhereClause<TableType>(
-  node: QueryNode,
+  node: RelationalQueryNode<RelationalNodeType>
 ): node is WhereClause<TableType> {
-  return (
-    isRelationalQueryNode(node) && node.nodeType === RelationalNodeType.WHERE
-  )
+  return node.nodeType === RelationalNodeType.WHERE
 }
 
+/**
+ * Reipresents a column alias value
+ */
 export interface ColumnAlias<
   TableType extends RelationalDataTable,
   Column extends keyof TableType,
-  Alias extends string,
+  Alias extends string
 > {
   column: Column
   alias: Alias
@@ -262,7 +227,7 @@ export interface ColumnAlias<
 export interface SelectClause<
   TableType extends RelationalDataTable,
   Column extends keyof TableType,
-  RowType,
+  RowType extends RelationalDataTable
 > extends QuerySource<RowType>,
     RelationalQueryNode<RelationalNodeType.SELECT> {
   columns: Column[]
@@ -272,17 +237,17 @@ export interface SelectClause<
 /**
  * Type guard for {@link SelectClause} identification
  *
- * @param node The {@link QueryNode} to inspect
+ * @param node The {@link RelationalQueryNode} to inspect
  * @returns True if the node is a {@link SelectClause}
  */
 export function isSelectClause<
   TableType extends RelationalDataTable,
   Column extends keyof TableType,
-  RowType = Pick<TableType, Column>,
->(node: QueryNode): node is SelectClause<TableType, Column, RowType> {
-  return (
-    isRelationalQueryNode(node) && node.nodeType === RelationalNodeType.SELECT
-  )
+  RowType extends RelationalDataTable = Pick<TableType, Column>
+>(
+  node: RelationalQueryNode<RelationalNodeType>
+): node is SelectClause<TableType, Column, RowType> {
+  return node.nodeType === RelationalNodeType.SELECT
 }
 
 /**
@@ -291,29 +256,53 @@ export function isSelectClause<
 export interface TableQueryNode<
   DataStoreType extends RelationalDataStore,
   TargetTable extends keyof DataStoreType["tables"],
-  TableType extends RelationalDataTable = DataStoreType["tables"][TargetTable],
-  RowType = TableType,
+  TableType extends DataStoreType["tables"][TargetTable],
+  RowType extends RelationalDataTable = TableType
 > extends RelationalQueryNode<RelationalNodeType.TABLE> {
   table: TargetTable
   select?: SelectClause<TableType, keyof TableType, RowType>
   where?: WhereClause<TableType>
 }
 
+export interface JoinQueryNode<
+  DataStoreType extends RelationalDataStore,
+  Left extends keyof DataStoreType["tables"],
+  Right extends keyof DataStoreType["tables"],
+  LeftColumn extends keyof DataStoreType["tables"][Left],
+  RightColumn extends keyof {
+    [key in keyof DataStoreType["tables"][Right]]: DataStoreType["tables"][Right] extends DataStoreType["tables"][Left][LeftColumn]
+      ? key
+      : never
+  },
+  RowType extends MergedNonOverlappingType<
+    DataStoreType["tables"][Left],
+    DataStoreType["tables"][Right]
+  > = MergedNonOverlappingType<
+    DataStoreType["tables"][Left],
+    DataStoreType["tables"][Right]
+  >
+> extends QuerySource<RowType>,
+    RelationalQueryNode<RelationalNodeType.JOIN> {
+  left: Left
+  right: Right
+  leftColumn: LeftColumn
+  rightColumn: RightColumn
+  joinType: JoinType
+}
+
 /**
  * Type guard for {@link TableQueryNode} identification
  *
- * @param node The {@link QueryNode} to inspect
+ * @param node The {@link RelationalQueryNode} to inspect
  * @returns True if the node is a {@link TableQueryNode}
  */
 export function isTableQueryNode<
   DataStoreType extends RelationalDataStore,
   TargetTable extends keyof DataStoreType["tables"],
-  TableType extends RelationalDataTable = DataStoreType["tables"][TargetTable],
-  RowType = TableType,
+  TableType extends DataStoreType["tables"][TargetTable],
+  RowType extends RelationalDataTable = TableType
 >(
-  node: QueryNode,
+  node: RelationalQueryNode<RelationalNodeType>
 ): node is TableQueryNode<DataStoreType, TargetTable, TableType, RowType> {
-  return (
-    isRelationalQueryNode(node) && node.nodeType === RelationalNodeType.TABLE
-  )
+  return node.nodeType === RelationalNodeType.TABLE
 }

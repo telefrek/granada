@@ -82,7 +82,7 @@ describe("Relational query builder should support basic functionality", () => {
     const result = await executor.run(
       useDataStore<TestDataStore>()
         .from("orders")
-        .build(InMemoryRelationalQueryBuilder),
+        .build(InMemoryRelationalQueryBuilder)
     )
     expect(result).not.toBeUndefined()
     if (Array.isArray(result.rows)) {
@@ -95,7 +95,7 @@ describe("Relational query builder should support basic functionality", () => {
       useDataStore<TestDataStore>()
         .from("orders")
         .where(gt("id", 2))
-        .build(InMemoryRelationalQueryBuilder),
+        .build(InMemoryRelationalQueryBuilder)
     )
 
     if (Array.isArray(result.rows)) {
@@ -106,7 +106,7 @@ describe("Relational query builder should support basic functionality", () => {
       useDataStore<TestDataStore>()
         .from("orders")
         .where(gte("id", 2))
-        .build(InMemoryRelationalQueryBuilder),
+        .build(InMemoryRelationalQueryBuilder)
     )
 
     if (Array.isArray(result.rows)) {
@@ -120,7 +120,7 @@ describe("Relational query builder should support basic functionality", () => {
       useDataStore<TestDataStore>()
         .from("orders")
         .where(contains("name", "ord3"))
-        .build(InMemoryRelationalQueryBuilder),
+        .build(InMemoryRelationalQueryBuilder)
     )
 
     if (Array.isArray(result.rows)) {
@@ -131,7 +131,7 @@ describe("Relational query builder should support basic functionality", () => {
       useDataStore<TestDataStore>()
         .from("orders")
         .where(contains("categories", Category.TEST))
-        .build(InMemoryRelationalQueryBuilder),
+        .build(InMemoryRelationalQueryBuilder)
     )
 
     if (Array.isArray(result.rows)) {
@@ -142,7 +142,7 @@ describe("Relational query builder should support basic functionality", () => {
       useDataStore<TestDataStore>()
         .from("orders")
         .where(contains("categories", Category.PURCHASE))
-        .build(InMemoryRelationalQueryBuilder),
+        .build(InMemoryRelationalQueryBuilder)
     )
 
     if (Array.isArray(result.rows)) {
@@ -156,7 +156,7 @@ describe("Relational query builder should support basic functionality", () => {
       useDataStore<TestDataStore>()
         .from("orders")
         .select("name", "createdAt")
-        .build(InMemoryRelationalQueryBuilder),
+        .build(InMemoryRelationalQueryBuilder)
     )
     expect(result).not.toBeUndefined()
     if (Array.isArray(result.rows)) {
@@ -197,7 +197,7 @@ describe("Relational query builder should support basic functionality", () => {
         .from("orders")
         .select("name")
         .where(and(contains("categories", Category.PURCHASE), not(eq("id", 1))))
-        .build(InMemoryRelationalQueryBuilder),
+        .build(InMemoryRelationalQueryBuilder)
     )
     expect(result).not.toBeUndefined()
     if (Array.isArray(result.rows)) {
@@ -214,7 +214,7 @@ describe("Relational query builder should support basic functionality", () => {
         .select("name", "createdAt")
         .alias("name", "foo")
         .alias("createdAt", "date")
-        .build(InMemoryRelationalQueryBuilder),
+        .build(InMemoryRelationalQueryBuilder)
     )
 
     if (Array.isArray(result.rows)) {
@@ -234,12 +234,13 @@ describe("Relational query builder should support basic functionality", () => {
       store
         .with(
           "foo",
-          store.from("orders").select("name", "categories").where(gt("id", 1)),
+          // testFrom("blah")
+          store.from("orders").select("name", "categories").where(gt("id", 1))
         )
         .from("foo")
         .select("name")
         .where(contains("categories", Category.PURCHASE))
-        .build(InMemoryRelationalQueryBuilder),
+        .build(InMemoryRelationalQueryBuilder)
     )
 
     if (Array.isArray(result.rows)) {

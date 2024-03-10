@@ -35,14 +35,16 @@ export interface ParameterizedQuery<T, U> extends Query<U> {
 /**
  * Represents an object that is capable of executing a query
  */
-export interface QueryExecutor {
+export interface QueryExecutor<Q extends any = any> {
   /**
    * Runs the given query and produces a result
    * @param query The {@link Query} to run
    *
    * @returns Either a {@link QueryResult} or {@link StreamingQueryResult}
    */
-  run<T>(query: Query<T>): Promise<QueryResult<T> | StreamingQueryResult<T>>
+  run<T extends Q>(
+    query: Query<T>
+  ): Promise<QueryResult<T> | StreamingQueryResult<T>>
 }
 
 /**
