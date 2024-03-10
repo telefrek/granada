@@ -13,6 +13,7 @@ import {
   type ContainmentItemType,
   type ContainmentProperty,
   type JoinType,
+  type MatchingKey,
   type MergedNonOverlappingType,
 } from "./types"
 
@@ -269,11 +270,11 @@ export interface JoinQueryNode<
   Left extends keyof DataStoreType["tables"],
   Right extends keyof DataStoreType["tables"],
   LeftColumn extends keyof DataStoreType["tables"][Left],
-  RightColumn extends keyof {
-    [key in keyof DataStoreType["tables"][Right]]: DataStoreType["tables"][Right] extends DataStoreType["tables"][Left][LeftColumn]
-      ? key
-      : never
-  },
+  RightColumn extends keyof MatchingKey<
+    DataStoreType["tables"][Left],
+    DataStoreType["tables"][Right],
+    LeftColumn
+  >,
   RowType extends MergedNonOverlappingType<
     DataStoreType["tables"][Left],
     DataStoreType["tables"][Right]

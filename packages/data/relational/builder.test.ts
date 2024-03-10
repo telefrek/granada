@@ -4,6 +4,7 @@ import {
   InMemoryRelationalQueryBuilder,
   type InMemoryRelationalDataStore,
 } from "./memory"
+import { JoinType } from "./types"
 
 enum Category {
   TEST,
@@ -247,5 +248,19 @@ describe("Relational query builder should support basic functionality", () => {
       expect(result.rows.length).toBe(1)
       expect(result.rows[0].name).toBe(STORE.orders[2].name)
     }
+  })
+
+  it("should allow basic inner joins", () => {
+    const store = useDataStore<TestDataStore>()
+    type Testing = {
+      id: number
+      name: string
+    }
+    type Testing2 = {
+      id2: number
+      name2: string
+    }
+
+    store.join("orders", "customers", "id", "id", JoinType.INNER)
   })
 })

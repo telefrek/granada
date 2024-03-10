@@ -20,6 +20,8 @@ import {
   RelationalNodeType,
   type ContainmentItemType,
   type ContainmentProperty,
+  type JoinType,
+  type MatchingKey,
   type ModifiedStore,
 } from "./types"
 
@@ -87,14 +89,6 @@ export function testFrom<
   })
 }
 
-// export const join = <
-//   JoinRowType,
-//   JoinSource extends RelationalDataSource<DataStoreType, JoinRowType>
-// >(
-//   joinSource: JoinSoure,
-//   joinType: JoinType
-// ): void
-
 /**
  * Handles building out {@link TableQueryNode} instances
  */
@@ -160,7 +154,7 @@ export interface RelationalQueryContext<
    * Starts a new CTE for the current query
    *
    * @param name The name for the CTE
-   * @param query The {@link RelationalQueryProvider} that generates the CTE
+   * @param query The {@link RelationalDataSource} that generates the CTE
    * @returns
    */
   with<TableName extends string, RowType extends RelationalDataTable>(
@@ -178,6 +172,24 @@ export interface RelationalQueryContext<
   from<TargetTable extends keyof DataStoreType["tables"]>(
     table: TargetTable
   ): RelationalTableBuilder<DataStoreType, TargetTable>
+
+  join<
+    Left extends keyof DataStoreType["tables"],
+    Right extends keyof DataStoreType["tables"],
+    LeftColumn extends keyof DataStoreType["tables"][Left],
+    RightColumn extends keyof DataStoreType["tables"][Right] &
+      MatchingKey<
+        DataStoreType["tables"][Left],
+        DataStoreType["tables"][Right],
+        LeftColumn
+      >
+  >(
+    left: Left,
+    right: Right,
+    leftColumn: LeftColumn,
+    rightColumn: RightColumn,
+    joinType: JoinType
+  ): void
 }
 
 export const eq: ColumnFilter = (column, value) =>
@@ -256,6 +268,24 @@ export class RelationalQueryContextBase<
       nodeType: RelationalNodeType.TABLE,
     })
   }
+
+  join<
+    Left extends keyof DataStoreType["tables"],
+    Right extends keyof DataStoreType["tables"],
+    LeftColumn extends keyof DataStoreType["tables"][Left],
+    RightColumn extends keyof DataStoreType["tables"][Right] &
+      MatchingKey<
+        DataStoreType["tables"][Left],
+        DataStoreType["tables"][Right],
+        LeftColumn
+      >
+  >(
+    left: Left,
+    right: Right,
+    leftColumn: LeftColumn,
+    rightColumn: RightColumn,
+    joinType: JoinType
+  ): void {}
 }
 
 /**

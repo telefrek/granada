@@ -12,10 +12,10 @@ export type MergedType<A, B> = A & B
 /**
  * Merges the two types such that keys in A override any keys in B
  */
-export type MergedNonOverlappingType<
+export type MergedNonOverlappingType<A, B> = MergedType<
   A,
-  B extends { [K in keyof B]: K extends keyof A ? never : B[K] }
-> = MergedType<A, B>
+  { [K in keyof B]: K extends keyof A ? never : B[K] }
+>
 
 /**
  * A modiefied {@link RelationalDataStore} with a new key and table definition
@@ -99,3 +99,12 @@ export type ContainmentItemType<
   : TableType[Column] extends string
   ? TableType[Column]
   : never
+
+export type MatchingKey<Left, Right, LeftColumn extends keyof Left> = KeyofType<
+  Right,
+  Left[LeftColumn]
+>
+
+export type KeyofType<T, K> = {
+  [key in keyof T]: T[key] extends K ? key : never
+}[keyof T]
