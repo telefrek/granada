@@ -209,6 +209,9 @@ export class DefaultRelationalNodeBuilder<
   > {
     const node = source.asNode()
     if (isTableQueryNode(node)) {
+      // Nodes may be built from projections
+      node.parent = node.parent ?? this.#projections.get(node.tableName)
+
       this.#projections.set(tableName, {
         nodeType: RelationalNodeType.CTE,
         tableName,

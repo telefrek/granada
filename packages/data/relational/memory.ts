@@ -72,7 +72,7 @@ type InMemoryQuerySourceMaterializer<
 type InMemoryQuerySegmentMaterializer<
   DataStoreType extends RelationalDataStore,
   TargetTable extends keyof DataStoreType["tables"],
-  T extends RelationalDataTable
+  T extends RelationalDataTable = DataStoreType["tables"][TargetTable]
 > = (
   store: InMemoryRelationalDataStore<DataStoreType>,
   node: TableQueryNode<
@@ -142,15 +142,15 @@ export class InMemoryQueryExecutor<DataStoreType extends RelationalDataStore>
 function createMaterializer<
   DataStoreType extends RelationalDataStore,
   TargetTable extends keyof DataStoreType["tables"],
-  T extends RelationalDataTable
+  T extends RelationalDataTable = DataStoreType["tables"][TargetTable]
 >(
   table: TargetTable
 ): InMemoryQuerySegmentMaterializer<DataStoreType, TargetTable, T> {
-  return (store, node, tempTables) => {
+  return (store, node, projections) => {
     let rows =
       node.tableName in store
         ? store[node.tableName]
-        : (tempTables.get(
+        : (projections.get(
             node.tableName as string
           ) as DataStoreType["tables"][TargetTable][]) ?? []
     let ret: T[] = []
@@ -191,32 +191,50 @@ export class InMemoryRelationalQueryBuilder<
     super(queryNode)
   }
 
-  protected override buildQuery(ast: QueryNode): Query<RowType> {
+  protected override buildQuery(node: QueryNode): Query<RowType> {
     // Verify we have a relational node
-    if (isRelationalQueryNode(ast) && isTableQueryNode(ast)) {
+    if (isRelationalQueryNode(node) && isTableQueryNode(node)) {
       return new InMemoryQuery("name", (source) => {
-        const tempTables: Map<string, unknown[]> = new Map()
+        const projections: Map<string, unknown[]> = new Map()
 
-        if (ast.parent !== undefined) {
-          // Climb the parent tree
-          if (isRelationalQueryNode(ast.parent) && isCteClause(ast.parent)) {
-            tempTables.set(
-              ast.parent.tableName as string,
-              createMaterializer(ast.parent.tableName)(
-                source,
-                ast.parent.source,
-                tempTables
-              )
-            )
-          }
-        }
-
-        const materializer = createMaterializer(ast.tableName)
-        return materializer(source, ast, tempTables)
+        const materializer = this.unWrapProjections(source, node, projections)
+        return materializer(source, node, projections)
       })
     }
 
     throw new QueryError("Node is not a RelationalQueryNode")
+  }
+
+  unWrapProjections<
+    Store extends RelationalDataStore,
+    TableName extends keyof Store["tables"]
+  >(
+    source: InMemoryRelationalDataStore<Store>,
+    tableNode: TableQueryNode<Store, TableName>,
+    projections: Map<string, unknown[]>
+  ): InMemoryQuerySegmentMaterializer<Store, TableName> {
+    // Check for a parent
+    if (
+      tableNode.parent !== undefined &&
+      isRelationalQueryNode(tableNode.parent) &&
+      isCteClause(tableNode.parent)
+    ) {
+      // Build the projection
+      const cte = tableNode.parent
+
+      const materializer = this.unWrapProjections(
+        source,
+        cte.source,
+        projections
+      )
+
+      projections.set(
+        cte.tableName,
+        materializer(source, cte.source, projections)
+      )
+    }
+
+    return createMaterializer(tableNode.tableName)
   }
 }
 

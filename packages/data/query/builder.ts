@@ -22,10 +22,10 @@ export type QueryBuilder<T> = {
  * An abstract builder that uses the {@link QueryNode} AST
  */
 export abstract class QueryBuilderBase<T> implements QueryBuilder<T> {
-  protected ast: QueryNode = {}
+  protected node: QueryNode = {}
 
   constructor(root: QueryNode = {}) {
-    this.ast = root
+    this.node = root
   }
 
   /**
@@ -36,9 +36,9 @@ export abstract class QueryBuilderBase<T> implements QueryBuilder<T> {
    *
    * @returns A {@link Query} that represents that AST
    */
-  protected abstract buildQuery<T>(ast: QueryNode): Query<T>
+  protected abstract buildQuery<T>(node: QueryNode): Query<T>
 
   build(): Query<T> {
-    return this.buildQuery(this.ast)
+    return this.buildQuery(this.node)
   }
 }
