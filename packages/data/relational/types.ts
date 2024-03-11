@@ -2,7 +2,7 @@
  * Type helpers for Relational Queries
  */
 
-import type { RelationalDataStore } from "./index"
+import type { RelationalDataStore, RelationalDataTable } from "./index"
 
 /**
  * Merges the two types
@@ -23,7 +23,7 @@ export type MergedNonOverlappingType<A, B> = MergedType<
 export type ModifiedStore<
   Left extends RelationalDataStore,
   N extends string,
-  RowType
+  RowType extends RelationalDataTable
 > = {
   tables: { [key in keyof Left["tables"]]: Left["tables"][key] } & Record<
     N,

@@ -237,6 +237,22 @@ describe("Relational query builder should support basic functionality", () => {
     }
   })
 
+  it("should allow tables to be aliased", async () => {
+    // This should get the projected row with only 2 columns back
+    const result = await executor.run(
+      useDataStore<TestDataStore>()
+        .from("orders", "newOrders")
+        .select("name", "createdAt")
+        .build(InMemoryRelationalQueryBuilder)
+    )
+
+    expect(result).not.toBeUndefined()
+    if (Array.isArray(result.rows)) {
+      expect(result.rows.length).toBe(STORE.orders.length)
+      expect(Object.keys(result.rows[0]).length).toEqual(2)
+    }
+  })
+
   it("should allow cte clauses", async () => {
     const result = await executor.run(
       useDataStore<TestDataStore>()

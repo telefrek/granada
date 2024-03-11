@@ -129,10 +129,12 @@ function translateTableQuery(
   return `SELECT ${
     tableQueryNode.select
       ? tableQueryNode.select.columns
-          .map((c) => (aliasing.has(c) ? `${c} as ${aliasing.get(c)!}` : c))
+          .map((c) => (aliasing.has(c) ? `${c} AS ${aliasing.get(c)!}` : c))
           .join(", ")
       : "*"
   } FROM ${tableQueryNode.tableName} ${
+    tableQueryNode.tableAlias ? `AS ${tableQueryNode.tableAlias}` : ""
+  } ${
     tableQueryNode.where
       ? `WHERE ${translateFilterGroup(tableQueryNode.where.filter)}`
       : ""

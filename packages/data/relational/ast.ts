@@ -257,9 +257,11 @@ export function isSelectClause<
 export type TableQueryNode<
   DataStoreType extends RelationalDataStore,
   TableName extends keyof DataStoreType["tables"],
-  RowType extends RelationalDataTable = DataStoreType["tables"][TableName]
+  RowType extends RelationalDataTable = DataStoreType["tables"][TableName],
+  TableAlias extends keyof DataStoreType["tables"] = never
 > = RelationalQueryNode<RelationalNodeType.TABLE> & {
   tableName: TableName
+  tableAlias?: TableAlias
   select?: SelectClause<
     DataStoreType["tables"][TableName],
     keyof DataStoreType["tables"][TableName],
