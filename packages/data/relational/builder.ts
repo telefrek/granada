@@ -14,7 +14,9 @@ import {
   type FilterGroup,
   type FilterTypes,
   type RelationalQueryNode,
+  type SelectClause,
   type TableQueryNode,
+  type WhereClause,
 } from "./ast"
 import {
   BooleanOperation,
@@ -74,53 +76,43 @@ export type RelationalNodeBuilder<
   CteNodeBuilder<DataStoreType> &
   FromNodeBuilder<DataStoreType>
 
-type TableNodeBuilder<
-  DataStoreType extends RelationalDataStore,
-  TableName extends keyof DataStoreType["tables"],
-  RowType extends RelationalDataTable = DataStoreType["tables"][TableName],
-  TableAlias extends keyof DataStoreType["tables"] = never
-> = RelationalDataSource<DataStoreType, RowType> & {
-  select<Column extends keyof DataStoreType["tables"][TableName] & string>(
-    ...columns: Column[]
-  ): Omit<
-    TableNodeBuilder<
-      DataStoreType,
-      TableName,
-      Pick<DataStoreType["tables"][TableName], Column>,
-      TableAlias
-    >,
-    "select"
-  >
-
-  alias<
-    Column extends keyof RowType &
-      keyof DataStoreType["tables"][TableName] &
-      string,
-    Alias extends string
-  >(
-    column: Column,
-    alias: Alias
-  ): TableNodeBuilder<
-    DataStoreType,
-    TableName,
-    AliasedType<RowType, Column, Alias>,
-    TableAlias
-  >
-
-  where(
-    filter:
-      | FilterGroup<DataStoreType["tables"][TableName]>
-      | FilterTypes<DataStoreType["tables"][TableName]>
-  ): Omit<
-    TableNodeBuilder<DataStoreType, TableName, RowType, TableAlias>,
-    "where"
-  >
-}
-
 export function useDataStore<
   DataStoreType extends RelationalDataStore
 >(): RelationalNodeBuilder<DataStoreType> {
   return new DefaultRelationalNodeBuilder()
+}
+
+type FromNodeBuilder<DataStoreType extends RelationalDataStore> = {
+  from<TableName extends keyof DataStoreType["tables"]>(
+    tableName: TableName
+  ): TableNodeBuilder<DataStoreType, TableName>
+
+  from<TableName extends keyof DataStoreType["tables"], Alias extends string>(
+    tableName: TableName,
+    tableAlias: Alias
+  ): TableNodeBuilder<
+    ModifiedStore<
+      DataStoreType,
+      Extract<TableName, string>,
+      DataStoreType["tables"][TableName]
+    >,
+    TableName,
+    DataStoreType["tables"][TableName],
+    Alias
+  >
+}
+
+type CteNodeBuilder<DataStoreType extends RelationalDataStore> = {
+  with<TableAlias extends string, TableRowType extends RelationalDataTable>(
+    tableName: TableAlias,
+    source: TableNodeBuilder<
+      DataStoreType,
+      keyof DataStoreType["tables"],
+      TableRowType
+    >
+  ): RelationalNodeBuilder<
+    ModifiedStore<DataStoreType, TableAlias, TableRowType>
+  >
 }
 
 export class DefaultRelationalNodeBuilder<
@@ -138,17 +130,14 @@ export class DefaultRelationalNodeBuilder<
     this.#projections = projections ?? new Map()
   }
 
-  from<TableName extends keyof DataStoreType["tables"] & string>(
+  from<TableName extends keyof DataStoreType["tables"]>(
     tableName: TableName
   ): TableNodeBuilder<
     DataStoreType,
     TableName,
     DataStoreType["tables"][TableName]
   >
-  from<
-    TableName extends keyof DataStoreType["tables"] & string,
-    Alias extends string
-  >(
+  from<TableName extends keyof DataStoreType["tables"], Alias extends string>(
     tableName: TableName,
     tableAlias: Alias
   ): TableNodeBuilder<
@@ -158,7 +147,7 @@ export class DefaultRelationalNodeBuilder<
     Alias
   >
   from<
-    TableName extends keyof DataStoreType["tables"] & string,
+    TableName extends keyof DataStoreType["tables"],
     Alias extends string = never
   >(
     tableName: TableName,
@@ -181,31 +170,25 @@ export class DefaultRelationalNodeBuilder<
         TableName,
         DataStoreType["tables"][TableName],
         Alias
-      >(tableName, {
-        parent: this.#projections.get(tableName),
-        nodeType: RelationalNodeType.TABLE,
-        tableName,
-        tableAlias: tableAlias,
-      })
+      >(tableName, this.#projections.get(tableName as string), tableAlias)
     }
 
     return new DefaultTableNodeBuilder<
       DataStoreType,
       TableName,
       DataStoreType["tables"][TableName]
-    >(tableName, {
-      parent: this.#projections.get(tableName),
-      nodeType: RelationalNodeType.TABLE,
-      tableName,
-    })
+    >(tableName, this.#projections.get(tableName as string))
   }
 
-  with<TableName extends string, TableRowType extends RelationalDataTable>(
-    tableName: TableName,
-    source: RelationalDataSource<DataStoreType, TableRowType>
+  with<TableAlias extends string, TableRowType extends RelationalDataTable>(
+    tableName: TableAlias,
+    source: TableNodeBuilder<
+      DataStoreType,
+      keyof DataStoreType["tables"],
+      TableRowType
+    >
   ): RelationalNodeBuilder<
-    ModifiedStore<DataStoreType, TableName, TableRowType>,
-    never
+    ModifiedStore<DataStoreType, TableAlias, TableRowType>
   > {
     const node = source.asNode()
     if (isTableQueryNode(node)) {
@@ -216,9 +199,12 @@ export class DefaultRelationalNodeBuilder<
         nodeType: RelationalNodeType.CTE,
         tableName,
         source: node,
-      } as CteClause<ModifiedStore<DataStoreType, TableName, TableRowType>, TableName>)
+      } as CteClause<ModifiedStore<DataStoreType, TableAlias, TableRowType>, TableAlias>)
 
-      return new DefaultRelationalNodeBuilder(this.#projections)
+      return new DefaultRelationalNodeBuilder<
+        ModifiedStore<DataStoreType, TableAlias, TableRowType>,
+        never
+      >(this.#projections)
     }
 
     throw new QueryError("cannot build CTE from non table source")
@@ -231,140 +217,157 @@ export class DefaultRelationalNodeBuilder<
   }
 }
 
-class DefaultTableNodeBuilder<
+type TableNodeBuilder<
   DataStoreType extends RelationalDataStore,
-  TableName extends keyof DataStoreType["tables"] & string,
+  TableName extends keyof DataStoreType["tables"],
   RowType extends RelationalDataTable = DataStoreType["tables"][TableName],
-  TableAlias extends keyof DataStoreType["tables"] & string = never
-> implements TableNodeBuilder<DataStoreType, TableName, RowType>
-{
-  #node: TableQueryNode<DataStoreType, TableName, RowType, TableAlias>
+  TableAlias extends string = never,
+  TableType extends DataStoreType["tables"][TableName] = DataStoreType["tables"][TableName]
+> = RelationalDataSource<DataStoreType, RowType> & {
+  tableName: TableName
 
-  asNode(): RelationalQueryNode<RelationalNodeType> {
-    return this.#node
-  }
-
-  constructor(
-    tableName: TableName,
-    node?: TableQueryNode<DataStoreType, TableName, RowType, TableAlias>
-  ) {
-    this.#node = node ?? {
-      tableName: tableName,
-      nodeType: RelationalNodeType.TABLE,
-    }
-  }
-
-  build(ctor: QueryBuilderCtor<RowType>): Query<RowType> {
-    return new ctor(this.#node).build()
-  }
-
-  select<Column extends keyof DataStoreType["tables"][TableName] & string>(
+  select<Column extends keyof TableType>(
     ...columns: Column[]
-  ): Omit<
-    TableNodeBuilder<
-      DataStoreType,
-      TableName,
-      Pick<DataStoreType["tables"][TableName], Column>,
-      TableAlias
-    >,
-    "select"
-  > {
-    return new DefaultTableNodeBuilder(this.#node.tableName, {
-      nodeType: RelationalNodeType.TABLE,
-      tableName: this.#node.tableName,
-      tableAlias: this.#node.tableAlias,
-      parent: this.#node.parent,
-      select: {
-        nodeType: RelationalNodeType.SELECT,
-        columns: columns,
-      },
-      where: this.#node.where,
-    })
-  }
+  ): TableNodeBuilder<
+    DataStoreType,
+    TableName,
+    Pick<TableType, Column>,
+    TableAlias,
+    TableType
+  >
 
-  alias<
-    Column extends keyof RowType &
-      keyof DataStoreType["tables"][TableName] &
-      string,
-    Alias extends string
-  >(
+  alias<Column extends keyof RowType & keyof TableType, Alias extends string>(
     column: Column,
     alias: Alias
   ): TableNodeBuilder<
     DataStoreType,
     TableName,
     AliasedType<RowType, Column, Alias>,
-    TableAlias
-  > {
-    return new DefaultTableNodeBuilder(this.#node.tableName, {
+    TableAlias,
+    TableType
+  >
+
+  where(
+    filter: FilterGroup<TableType> | FilterTypes<TableType>
+  ): TableNodeBuilder<DataStoreType, TableName, RowType, TableAlias, TableType>
+}
+
+class DefaultTableNodeBuilder<
+  DataStoreType extends RelationalDataStore,
+  TableName extends keyof DataStoreType["tables"],
+  RowType extends RelationalDataTable = DataStoreType["tables"][TableName],
+  TableAlias extends string = never,
+  TableType extends DataStoreType["tables"][TableName] = DataStoreType["tables"][TableName]
+> implements
+    TableNodeBuilder<DataStoreType, TableName, RowType, TableAlias, TableType>
+{
+  asNode(): RelationalQueryNode<RelationalNodeType> {
+    return {
       nodeType: RelationalNodeType.TABLE,
-      tableAlias: this.#node.tableAlias,
-      tableName: this.#node.tableName,
-      parent: this.#node.parent,
-      select: {
+      tableName: this.tableName,
+      tableAlias: this.#tableAlias,
+      select: this.#select,
+      where: this.#where,
+      parent: this.#parent,
+    } as TableQueryNode<DataStoreType, TableName, RowType, TableAlias>
+  }
+
+  tableName: TableName
+
+  #tableAlias?: TableAlias
+  #parent?: QueryNode
+  #select?: SelectClause<TableType, keyof TableType, RowType>
+  #where?: WhereClause<TableType>
+
+  constructor(
+    tableName: TableName,
+    parent?: QueryNode,
+    tableAlias?: TableAlias,
+    select?: SelectClause<TableType, keyof TableType, RowType>,
+    where?: WhereClause<TableType>
+  ) {
+    this.tableName = tableName
+    this.#tableAlias = tableAlias
+    this.#parent = parent
+    this.#select = select
+    this.#where = where
+  }
+
+  build(ctor: QueryBuilderCtor<RowType>): Query<RowType> {
+    return new ctor(this.asNode()).build()
+  }
+
+  select<Column extends keyof TableType>(
+    ...columns: Column[]
+  ): TableNodeBuilder<
+    DataStoreType,
+    TableName,
+    Pick<TableType, Column>,
+    TableAlias,
+    TableType
+  > {
+    return new DefaultTableNodeBuilder(
+      this.tableName,
+      this.#parent,
+      this.#tableAlias,
+      {
         nodeType: RelationalNodeType.SELECT,
-        columns: this.#node.select?.columns ?? [],
-        aliasing: (this.#node.select?.aliasing ?? []).concat([
-          { column, alias },
-        ]),
+        columns: columns,
       },
-    })
+      this.#where
+    )
+  }
+
+  alias<Column extends keyof RowType & keyof TableType, Alias extends string>(
+    column: Column,
+    alias: Alias
+  ): TableNodeBuilder<
+    DataStoreType,
+    TableName,
+    AliasedType<RowType, Column, Alias>,
+    TableAlias,
+    TableType
+  > {
+    return new DefaultTableNodeBuilder(
+      this.tableName,
+      this.#parent,
+      this.#tableAlias,
+      {
+        nodeType: RelationalNodeType.SELECT,
+        columns: this.#select?.columns ?? [],
+        aliasing: (this.#select?.aliasing ?? []).concat([{ column, alias }]),
+      },
+      this.#where
+    )
   }
 
   where(
-    filter:
-      | FilterGroup<DataStoreType["tables"][TableName]>
-      | FilterTypes<DataStoreType["tables"][TableName]>
-  ): Omit<
-    TableNodeBuilder<DataStoreType, TableName, RowType, TableAlias>,
-    "where"
+    filter: FilterGroup<TableType> | FilterTypes<TableType>
+  ): TableNodeBuilder<
+    DataStoreType,
+    TableName,
+    RowType,
+    TableAlias,
+    TableType
   > {
-    return new DefaultTableNodeBuilder(this.#node.tableName, {
-      nodeType: RelationalNodeType.TABLE,
-      tableName: this.#node.tableName,
-      tableAlias: this.#node.tableAlias,
-      select: this.#node.select,
-      parent: this.#node.parent,
-      where: {
+    return new DefaultTableNodeBuilder(
+      this.tableName,
+      this.#parent,
+      this.#tableAlias,
+      this.#select,
+      {
         nodeType: RelationalNodeType.WHERE,
         filter,
-      },
-    })
+      }
+    )
   }
-}
-
-type FromNodeBuilder<DataStoreType extends RelationalDataStore> = {
-  from<TableName extends keyof DataStoreType["tables"] & string>(
-    tableName: TableName
-  ): TableNodeBuilder<DataStoreType, TableName>
-
-  from<
-    TableName extends keyof DataStoreType["tables"] & string,
-    Alias extends string
-  >(
-    tableName: TableName,
-    tableAlias: Alias
-  ): TableNodeBuilder<
-    ModifiedStore<DataStoreType, TableName, DataStoreType["tables"][TableName]>,
-    TableName,
-    DataStoreType["tables"][TableName],
-    Alias
-  >
-}
-
-type CteNodeBuilder<DataStoreType extends RelationalDataStore> = {
-  with<TableName extends string, TableRowType extends RelationalDataTable>(
-    tableName: TableName,
-    source: RelationalDataSource<DataStoreType, TableRowType>
-  ): RelationalNodeBuilder<
-    ModifiedStore<DataStoreType, TableName, TableRowType>
-  >
 }
 
 export function from<
   DataStoreType extends RelationalDataStore,
-  TableName extends keyof DataStoreType["tables"] & string
->(tableName: TableName): TableNodeBuilder<DataStoreType, TableName> {
+  TableName extends keyof DataStoreType["tables"],
+  TableType extends DataStoreType["tables"][TableName]
+>(tableName: TableName): TableNodeBuilder<DataStoreType, TableName, TableType> {
   return new DefaultTableNodeBuilder(tableName)
 }
 

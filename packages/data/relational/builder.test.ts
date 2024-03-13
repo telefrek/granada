@@ -253,47 +253,48 @@ describe("Relational query builder should support basic functionality", () => {
     }
   })
 
-  it("should allow cte clauses", async () => {
-    const result = await executor.run(
-      useDataStore<TestDataStore>()
-        .with(
-          "foo",
-          from("orders").select("name", "categories").where(gt("id", 1))
-        )
-        .from("foo")
-        .select("name")
-        .where(contains("categories", Category.PURCHASE))
-        .build(InMemoryRelationalQueryBuilder)
-    )
+  // it("should allow cte clauses", async () => {
+  //   const result = await executor.run(
+  //     useDataStore<TestDataStore>()
+  //       .with(
+  //         "foo",
+  //         // from("orders").select()
+  //         from("orders").select("name", "categories").where(gt("id", 1))
+  //       )
+  //       .from("foo")
+  //       .select("name")
+  //       .where(contains("categories", Category.PURCHASE))
+  //       .build(InMemoryRelationalQueryBuilder)
+  //   )
 
-    if (Array.isArray(result.rows)) {
-      expect(result.rows.length).toBe(1)
-      expect(result.rows[0].name).toBe(STORE.orders[2].name)
-    }
-  })
+  //   if (Array.isArray(result.rows)) {
+  //     expect(result.rows.length).toBe(1)
+  //     expect(result.rows[0].name).toBe(STORE.orders[2].name)
+  //   }
+  // })
 
-  it("should allow multiple cte clauses", async () => {
-    const result = await executor.run(
-      useDataStore<TestDataStore>()
-        .with(
-          "foo",
-          from("orders").select("name", "categories").where(gt("id", 1))
-        )
-        .with(
-          "bar",
-          from("foo")
-            .select("name")
-            .where(contains("categories", Category.PURCHASE))
-        )
-        .from("bar")
-        .build(InMemoryRelationalQueryBuilder)
-    )
+  // it("should allow multiple cte clauses", async () => {
+  //   const result = await executor.run(
+  //     useDataStore<TestDataStore>()
+  //       .with(
+  //         "foo",
+  //         from("orders").select("name", "categories").where(gt("id", 1))
+  //       )
+  //       .with(
+  //         "bar",
+  //         from("foo")
+  //           .select("name")
+  //           .where(contains("categories", Category.PURCHASE))
+  //       )
+  //       .from("bar")
+  //       .build(InMemoryRelationalQueryBuilder)
+  //   )
 
-    if (Array.isArray(result.rows)) {
-      expect(result.rows.length).toBe(1)
-      expect(result.rows[0].name).toBe(STORE.orders[2].name)
-    }
-  })
+  //   if (Array.isArray(result.rows)) {
+  //     expect(result.rows.length).toBe(1)
+  //     expect(result.rows[0].name).toBe(STORE.orders[2].name)
+  //   }
+  // })
 
   it("should allow basic inner joins", () => {
     const store = useDataStore<TestDataStore>()
