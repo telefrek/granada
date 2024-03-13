@@ -10,7 +10,6 @@ import { QueryBuilderBase } from "../query/builder"
 import { QueryError } from "../query/error"
 import {
   ContainmentObjectType,
-  isTableQueryNode,
   type CteClause,
   type FilterGroup,
   type FilterTypes,
@@ -74,11 +73,27 @@ export type RelationalDataSource<
 export type RelationalNodeBuilder<
   DataStoreType extends RelationalDataStore,
   RowType extends RelationalDataTable = never
-> = RelationalDataSource<DataStoreType, RowType> &
-  //CteNodeBuilder<DataStoreType> &
-  FromNodeBuilder<DataStoreType> & {
-    projections: Map<string, QueryNode>
-  }
+> = RelationalDataSource<DataStoreType, RowType> & {
+  projections: Map<string, QueryNode>
+
+  from<TableName extends keyof DataStoreType["tables"]>(
+    tableName: TableName
+  ): TableNodeBuilder<DataStoreType, TableName>
+
+  from<TableName extends keyof DataStoreType["tables"], Alias extends string>(
+    tableName: TableName,
+    tableAlias: Alias
+  ): TableNodeBuilder<
+    ModifiedStore<
+      DataStoreType,
+      Extract<TableName, string>,
+      DataStoreType["tables"][TableName]
+    >,
+    TableName,
+    DataStoreType["tables"][TableName],
+    Alias
+  >
+}
 
 export function useDataStore<
   DataStoreType extends RelationalDataStore
@@ -100,7 +115,7 @@ export function cte<
 ): RelationalNodeBuilder<ModifiedStore<DataStoreType, Alias, RowType>> {
   const table = source(builder)
 
-  const projections = builder.projections.set(alias, {
+  builder.projections.set(alias, {
     tableName: alias,
     nodeType: RelationalNodeType.CTE,
     source: table.asNode() as TableQueryNode<
@@ -108,40 +123,8 @@ export function cte<
       keyof DataStoreType["tables"]
     >,
   } as CteClause<DataStoreType, keyof DataStoreType["tables"]>)
+
   return new DefaultRelationalNodeBuilder(builder.projections)
-}
-
-type FromNodeBuilder<DataStoreType extends RelationalDataStore> = {
-  from<TableName extends keyof DataStoreType["tables"]>(
-    tableName: TableName
-  ): TableNodeBuilder<DataStoreType, TableName>
-
-  from<TableName extends keyof DataStoreType["tables"], Alias extends string>(
-    tableName: TableName,
-    tableAlias: Alias
-  ): TableNodeBuilder<
-    ModifiedStore<
-      DataStoreType,
-      Extract<TableName, string>,
-      DataStoreType["tables"][TableName]
-    >,
-    TableName,
-    DataStoreType["tables"][TableName],
-    Alias
-  >
-}
-
-type CteNodeBuilder<DataStoreType extends RelationalDataStore> = {
-  with<TableAlias extends string, TableRowType extends RelationalDataTable>(
-    tableName: TableAlias,
-    source: TableNodeBuilder<
-      DataStoreType,
-      keyof DataStoreType["tables"],
-      TableRowType
-    >
-  ): RelationalNodeBuilder<
-    ModifiedStore<DataStoreType, TableAlias, TableRowType>
-  >
 }
 
 export class DefaultRelationalNodeBuilder<
@@ -209,36 +192,6 @@ export class DefaultRelationalNodeBuilder<
     >(tableName, this.projections.get(tableName as string))
   }
 
-  with<TableAlias extends string, TableRowType extends RelationalDataTable>(
-    tableName: TableAlias,
-    source: TableNodeBuilder<
-      DataStoreType,
-      keyof DataStoreType["tables"],
-      TableRowType
-    >
-  ): RelationalNodeBuilder<
-    ModifiedStore<DataStoreType, TableAlias, TableRowType>
-  > {
-    const node = source.asNode()
-    if (isTableQueryNode(node)) {
-      // Nodes may be built from projections
-      node.parent = node.parent ?? this.projections.get(node.tableName)
-
-      this.projections.set(tableName, {
-        nodeType: RelationalNodeType.CTE,
-        tableName,
-        source: node,
-      } as CteClause<ModifiedStore<DataStoreType, TableAlias, TableRowType>, TableAlias>)
-
-      return new DefaultRelationalNodeBuilder<
-        ModifiedStore<DataStoreType, TableAlias, TableRowType>,
-        never
-      >(this.projections)
-    }
-
-    throw new QueryError("cannot build CTE from non table source")
-  }
-
   build(ctor: QueryBuilderCtor<RowType>): Query<RowType> {
     throw new QueryError(
       "invalid to build a query without a valid table clause"
@@ -246,7 +199,7 @@ export class DefaultRelationalNodeBuilder<
   }
 }
 
-export type TableNodeBuilder<
+type TableNodeBuilder<
   DataStoreType extends RelationalDataStore,
   TableName extends keyof DataStoreType["tables"],
   RowType extends RelationalDataTable = DataStoreType["tables"][TableName],
@@ -391,6 +344,8 @@ class DefaultTableNodeBuilder<
     )
   }
 }
+
+type JoinNodeBuilder = {}
 
 export const eq: ColumnFilter = (column, value) =>
   ColumnFilterBuilder(column, value, ColumnFilteringOperation.EQ)

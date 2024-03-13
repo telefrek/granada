@@ -63,6 +63,8 @@ classDiagram
         TABLE
         WHERE
         SELECT
+        CTE
+        JOIN
     }
     class ColumnFilteringOperation{
         <<enumeration>>
@@ -91,12 +93,20 @@ classDiagram
         column
         op
         value
-
     }
     class NullColumnFilter{
         column
     }
     class FilterGroup{
+        op
+        filters
+    }
+    class JoinColumnFilter{
+        leftColumn
+        rightColumn
+        op
+    }
+    class JoinFilterGroup{
         op
         filters
     }
@@ -123,6 +133,11 @@ classDiagram
         source
         name
     }
+    class JoinQueryNode{
+        leftTable
+        rightTable
+        filters
+    }
     RelationalNodeType<--RelationalQueryNode
     ColumnFilteringOperation<--ColumnFilter
     ColumnValueContainsOperation<--ContainmentFilter
@@ -141,4 +156,11 @@ classDiagram
     WhereClause<..TableQueryNode
     SelectClause<..TableQueryNode
     TableQueryNode<..CteQueryNode
+    TableQueryNode<--JoinQueryNode
+    JoinColumnFilter<..JoinFilterGroup
+    JoinFilterGroup<..JoinFilterGroup
+    BooleanOperation<|--JoinFilterGroup
+    JoinColumnFilter<--JoinQueryNode
+    ColumnFilteringOperation<|--JoinColumnFilter
+    JoinFilterGroup<|--JoinQueryNode
 ```

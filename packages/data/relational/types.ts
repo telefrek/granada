@@ -74,7 +74,6 @@ export enum RelationalNodeType {
   SELECT = "select",
   CTE = "cte",
   JOIN = "join",
-  NONE = "none",
 }
 
 export type PropertiesOfType<TableType, TargetType> = {
