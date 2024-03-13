@@ -75,13 +75,40 @@ export type RelationalNodeBuilder<
   DataStoreType extends RelationalDataStore,
   RowType extends RelationalDataTable = never
 > = RelationalDataSource<DataStoreType, RowType> &
-  CteNodeBuilder<DataStoreType> &
-  FromNodeBuilder<DataStoreType>
+  //CteNodeBuilder<DataStoreType> &
+  FromNodeBuilder<DataStoreType> & {
+    projections: Map<string, QueryNode>
+  }
 
 export function useDataStore<
   DataStoreType extends RelationalDataStore
 >(): RelationalNodeBuilder<DataStoreType> {
   return new DefaultRelationalNodeBuilder()
+}
+
+export function cte<
+  DataStoreType extends RelationalDataStore,
+  Alias extends string,
+  Builder extends RelationalNodeBuilder<DataStoreType>,
+  RowType extends RelationalDataTable
+>(
+  builder: Builder,
+  alias: Alias,
+  source: (
+    builder: Builder
+  ) => TableNodeBuilder<DataStoreType, keyof DataStoreType["tables"], RowType>
+): RelationalNodeBuilder<ModifiedStore<DataStoreType, Alias, RowType>> {
+  const table = source(builder)
+
+  const projections = builder.projections.set(alias, {
+    tableName: alias,
+    nodeType: RelationalNodeType.CTE,
+    source: table.asNode() as TableQueryNode<
+      DataStoreType,
+      keyof DataStoreType["tables"]
+    >,
+  } as CteClause<DataStoreType, keyof DataStoreType["tables"]>)
+  return new DefaultRelationalNodeBuilder(builder.projections)
 }
 
 type FromNodeBuilder<DataStoreType extends RelationalDataStore> = {
@@ -122,14 +149,14 @@ export class DefaultRelationalNodeBuilder<
   RowType extends RelationalDataTable = never
 > implements RelationalNodeBuilder<DataStoreType, RowType>
 {
-  #projections: Map<string, QueryNode>
+  projections: Map<string, QueryNode>
 
   asNode(): RelationalQueryNode<RelationalNodeType> {
     throw new QueryError("cannot translate a RelationalNodeBuilder directly")
   }
 
   constructor(projections?: Map<string, QueryNode>) {
-    this.#projections = projections ?? new Map()
+    this.projections = projections ?? new Map()
   }
 
   from<TableName extends keyof DataStoreType["tables"]>(
@@ -172,14 +199,14 @@ export class DefaultRelationalNodeBuilder<
         TableName,
         DataStoreType["tables"][TableName],
         Alias
-      >(tableName, this.#projections.get(tableName as string), tableAlias)
+      >(tableName, this.projections.get(tableName as string), tableAlias)
     }
 
     return new DefaultTableNodeBuilder<
       DataStoreType,
       TableName,
       DataStoreType["tables"][TableName]
-    >(tableName, this.#projections.get(tableName as string))
+    >(tableName, this.projections.get(tableName as string))
   }
 
   with<TableAlias extends string, TableRowType extends RelationalDataTable>(
@@ -195,9 +222,9 @@ export class DefaultRelationalNodeBuilder<
     const node = source.asNode()
     if (isTableQueryNode(node)) {
       // Nodes may be built from projections
-      node.parent = node.parent ?? this.#projections.get(node.tableName)
+      node.parent = node.parent ?? this.projections.get(node.tableName)
 
-      this.#projections.set(tableName, {
+      this.projections.set(tableName, {
         nodeType: RelationalNodeType.CTE,
         tableName,
         source: node,
@@ -206,7 +233,7 @@ export class DefaultRelationalNodeBuilder<
       return new DefaultRelationalNodeBuilder<
         ModifiedStore<DataStoreType, TableAlias, TableRowType>,
         never
-      >(this.#projections)
+      >(this.projections)
     }
 
     throw new QueryError("cannot build CTE from non table source")

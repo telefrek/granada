@@ -2,6 +2,7 @@ import {
   and,
   contains,
   containsItems,
+  cte,
   eq,
   gt,
   gte,
@@ -255,15 +256,10 @@ describe("Relational query builder should support basic functionality", () => {
   })
 
   it("should allow cte clauses", async () => {
-    const store = useDataStore<TestDataStore>()
-
     const result = await executor.run(
-      store
-        .with(
-          "foo",
-          // from("orders").select()
-          store.from("orders").select("name", "categories").where(gt("id", 1))
-        )
+      cte(useDataStore<TestDataStore>(), "foo", (builder) =>
+        builder.from("orders").select("name", "categories").where(gt("id", 1))
+      )
         .from("foo")
         .select("name")
         .where(containsItems("categories", Category.PURCHASE))
@@ -277,23 +273,18 @@ describe("Relational query builder should support basic functionality", () => {
   })
 
   it("should allow multiple cte clauses", async () => {
-    const store = useDataStore<TestDataStore>().with(
-      "foo",
-      useDataStore<TestDataStore>()
-        .from("orders")
-        .select("name", "categories")
-        .where(gt("id", 1))
-    )
-
     const result = await executor.run(
-      store
-        .with(
-          "bar",
-          store
+      cte(
+        cte(useDataStore<TestDataStore>(), "foo", (builder) =>
+          builder.from("orders").select("name", "categories").where(gt("id", 1))
+        ),
+        "bar",
+        (builder) =>
+          builder
             .from("foo")
             .select("name")
             .where(containsItems("categories", Category.PURCHASE))
-        )
+      )
         .from("bar")
         .build(InMemoryRelationalQueryBuilder)
     )
