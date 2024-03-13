@@ -9,6 +9,7 @@ import type { QueryNode } from "../query/ast"
 import { QueryBuilderBase } from "../query/builder"
 import { QueryError } from "../query/error"
 import {
+  ContainmentObjectType,
   isTableQueryNode,
   type CteClause,
   type FilterGroup,
@@ -23,9 +24,10 @@ import {
   ColumnFilteringOperation,
   ColumnValueContainsOperation,
   RelationalNodeType,
-  type ContainmentItemType,
-  type ContainmentProperty,
+  type ArrayItemType,
+  type ArrayProperty,
   type ModifiedStore,
+  type PropertiesOfType,
 } from "./types"
 
 /**
@@ -217,7 +219,7 @@ export class DefaultRelationalNodeBuilder<
   }
 }
 
-type TableNodeBuilder<
+export type TableNodeBuilder<
   DataStoreType extends RelationalDataStore,
   TableName extends keyof DataStoreType["tables"],
   RowType extends RelationalDataTable = DataStoreType["tables"][TableName],
@@ -363,14 +365,6 @@ class DefaultTableNodeBuilder<
   }
 }
 
-export function from<
-  DataStoreType extends RelationalDataStore,
-  TableName extends keyof DataStoreType["tables"],
-  TableType extends DataStoreType["tables"][TableName]
->(tableName: TableName): TableNodeBuilder<DataStoreType, TableName, TableType> {
-  return new DefaultTableNodeBuilder(tableName)
-}
-
 export const eq: ColumnFilter = (column, value) =>
   ColumnFilterBuilder(column, value, ColumnFilteringOperation.EQ)
 
@@ -396,16 +390,32 @@ export const not: BooleanFilter = (...clauses) =>
   ColumnGroupFilterBuilder(BooleanOperation.NOT, ...clauses)
 
 export const contains = <
-  RowType extends RelationalDataTable,
-  ContainingColumn extends ContainmentProperty<RowType>,
-  ColumnValue extends ContainmentItemType<RowType, ContainingColumn>
+  TableType extends RelationalDataTable,
+  Column extends PropertiesOfType<TableType, string>
 >(
-  column: ContainingColumn,
-  value: ColumnValue
-): FilterTypes<RowType> => {
+  column: Column,
+  value: string
+): FilterTypes<TableType> => {
   return {
+    type: ContainmentObjectType.STRING,
     column,
     value,
+    op: ColumnValueContainsOperation.IN,
+  }
+}
+
+export const containsItems = <
+  TableType extends RelationalDataTable,
+  ContainingColumn extends ArrayProperty<TableType>,
+  ColumnValue extends ArrayItemType<TableType, ContainingColumn>
+>(
+  column: ContainingColumn,
+  ...values: ColumnValue[]
+): FilterTypes<TableType> => {
+  return {
+    type: ContainmentObjectType.ARRAY,
+    column,
+    value: values.length === 1 ? values[0] : values,
     op: ColumnValueContainsOperation.IN,
   }
 }

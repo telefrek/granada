@@ -1,9 +1,8 @@
 import {
-  DefaultRelationalNodeBuilder,
   and,
   contains,
+  containsItems,
   eq,
-  from,
   gt,
   gte,
   not,
@@ -140,7 +139,7 @@ describe("Relational query builder should support basic functionality", () => {
     result = await executor.run(
       useDataStore<TestDataStore>()
         .from("orders")
-        .where(contains("categories", Category.TEST))
+        .where(containsItems("categories", Category.TEST))
         .build(InMemoryRelationalQueryBuilder)
     )
 
@@ -151,7 +150,7 @@ describe("Relational query builder should support basic functionality", () => {
     result = await executor.run(
       useDataStore<TestDataStore>()
         .from("orders")
-        .where(contains("categories", Category.PURCHASE))
+        .where(containsItems("categories", Category.PURCHASE))
         .build(InMemoryRelationalQueryBuilder)
     )
 
@@ -206,7 +205,9 @@ describe("Relational query builder should support basic functionality", () => {
       useDataStore<TestDataStore>()
         .from("orders")
         .select("name")
-        .where(and(contains("categories", Category.PURCHASE), not(eq("id", 1))))
+        .where(
+          and(containsItems("categories", Category.PURCHASE), not(eq("id", 1)))
+        )
         .build(InMemoryRelationalQueryBuilder)
     )
     expect(result).not.toBeUndefined()
@@ -253,64 +254,58 @@ describe("Relational query builder should support basic functionality", () => {
     }
   })
 
-  // it("should allow cte clauses", async () => {
-  //   const result = await executor.run(
-  //     useDataStore<TestDataStore>()
-  //       .with(
-  //         "foo",
-  //         // from("orders").select()
-  //         from("orders").select("name", "categories").where(gt("id", 1))
-  //       )
-  //       .from("foo")
-  //       .select("name")
-  //       .where(contains("categories", Category.PURCHASE))
-  //       .build(InMemoryRelationalQueryBuilder)
-  //   )
+  it("should allow cte clauses", async () => {
+    const store = useDataStore<TestDataStore>()
 
-  //   if (Array.isArray(result.rows)) {
-  //     expect(result.rows.length).toBe(1)
-  //     expect(result.rows[0].name).toBe(STORE.orders[2].name)
-  //   }
-  // })
+    const result = await executor.run(
+      store
+        .with(
+          "foo",
+          // from("orders").select()
+          store.from("orders").select("name", "categories").where(gt("id", 1))
+        )
+        .from("foo")
+        .select("name")
+        .where(containsItems("categories", Category.PURCHASE))
+        .build(InMemoryRelationalQueryBuilder)
+    )
 
-  // it("should allow multiple cte clauses", async () => {
-  //   const result = await executor.run(
-  //     useDataStore<TestDataStore>()
-  //       .with(
-  //         "foo",
-  //         from("orders").select("name", "categories").where(gt("id", 1))
-  //       )
-  //       .with(
-  //         "bar",
-  //         from("foo")
-  //           .select("name")
-  //           .where(contains("categories", Category.PURCHASE))
-  //       )
-  //       .from("bar")
-  //       .build(InMemoryRelationalQueryBuilder)
-  //   )
+    if (Array.isArray(result.rows)) {
+      expect(result.rows.length).toBe(1)
+      expect(result.rows[0].name).toBe(STORE.orders[2].name)
+    }
+  })
 
-  //   if (Array.isArray(result.rows)) {
-  //     expect(result.rows.length).toBe(1)
-  //     expect(result.rows[0].name).toBe(STORE.orders[2].name)
-  //   }
-  // })
+  it("should allow multiple cte clauses", async () => {
+    const store = useDataStore<TestDataStore>().with(
+      "foo",
+      useDataStore<TestDataStore>()
+        .from("orders")
+        .select("name", "categories")
+        .where(gt("id", 1))
+    )
+
+    const result = await executor.run(
+      store
+        .with(
+          "bar",
+          store
+            .from("foo")
+            .select("name")
+            .where(containsItems("categories", Category.PURCHASE))
+        )
+        .from("bar")
+        .build(InMemoryRelationalQueryBuilder)
+    )
+
+    if (Array.isArray(result.rows)) {
+      expect(result.rows.length).toBe(1)
+      expect(result.rows[0].name).toBe(STORE.orders[2].name)
+    }
+  })
 
   it("should allow basic inner joins", () => {
     const store = useDataStore<TestDataStore>()
-    type Testing = {
-      id: number
-      name: string
-    }
-    type Testing2 = {
-      id2: number
-      name2: string
-    }
-
-    new DefaultRelationalNodeBuilder<TestDataStore>().with(
-      "bar",
-      from("orders")
-    )
 
     // TODO: Add filtering type (equality)
     // store.join("orders", "customers", "id", "id", JoinType.INNER)

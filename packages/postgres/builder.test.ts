@@ -1,4 +1,4 @@
-import { contains } from "@telefrek/data/relational/builder"
+import { containsItems } from "@telefrek/data/relational/builder"
 import {
   createRelationalQueryContext,
   isPostgresRelationalQuery,
@@ -54,15 +54,15 @@ describe("Postgres query syntax should be translated correctly", () => {
   it("Should create a valid query from  a builder", () => {
     const context = createRelationalQueryContext<TestDatabase>()
     const query = context
-      .from("orders", "newOrders")
+      .from("orders")
       .select("id", "categories")
       .alias("id", "order_id")
-      .where(contains("categories", "purchase"))
+      .where(containsItems("categories", "purchase"))
       .build(PostgresQueryBuilder)
 
     if (isPostgresRelationalQuery(query)) {
       expect(query.queryText).toEqual(
-        "SELECT id AS order_id, categories FROM orders AS newOrders WHERE 'purchase'=ANY(categories)"
+        "SELECT id AS order_id, categories FROM orders WHERE 'purchase'=ANY(categories)"
       )
     }
   })

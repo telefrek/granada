@@ -10,11 +10,12 @@ import {
   ColumnFilteringOperation,
   ColumnValueContainsOperation,
   RelationalNodeType,
-  type ContainmentItemType,
-  type ContainmentProperty,
+  type ArrayItemType,
+  type ArrayProperty,
   type JoinType,
   type MatchingKey,
   type MergedNonOverlappingType,
+  type PropertiesOfType,
 } from "./types"
 
 /**
@@ -53,17 +54,35 @@ export type ColumnFilter<TableType, Column extends keyof TableType> = {
   value: TableType[Column]
 }
 
+export enum ContainmentObjectType {
+  ARRAY,
+  STRING,
+}
+
+export type ContainmentFilter<ContainmentObjectType> = {
+  type: ContainmentObjectType
+}
+
 /**
  * Special filter for containment operations
  */
-export type ContainmentFilter<
+export type ArrayFilter<
   TableType,
-  Column extends ContainmentProperty<TableType>,
-  ColumnItemType extends ContainmentItemType<TableType, Column>
-> = {
+  Column extends ArrayProperty<TableType>,
+  ColumnItemType extends ArrayItemType<TableType, Column>
+> = ContainmentFilter<ContainmentObjectType.ARRAY> & {
   column: Column
   op: ColumnValueContainsOperation
-  value: ColumnItemType
+  value: ColumnItemType | ColumnItemType[]
+}
+
+export type StringFilter<
+  TableType,
+  Column extends PropertiesOfType<TableType, string>
+> = ContainmentFilter<ContainmentObjectType.STRING> & {
+  column: Column
+  op: ColumnValueContainsOperation
+  value: string
 }
 
 /**
@@ -92,25 +111,51 @@ export function isColumnFilter<TableType>(
  * Type guard for column filtering via {@link ColumnValueContainsOperation}
  *
  * @param filter The {@link FilterTypes} to check
- * @returns True if the filter is a {@link ContainmentFilter}
+ * @returns True if the filter is a {@link ArrayFilter}
  */
-export function isContainmentFilter<TableType>(
+export function IsArrayFilter<TableType>(
   filter: FilterTypes<TableType> | FilterGroup<TableType>
-): filter is ContainmentFilter<
+): filter is ArrayFilter<
   TableType,
-  ContainmentProperty<TableType>,
-  ContainmentItemType<TableType, ContainmentProperty<TableType>>
+  ArrayProperty<TableType>,
+  ArrayItemType<TableType, ArrayProperty<TableType>>
 > {
   return (
     typeof filter === "object" &&
-    filter !== null &&
-    "column" in filter &&
-    "value" in filter &&
+      filter !== null &&
+      "column" in filter &&
+      "value" in filter &&
+      "type" in filter &&
+      filter.type === ContainmentObjectType.ARRAY,
     "op" in filter &&
-    typeof filter.op === "string" &&
-    Object.values(ColumnValueContainsOperation).includes(
-      filter.op as ColumnValueContainsOperation
-    )
+      typeof filter.op === "string" &&
+      Object.values(ColumnValueContainsOperation).includes(
+        filter.op as ColumnValueContainsOperation
+      )
+  )
+}
+
+/**
+ * Type guard for column filtering via {@link ColumnValueContainsOperation}
+ *
+ * @param filter The {@link FilterTypes} to check
+ * @returns True if the filter is a {@link StringFilter}
+ */
+export function isStringFilter<TableType>(
+  filter: FilterTypes<TableType> | FilterGroup<TableType>
+): filter is StringFilter<TableType, PropertiesOfType<TableType, string>> {
+  return (
+    typeof filter === "object" &&
+      filter !== null &&
+      "column" in filter &&
+      "value" in filter &&
+      "type" in filter &&
+      filter.type === ContainmentObjectType.STRING,
+    "op" in filter &&
+      typeof filter.op === "string" &&
+      Object.values(ColumnValueContainsOperation).includes(
+        filter.op as ColumnValueContainsOperation
+      )
   )
 }
 
@@ -130,11 +175,12 @@ export type NullColumnFilter<
 export type FilterTypes<TableType> =
   | ColumnFilter<TableType, keyof TableType>
   | NullColumnFilter<TableType, keyof OptionalProperties<TableType>>
-  | ContainmentFilter<
+  | ArrayFilter<
       TableType,
-      ContainmentProperty<TableType>,
-      ContainmentItemType<TableType, ContainmentProperty<TableType>>
+      ArrayProperty<TableType>,
+      ArrayItemType<TableType, ArrayProperty<TableType>>
     >
+  | StringFilter<TableType, PropertiesOfType<TableType, string>>
 
 /**
  * Represents a group of filters that are bound by a {@link BooleanOperation}

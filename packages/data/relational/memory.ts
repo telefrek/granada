@@ -14,17 +14,19 @@ import {
 import type { QueryNode } from "../query/ast"
 import { QueryError } from "../query/error"
 import {
+  IsArrayFilter,
   isColumnFilter,
-  isContainmentFilter,
   isCteClause,
   isFilterGroup,
   isRelationalQueryNode,
+  isStringFilter,
   isTableQueryNode,
+  type ArrayFilter,
   type ColumnFilter,
-  type ContainmentFilter,
   type FilterGroup,
   type FilterTypes,
   type RelationalQueryNode,
+  type StringFilter,
   type TableQueryNode,
 } from "./ast"
 import { RelationalQueryBuilder } from "./builder"
@@ -32,8 +34,9 @@ import {
   BooleanOperation,
   ColumnFilteringOperation,
   ColumnValueContainsOperation,
-  type ContainmentItemType,
-  type ContainmentProperty,
+  type ArrayItemType,
+  type ArrayProperty,
+  type PropertiesOfType,
   type RelationalNodeType,
 } from "./types"
 
@@ -258,8 +261,10 @@ function buildFilter<
       case BooleanOperation.NOT:
         return (row) => !filters.some((f) => f(row))
     }
-  } else if (isContainmentFilter(clause)) {
-    return buildContainsFilter(clause)
+  } else if (IsArrayFilter(clause)) {
+    return buildArrayFilter(clause)
+  } else if (isStringFilter(clause)) {
+    return buildStringFilter(clause)
   } else if (isColumnFilter(clause)) {
     return buildColumnFilter(clause)
   }
@@ -267,13 +272,13 @@ function buildFilter<
   return (_) => false
 }
 
-function buildContainsFilter<
+function buildArrayFilter<
   TableType extends Record<string, any> = Record<string, any>
 >(
-  columnFilter: ContainmentFilter<
+  columnFilter: ArrayFilter<
     TableType,
-    ContainmentProperty<TableType>,
-    ContainmentItemType<TableType, ContainmentProperty<TableType>>
+    ArrayProperty<TableType>,
+    ArrayItemType<TableType, ArrayProperty<TableType>>
   >
 ): (input: TableType) => boolean {
   switch (columnFilter.op) {
@@ -281,13 +286,26 @@ function buildContainsFilter<
       return (row) => {
         const v = row[columnFilter.column]
 
-        if (typeof v === "string") {
-          return v.indexOf(columnFilter.value as string) >= 0
-        } else if (Array.isArray(v)) {
-          return v.includes(columnFilter.value)
+        if (Array.isArray(columnFilter.value)) {
+          return columnFilter.value.some((val) => v.includes(val))
         }
 
-        return false
+        return v.includes(columnFilter.value)
+      }
+  }
+}
+
+function buildStringFilter<
+  TableType extends Record<string, any> = Record<string, any>
+>(
+  columnFilter: StringFilter<TableType, PropertiesOfType<TableType, string>>
+): (input: TableType) => boolean {
+  switch (columnFilter.op) {
+    case ColumnValueContainsOperation.IN:
+      return (row) => {
+        const v = row[columnFilter.column]
+
+        return v.indexOf(columnFilter.value as string) >= 0
       }
   }
 }

@@ -6,8 +6,8 @@ import type { QueryNode } from "@telefrek/data/query/ast"
 import { QueryError } from "@telefrek/data/query/error"
 import { ExecutionMode, Query } from "@telefrek/data/query/index"
 import {
+  IsArrayFilter,
   isColumnFilter,
-  isContainmentFilter,
   isFilterGroup,
   isRelationalQueryNode,
   isTableQueryNode,
@@ -26,16 +26,15 @@ import type {
 } from "@telefrek/data/relational/index"
 import type {
   PostgresColumnType,
-  PostgresColumnTypeDebug,
   PostgresColumnTypes,
   PostgresDatabase,
   PostgresTable,
 } from "."
 
 export type PostgresTableRow<Table extends PostgresTable> = {
-  [column in keyof Table["schema"]]: PostgresColumnTypeDebug<
-    Table["schema"][column]
-  >
+  [column in keyof Table["schema"]]: Table["schema"][column] extends PostgresColumnTypes
+    ? PostgresColumnType<Table["schema"][column]>
+    : never
 }
 
 export type PostgresRelationalDataStore<Database extends PostgresDatabase> = {
@@ -47,7 +46,9 @@ export type PostgresRelationalDataStore<Database extends PostgresDatabase> = {
 export function createRelationalQueryContext<
   Database extends PostgresDatabase
 >(): RelationalNodeBuilder<PostgresRelationalDataStore<Database>> {
-  return new DefaultRelationalNodeBuilder()
+  return new DefaultRelationalNodeBuilder<
+    PostgresRelationalDataStore<Database>
+  >()
 }
 
 export class PostgresRelationalQuery<RowType> implements Query<RowType> {
@@ -132,8 +133,8 @@ function translateTableQuery(
           .map((c) => (aliasing.has(c) ? `${c} AS ${aliasing.get(c)!}` : c))
           .join(", ")
       : "*"
-  } FROM ${tableQueryNode.tableName} ${
-    tableQueryNode.tableAlias ? `AS ${tableQueryNode.tableAlias}` : ""
+  } FROM ${tableQueryNode.tableName}${
+    tableQueryNode.tableAlias ? ` AS ${tableQueryNode.tableAlias}` : ""
   } ${
     tableQueryNode.where
       ? `WHERE ${translateFilterGroup(tableQueryNode.where.filter)}`
@@ -151,7 +152,7 @@ function translateFilterGroup<RelationalDataTable>(
       .trimEnd()
   } else if (isColumnFilter(filter)) {
     return `${filter.column as string} ${filter.op} ${wrap(filter.value)}`
-  } else if (isContainmentFilter(filter)) {
+  } else if (IsArrayFilter(filter)) {
     return `${wrap(filter.value)}=ANY(${filter.column as string})`
   }
 

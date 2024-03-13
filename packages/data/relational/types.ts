@@ -77,29 +77,25 @@ export enum RelationalNodeType {
   NONE = "none",
 }
 
+export type PropertiesOfType<TableType, TargetType> = {
+  [K in keyof TableType]: TableType[K] extends TargetType ? K : never
+}[keyof TableType]
+
 /**
  * Type that extracts keys that are arrays or strings which are valid for
  * {@link ColumnValueContainsOperation} filters
  */
-export type ContainmentProperty<TableType> = {
-  [K in keyof TableType]: TableType[K] extends Array<any>
-    ? K
-    : TableType[K] extends string
-    ? K
-    : never
+export type ArrayProperty<TableType> = {
+  [K in keyof TableType]: TableType[K] extends Array<any> ? K : never
 }[keyof TableType]
 
 /**
- * Helps to extract the type from the given {@link ContainmentProperty}
+ * Helps to extract the type from the given {@link ArrayProperty}
  */
-export type ContainmentItemType<
+export type ArrayItemType<
   TableType,
-  Column extends ContainmentProperty<TableType>
-> = TableType[Column] extends (infer ItemType)[]
-  ? ItemType
-  : TableType[Column] extends string
-  ? TableType[Column]
-  : never
+  Column extends ArrayProperty<TableType>
+> = TableType[Column] extends (infer ItemType)[] ? ItemType : never
 
 export type MatchingKey<Left, Right, LeftColumn extends keyof Left> = KeyofType<
   Right,
