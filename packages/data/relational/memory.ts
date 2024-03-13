@@ -174,9 +174,15 @@ function createMaterializer<
           transform.set(alias.column as string, alias.alias)
         }
 
-        ;(node.select!.columns as string[]).map((c) =>
-          entries.push([transform.has(c) ? transform.get(c)! : c, r[c]])
-        )
+        if (node.select!.columns === "*") {
+          Object.keys(r).map((c) =>
+            entries.push([transform.has(c) ? transform.get(c)! : c, r[c]])
+          )
+        } else {
+          ;(node.select!.columns as string[]).map((c) =>
+            entries.push([transform.has(c) ? transform.get(c)! : c, r[c]])
+          )
+        }
         return Object.fromEntries(entries) as T
       })
     } else {

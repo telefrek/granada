@@ -3,9 +3,8 @@
  */
 
 import type { OptionalProperties } from "@telefrek/core/type/utils"
-import type { RelationalDataStore, RelationalDataTable } from "."
+import type { RelationalDataStore, RelationalDataTable, STAR } from "."
 import type { QueryNode, QuerySource } from "../query/ast"
-import type { RelationalDataSource } from "./builder"
 import {
   BooleanOperation,
   ColumnFilteringOperation,
@@ -14,7 +13,6 @@ import {
   type ArrayItemType,
   type ArrayProperty,
   type MatchingKey,
-  type MergedNonOverlappingType,
   type PropertiesOfType,
 } from "./types"
 
@@ -277,7 +275,7 @@ export type SelectClause<
   RowType extends RelationalDataTable
 > = QuerySource<RowType> &
   RelationalQueryNode<RelationalNodeType.SELECT> & {
-    columns: Column[]
+    columns: Column[] | STAR
     aliasing?: ColumnAlias<TableType, Column, string>[]
   }
 
@@ -398,29 +396,24 @@ export function isJoinGroupFilter<DataStoreType extends RelationalDataStore>(
 export type JoinQueryNode<
   DataStoreType extends RelationalDataStore,
   LeftTable extends keyof DataStoreType["tables"],
-  LeftRowType extends RelationalDataTable,
   RightTable extends keyof DataStoreType["tables"],
-  RightRowType extends RelationalDataTable,
-  MergedRowType extends MergedNonOverlappingType<
-    LeftRowType,
-    RightRowType
-  > = MergedNonOverlappingType<LeftRowType, RightRowType>
-> = RelationalQueryNode<RelationalNodeType.JOIN> &
-  RelationalDataSource<DataStoreType, MergedRowType> & {
-    left: TableQueryNode<DataStoreType, LeftTable, LeftRowType>
-    right: TableQueryNode<DataStoreType, LeftTable, LeftRowType>
-    filter:
-      | JoinGroupFilter<DataStoreType, LeftTable, RightTable>
-      | JoinColumnFilter<DataStoreType, LeftTable, RightTable>
-  }
+  LeftRowType extends RelationalDataTable,
+  RightRowType extends RelationalDataTable
+> = RelationalQueryNode<RelationalNodeType.JOIN> & {
+  left: TableQueryNode<DataStoreType, LeftTable, LeftRowType>
+  right: TableQueryNode<DataStoreType, RightTable, RightRowType>
+  filter:
+    | JoinGroupFilter<DataStoreType, LeftTable, RightTable>
+    | JoinColumnFilter<DataStoreType, LeftTable, RightTable>
+}
 
 export function isJoinQueryNode<DataStoreType extends RelationalDataStore>(
   node: RelationalQueryNode<RelationalNodeType>
 ): node is JoinQueryNode<
   DataStoreType,
   keyof DataStoreType["tables"],
-  RelationalDataTable,
   keyof DataStoreType["tables"],
+  RelationalDataTable,
   RelationalDataTable
 > {
   return node.nodeType === RelationalNodeType.JOIN

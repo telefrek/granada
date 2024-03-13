@@ -92,6 +92,7 @@ describe("Relational query builder should support basic functionality", () => {
     const result = await executor.run(
       useDataStore<TestDataStore>()
         .from("orders")
+        .select("*")
         .build(InMemoryRelationalQueryBuilder)
     )
     expect(result).not.toBeUndefined()
@@ -104,6 +105,7 @@ describe("Relational query builder should support basic functionality", () => {
     let result = await executor.run(
       useDataStore<TestDataStore>()
         .from("orders")
+        .select("*")
         .where(gt("id", 2))
         .build(InMemoryRelationalQueryBuilder)
     )
@@ -115,6 +117,7 @@ describe("Relational query builder should support basic functionality", () => {
     result = await executor.run(
       useDataStore<TestDataStore>()
         .from("orders")
+        .select("*")
         .where(gte("id", 2))
         .build(InMemoryRelationalQueryBuilder)
     )
@@ -286,6 +289,7 @@ describe("Relational query builder should support basic functionality", () => {
             .where(containsItems("categories", Category.PURCHASE))
       )
         .from("bar")
+        .select("*")
         .build(InMemoryRelationalQueryBuilder)
     )
 

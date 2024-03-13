@@ -3,7 +3,7 @@
  */
 
 import type { AliasedType } from "@telefrek/core/type/utils"
-import type { RelationalDataStore, RelationalDataTable } from "."
+import type { RelationalDataStore, RelationalDataTable, STAR } from "."
 import type { Query } from "../query"
 import type { QueryNode } from "../query/ast"
 import { QueryBuilderBase } from "../query/builder"
@@ -13,6 +13,9 @@ import {
   type CteClause,
   type FilterGroup,
   type FilterTypes,
+  type JoinColumnFilter,
+  type JoinGroupFilter,
+  type JoinQueryNode,
   type RelationalQueryNode,
   type SelectClause,
   type TableQueryNode,
@@ -25,6 +28,7 @@ import {
   RelationalNodeType,
   type ArrayItemType,
   type ArrayProperty,
+  type MergedNonOverlappingType,
   type ModifiedStore,
   type PropertiesOfType,
 } from "./types"
@@ -202,12 +206,21 @@ export class DefaultRelationalNodeBuilder<
 type TableNodeBuilder<
   DataStoreType extends RelationalDataStore,
   TableName extends keyof DataStoreType["tables"],
-  RowType extends RelationalDataTable = DataStoreType["tables"][TableName],
+  RowType extends RelationalDataTable = {},
   TableAlias extends string = never,
   TableType extends DataStoreType["tables"][TableName] = DataStoreType["tables"][TableName]
 > = RelationalDataSource<DataStoreType, RowType> & {
   tableName: TableName
 
+  select(
+    column: STAR
+  ): TableNodeBuilder<
+    DataStoreType,
+    TableName,
+    DataStoreType["tables"][TableName],
+    TableAlias,
+    TableType
+  >
   select<Column extends keyof TableType>(
     ...columns: Column[]
   ): TableNodeBuilder<
@@ -237,7 +250,7 @@ type TableNodeBuilder<
 class DefaultTableNodeBuilder<
   DataStoreType extends RelationalDataStore,
   TableName extends keyof DataStoreType["tables"],
-  RowType extends RelationalDataTable = DataStoreType["tables"][TableName],
+  RowType extends RelationalDataTable = {},
   TableAlias extends string = never,
   TableType extends DataStoreType["tables"][TableName] = DataStoreType["tables"][TableName]
 > implements
@@ -275,10 +288,15 @@ class DefaultTableNodeBuilder<
     this.#where = where
   }
 
-  build(ctor: QueryBuilderCtor<RowType>): Query<RowType> {
-    return new ctor(this.asNode()).build()
-  }
-
+  select(
+    column: STAR
+  ): TableNodeBuilder<
+    DataStoreType,
+    TableName,
+    DataStoreType["tables"][TableName],
+    TableAlias,
+    TableType
+  >
   select<Column extends keyof TableType>(
     ...columns: Column[]
   ): TableNodeBuilder<
@@ -287,18 +305,88 @@ class DefaultTableNodeBuilder<
     Pick<TableType, Column>,
     TableAlias,
     TableType
-  > {
-    return new DefaultTableNodeBuilder(
+  >
+  select<Column extends keyof DataStoreType["tables"][TableName]>(
+    column?: unknown,
+    ...rest: unknown[]
+  ):
+    | TableNodeBuilder<
+        DataStoreType,
+        TableName,
+        DataStoreType["tables"][TableName],
+        TableAlias,
+        TableType
+      >
+    | TableNodeBuilder<
+        DataStoreType,
+        TableName,
+        Pick<TableType, Column>,
+        TableAlias,
+        TableType
+      > {
+    if (column === "*") {
+      return new DefaultTableNodeBuilder<
+        DataStoreType,
+        TableName,
+        DataStoreType["tables"][TableName],
+        TableAlias,
+        TableType
+      >(
+        this.tableName,
+        this.#parent,
+        this.#tableAlias,
+        {
+          nodeType: RelationalNodeType.SELECT,
+          columns: column,
+          aliasing: this.#select?.aliasing,
+        },
+        this.#where
+      )
+    }
+
+    return new DefaultTableNodeBuilder<
+      DataStoreType,
+      TableName,
+      Pick<DataStoreType["tables"][TableName], Column>,
+      TableAlias,
+      TableType
+    >(
       this.tableName,
       this.#parent,
       this.#tableAlias,
       {
         nodeType: RelationalNodeType.SELECT,
-        columns: columns,
+        columns: [column as Column].concat(rest as Column[]),
+        aliasing: this.#select?.aliasing,
       },
       this.#where
     )
   }
+
+  build(ctor: QueryBuilderCtor<RowType>): Query<RowType> {
+    return new ctor(this.asNode()).build()
+  }
+
+  // select<Column extends keyof TableType>(
+  //   ...columns: Column[]
+  // ): TableNodeBuilder<
+  //   DataStoreType,
+  //   TableName,
+  //   Pick<TableType, Column>,
+  //   TableAlias,
+  //   TableType
+  // > {
+  //   return new DefaultTableNodeBuilder(
+  //     this.tableName,
+  //     this.#parent,
+  //     this.#tableAlias,
+  //     {
+  //       nodeType: RelationalNodeType.SELECT,
+  //       columns: columns,
+  //     },
+  //     this.#where
+  //   )
+  // }
 
   alias<Column extends keyof RowType & keyof TableType, Alias extends string>(
     column: Column,
@@ -345,7 +433,64 @@ class DefaultTableNodeBuilder<
   }
 }
 
-type JoinNodeBuilder = {}
+type JoinNodeBuilder<
+  DataStoreType extends RelationalDataStore,
+  LeftRowType extends RelationalDataTable,
+  RightRowType extends RelationalDataTable
+> = RelationalDataSource<
+  DataStoreType,
+  MergedNonOverlappingType<LeftRowType, RightRowType>
+>
+
+class DefaultJoinNodeBuilder<
+  DataStoreType extends RelationalDataStore,
+  LeftTable extends keyof DataStoreType["tables"],
+  RightTable extends keyof DataStoreType["tables"],
+  LeftRowType extends RelationalDataTable,
+  RightRowType extends RelationalDataTable
+> implements JoinNodeBuilder<DataStoreType, LeftRowType, RightRowType>
+{
+  #leftTable: TableQueryNode<DataStoreType, LeftTable, LeftRowType>
+  #rightTable: TableQueryNode<DataStoreType, RightTable, RightRowType>
+  #filter:
+    | JoinColumnFilter<DataStoreType, LeftTable, RightTable>
+    | JoinGroupFilter<DataStoreType, LeftTable, RightTable>
+
+  constructor(
+    leftTable: TableQueryNode<DataStoreType, LeftTable, LeftRowType>,
+    rightTable: TableQueryNode<DataStoreType, RightTable, RightRowType>,
+    filter:
+      | JoinColumnFilter<DataStoreType, LeftTable, RightTable>
+      | JoinGroupFilter<DataStoreType, LeftTable, RightTable>
+  ) {
+    this.#leftTable = leftTable
+    this.#rightTable = rightTable
+    this.#filter = filter
+  }
+
+  asNode(): RelationalQueryNode<RelationalNodeType> {
+    const join: JoinQueryNode<
+      DataStoreType,
+      LeftTable,
+      RightTable,
+      LeftRowType,
+      RightRowType
+    > = {
+      nodeType: RelationalNodeType.JOIN,
+      left: this.#leftTable,
+      right: this.#rightTable,
+      filter: this.#filter,
+    }
+
+    return join
+  }
+
+  build(
+    ctor: QueryBuilderCtor<MergedNonOverlappingType<LeftRowType, RightRowType>>
+  ): Query<MergedNonOverlappingType<LeftRowType, RightRowType>> {
+    return new ctor(this.asNode()).build()
+  }
+}
 
 export const eq: ColumnFilter = (column, value) =>
   ColumnFilterBuilder(column, value, ColumnFilteringOperation.EQ)

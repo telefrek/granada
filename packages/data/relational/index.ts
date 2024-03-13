@@ -15,3 +15,6 @@ export type RelationalDataTable = Record<string, any>
 export type RelationalDataStore = {
   tables: Record<string, RelationalDataTable>
 }
+
+/** Sentinel indicator for all columns */
+export type STAR = "*"
