@@ -74,6 +74,7 @@ export enum RelationalNodeType {
   SELECT = "select",
   CTE = "cte",
   JOIN = "join",
+  MULTI_JOIN = "multi_join",
 }
 
 export type PropertiesOfType<TableType, TargetType> = {
@@ -96,11 +97,12 @@ export type ArrayItemType<
   Column extends ArrayProperty<TableType>
 > = TableType[Column] extends (infer ItemType)[] ? ItemType : never
 
-export type MatchingKey<Left, Right, LeftColumn extends keyof Left> = KeyofType<
+export type MatchingProperty<
+  Left,
   Right,
-  Left[LeftColumn]
->
+  LeftColumn extends keyof Left
+> = PropertyOfType<Right, Left[LeftColumn]>
 
-export type KeyofType<T, K> = {
+export type PropertyOfType<T, K> = {
   [key in keyof T]: T[key] extends K ? key : never
 }[keyof T]

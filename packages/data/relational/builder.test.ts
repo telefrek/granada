@@ -4,6 +4,7 @@ import {
   containsItems,
   cte,
   eq,
+  from,
   gt,
   gte,
   not,
@@ -117,7 +118,6 @@ describe("Relational query builder should support basic functionality", () => {
     result = await executor.run(
       useDataStore<TestDataStore>()
         .from("orders")
-        .select("*")
         .where(gte("id", 2))
         .build(InMemoryRelationalQueryBuilder)
     )
@@ -243,14 +243,18 @@ describe("Relational query builder should support basic functionality", () => {
   })
 
   it("should allow tables to be aliased", async () => {
-    // This should get the projected row with only 2 columns back
+    // Note this more more useful for joins but need to verify this weird
+    // signature still works...
     const result = await executor.run(
-      useDataStore<TestDataStore>()
-        .from("orders", "newOrders")
-        .select("name", "createdAt")
+      from("newOrders", useDataStore<TestDataStore>(), (builder) =>
+        builder.from("orders").select("name", "createdAt")
+      )
+        .from("newOrders")
+        .select("*")
         .build(InMemoryRelationalQueryBuilder)
     )
 
+    // This should get the projected row with only 2 columns back
     expect(result).not.toBeUndefined()
     if (Array.isArray(result.rows)) {
       expect(result.rows.length).toBe(STORE.orders.length)

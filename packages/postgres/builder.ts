@@ -10,6 +10,7 @@ import {
   isColumnFilter,
   isFilterGroup,
   isRelationalQueryNode,
+  isTableAliasQueryNode,
   isTableQueryNode,
   type FilterGroup,
   type FilterTypes,
@@ -129,12 +130,16 @@ function translateTableQuery(
 
   return `SELECT ${
     tableQueryNode.select
-      ? tableQueryNode.select.columns
-          .map((c) => (aliasing.has(c) ? `${c} AS ${aliasing.get(c)!}` : c))
-          .join(", ")
+      ? tableQueryNode.select.columns !== "*"
+        ? tableQueryNode.select.columns
+            .map((c) => (aliasing.has(c) ? `${c} AS ${aliasing.get(c)!}` : c))
+            .join(", ")
+        : "*"
       : "*"
   } FROM ${tableQueryNode.tableName}${
-    tableQueryNode.tableAlias ? ` AS ${tableQueryNode.tableAlias}` : ""
+    isTableAliasQueryNode(tableQueryNode)
+      ? ` AS ${tableQueryNode.tableAlias}`
+      : ""
   } ${
     tableQueryNode.where
       ? `WHERE ${translateFilterGroup(tableQueryNode.where.filter)}`

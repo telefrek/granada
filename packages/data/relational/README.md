@@ -57,7 +57,7 @@ current and correct view of the types, check out this [file](./builder.ts)
 title: AST Types
 ---
 classDiagram
-    direction LR
+    direction RL
     class RelationalNodeType{
         <<enumeration>>
         TABLE
@@ -138,6 +138,9 @@ classDiagram
         rightTable
         filters
     }
+    class MultiJoinQueryNode{
+        joins
+    }
     RelationalNodeType<--RelationalQueryNode
     ColumnFilteringOperation<--ColumnFilter
     ColumnValueContainsOperation<--ContainmentFilter
@@ -163,4 +166,12 @@ classDiagram
     JoinColumnFilter<--JoinQueryNode
     ColumnFilteringOperation<|--JoinColumnFilter
     JoinFilterGroup<|--JoinQueryNode
+    JoinQueryNode<|--MultiJoinQueryNode
+    JoinQueryNode<..CteQueryNode
+    MultiJoinQueryNode<..CteQueryNode
+    RowGenerator<|--NamedRowGenerator
+    NamedRowGenerator<|--CteQueryNode
+    NamedRowGenerator<|--TableQueryNode
+    RowGenerator<|--JoinQueryNode
+    RowGenerator<|--MultiJoinQueryNode
 ```

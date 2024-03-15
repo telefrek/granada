@@ -18,16 +18,19 @@ import {
   isColumnFilter,
   isCteClause,
   isFilterGroup,
+  isGenerator,
   isRelationalQueryNode,
   isStringFilter,
+  isTableAliasQueryNode,
   isTableQueryNode,
   type ArrayFilter,
   type ColumnFilter,
+  type CteClause,
   type FilterGroup,
   type FilterTypes,
   type RelationalQueryNode,
+  type RowGenerator,
   type StringFilter,
-  type TableQueryNode,
 } from "./ast"
 import { RelationalQueryBuilder } from "./builder"
 import {
@@ -74,15 +77,10 @@ type InMemoryQuerySourceMaterializer<
  */
 type InMemoryQuerySegmentMaterializer<
   DataStoreType extends RelationalDataStore,
-  TargetTable extends keyof DataStoreType["tables"],
-  T extends RelationalDataTable = DataStoreType["tables"][TargetTable]
+  T extends RelationalDataTable
 > = (
   store: InMemoryRelationalDataStore<DataStoreType>,
-  node: TableQueryNode<
-    DataStoreType,
-    TargetTable,
-    DataStoreType["tables"][TargetTable]
-  >,
+  node: RowGenerator<DataStoreType, T>,
   tempTables: Map<string, unknown[]>
 ) => T[]
 
@@ -142,51 +140,62 @@ export class InMemoryQueryExecutor<DataStoreType extends RelationalDataStore>
   }
 }
 
-function createMaterializer<
+function createCteMaterializer<
   DataStoreType extends RelationalDataStore,
-  TargetTable extends keyof DataStoreType["tables"],
-  T extends RelationalDataTable = DataStoreType["tables"][TargetTable]
+  T extends RelationalDataTable = RelationalDataTable
 >(
-  table: TargetTable
-): InMemoryQuerySegmentMaterializer<DataStoreType, TargetTable, T> {
+  cte: CteClause<DataStoreType, keyof DataStoreType["tables"], T>
+): InMemoryQuerySegmentMaterializer<DataStoreType, T> {
   return (store, node, projections) => {
-    let rows =
-      node.tableName in store
-        ? store[node.tableName]
-        : (projections.get(
-            node.tableName as string
-          ) as DataStoreType["tables"][TargetTable][]) ?? []
+    return []
+  }
+}
+
+function createTableMaterializer<
+  DataStoreType extends RelationalDataStore,
+  TargetTable extends keyof DataStoreType["tables"] & string,
+  T extends RelationalDataTable = DataStoreType["tables"][TargetTable]
+>(table: TargetTable): InMemoryQuerySegmentMaterializer<DataStoreType, T> {
+  return (store, node, projections) => {
     let ret: T[] = []
+    if (isTableQueryNode(node)) {
+      let rows =
+        node.tableName in store
+          ? store[node.tableName]
+          : (projections.get(
+              node.tableName as string
+            ) as DataStoreType["tables"][TargetTable][]) ?? []
 
-    // Check for any filters to apply
-    if (node.where !== undefined) {
-      rows = rows.filter(buildFilter(node.where.filter))
-    }
+      // Check for any filters to apply
+      if (node.where !== undefined) {
+        rows = rows.filter(buildFilter(node.where.filter))
+      }
 
-    // Apply any select projections on the set firts
-    if (node.select !== undefined) {
-      ret = rows.map((r) => {
-        const entries: Array<readonly [PropertyKey, any]> = []
+      // Apply any select projections on the set firts
+      if (node.select !== undefined) {
+        ret = rows.map((r) => {
+          const entries: Array<readonly [PropertyKey, any]> = []
 
-        // TODO: handle aliasing
-        const transform = new Map<string, string>()
-        for (const alias of node.select?.aliasing ?? []) {
-          transform.set(alias.column as string, alias.alias)
-        }
+          // TODO: handle aliasing
+          const transform = new Map<string, string>()
+          for (const alias of node.select?.aliasing ?? []) {
+            transform.set(alias.column as string, alias.alias)
+          }
 
-        if (node.select!.columns === "*") {
-          Object.keys(r).map((c) =>
-            entries.push([transform.has(c) ? transform.get(c)! : c, r[c]])
-          )
-        } else {
-          ;(node.select!.columns as string[]).map((c) =>
-            entries.push([transform.has(c) ? transform.get(c)! : c, r[c]])
-          )
-        }
-        return Object.fromEntries(entries) as T
-      })
-    } else {
-      ret = rows as T[]
+          if (node.select!.columns === "*") {
+            Object.keys(r).map((c) =>
+              entries.push([transform.has(c) ? transform.get(c)! : c, r[c]])
+            )
+          } else {
+            ;(node.select!.columns as string[]).map((c) =>
+              entries.push([transform.has(c) ? transform.get(c)! : c, r[c]])
+            )
+          }
+          return Object.fromEntries(entries) as T
+        })
+      } else {
+        ret = rows as T[]
+      }
     }
 
     return ret
@@ -202,48 +211,66 @@ export class InMemoryRelationalQueryBuilder<
 
   protected override buildQuery(node: QueryNode): Query<RowType> {
     // Verify we have a relational node
-    if (isRelationalQueryNode(node) && isTableQueryNode(node)) {
+    if (isRelationalQueryNode(node) && isGenerator(node)) {
       return new InMemoryQuery("name", (source) => {
         const projections: Map<string, unknown[]> = new Map()
 
-        const materializer = this.unWrapProjections(source, node, projections)
-        return materializer(source, node, projections)
+        return this.unWrapProjections(source, node, projections)(
+          source,
+          node,
+          projections
+        )
       })
     }
 
     throw new QueryError("Node is not a RelationalQueryNode")
   }
 
-  unWrapProjections<
-    Store extends RelationalDataStore,
-    TableName extends keyof Store["tables"]
-  >(
+  unWrapProjections<Store extends RelationalDataStore>(
     source: InMemoryRelationalDataStore<Store>,
-    tableNode: TableQueryNode<Store, TableName>,
+    node: RowGenerator<Store, RelationalDataTable>,
     projections: Map<string, unknown[]>
-  ): InMemoryQuerySegmentMaterializer<Store, TableName> {
+  ): InMemoryQuerySegmentMaterializer<Store, RelationalDataTable> {
     // Check for a parent
-    if (
-      tableNode.parent !== undefined &&
-      isRelationalQueryNode(tableNode.parent) &&
-      isCteClause(tableNode.parent)
-    ) {
-      // Build the projection
-      const cte = tableNode.parent
+    if (node.parent !== undefined && isRelationalQueryNode(node.parent)) {
+      if (isCteClause(node.parent)) {
+        // CTE is projection that can be lots of types
+        const cte = node.parent
 
-      const materializer = this.unWrapProjections(
-        source,
-        cte.source,
-        projections
-      )
-
-      projections.set(
-        cte.tableName,
-        materializer(source, cte.source, projections)
-      )
+        if (isGenerator(cte.source)) {
+          const materializer = this.unWrapProjections(
+            source,
+            cte.source,
+            projections
+          )
+          projections.set(
+            cte.tableName,
+            materializer(source, cte.source, projections)
+          )
+        }
+      } else if (
+        isTableQueryNode(node.parent) &&
+        isTableAliasQueryNode(node.parent)
+      ) {
+        // Parent is for renames that come from table aliasing
+        projections.set(
+          node.parent.tableAlias,
+          createTableMaterializer(node.parent.tableName)(
+            source,
+            node.parent,
+            projections
+          )
+        )
+      }
     }
 
-    return createMaterializer(tableNode.tableName)
+    if (isRelationalQueryNode(node) && isTableQueryNode(node)) {
+      return createTableMaterializer(node.tableName)
+    }
+
+    console.log(`unsupported:\n\n${JSON.stringify(node, undefined, 2)}\n\n`)
+
+    throw new QueryError(`Unsupported type of row generator: ${node.nodeType}`)
   }
 }
 
