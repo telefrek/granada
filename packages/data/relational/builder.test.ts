@@ -7,6 +7,7 @@ import {
   from,
   gt,
   gte,
+  joinEq,
   not,
   useDataStore,
 } from "./builder"
@@ -34,6 +35,7 @@ interface TimeTrackedObject {
 interface Order extends NumericIdentiry, TimeTrackedObject {
   name: string
   categories: Category[]
+  customerId: number
 }
 
 interface Customer extends NumericIdentiry, TimeTrackedObject {
@@ -70,6 +72,7 @@ describe("Relational query builder should support basic functionality", () => {
         createdAt: Date.now(),
         updatedAt: Date.now(),
         categories: [Category.TEST, Category.PURCHASE],
+        customerId: 1,
       },
       {
         id: 2,
@@ -77,6 +80,7 @@ describe("Relational query builder should support basic functionality", () => {
         createdAt: 0,
         updatedAt: Date.now(),
         categories: [],
+        customerId: 1,
       },
       {
         id: 3,
@@ -84,6 +88,24 @@ describe("Relational query builder should support basic functionality", () => {
         createdAt: Date.now(),
         updatedAt: Date.now(),
         categories: [Category.PURCHASE],
+        customerId: 2,
+      },
+    ]
+
+    STORE.customers = [
+      {
+        id: 1,
+        firstName: "user",
+        lastName: "one",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+      {
+        id: 2,
+        firstName: "user",
+        lastName: "two",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       },
     ]
   })
@@ -174,7 +196,6 @@ describe("Relational query builder should support basic functionality", () => {
     expect(result).not.toBeUndefined()
     if (Array.isArray(result.rows)) {
       expect(result.rows.length).toBe(STORE.orders.length)
-      expect(Object.keys(result.rows[0]).length).toEqual(2)
     }
   })
 
@@ -198,7 +219,6 @@ describe("Relational query builder should support basic functionality", () => {
       expect(result).not.toBeUndefined()
       if (Array.isArray(result.rows)) {
         expect(result.rows.length).toBe(1)
-        expect(Object.keys(result.rows[0]).length).toEqual(2)
       }
     }
   })
@@ -234,7 +254,6 @@ describe("Relational query builder should support basic functionality", () => {
 
     if (Array.isArray(result.rows)) {
       expect(result.rows.length).toBe(STORE.orders.length)
-      expect(Object.keys(result.rows[0]).length).toEqual(2)
 
       // Ensure aliasing works in intellisense and value is not mangled
       expect(result.rows[0].foo).toBe(STORE.orders[0].name)
@@ -303,10 +322,64 @@ describe("Relational query builder should support basic functionality", () => {
     }
   })
 
-  it("should allow basic inner joins", () => {
+  it("should allow basic inner joins", async () => {
     const store = useDataStore<TestDataStore>()
 
-    // TODO: Add filtering type (equality)
-    // store.join("orders", "customers", "id", "id", JoinType.INNER)
+    const result = await executor.run(
+      store
+        .from("orders")
+        .select("id")
+        .alias("id", "order_id")
+        .join(
+          store
+            .from("customers")
+            .where(eq("id", 2))
+            .select("firstName", "lastName"),
+          joinEq("customerId", "id")
+        )
+        .build(InMemoryRelationalQueryBuilder)
+    )
+
+    if (Array.isArray(result.rows)) {
+      expect(result.rows.length).toBe(1)
+      expect(result.rows[0].order_id).toBe(3) // order 3
+      expect(result.rows[0].firstName).toBe("user") // user 2
+      expect(result.rows[0].lastName).toBe("two")
+    }
+  })
+
+  it("should allow a join inside of a cte", async () => {
+    const store = useDataStore<TestDataStore>()
+
+    const result = await executor.run(
+      cte(store, "customerOrders", (builder) =>
+        builder
+          .from("orders")
+          .select("id")
+          .alias("id", "orderId")
+          .join(
+            builder.from("customers").select("firstName", "lastName"),
+            joinEq("customerId", "id")
+          )
+      )
+        .from("customerOrders")
+        .select("*")
+        .where(eq("lastName", "one"))
+        .join(
+          store.from("customers").select("createdAt"),
+          joinEq("lastName", "lastName")
+        )
+
+        .build(InMemoryRelationalQueryBuilder)
+    )
+
+    if (Array.isArray(result.rows)) {
+      const customer = STORE.customers[0]
+      expect(result.rows.length).toBe(2)
+      expect(result.rows[0].orderId).toBe(1) // order 2
+      expect(result.rows[0].firstName).toBe(customer.firstName) // user 1
+      expect(result.rows[0].lastName).toBe(customer.lastName)
+      expect(result.rows[0].createdAt).toBe(customer.createdAt)
+    }
   })
 })

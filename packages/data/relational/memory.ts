@@ -19,6 +19,8 @@ import {
   isCteClause,
   isFilterGroup,
   isGenerator,
+  isJoinColumnFilter,
+  isJoinQueryNode,
   isRelationalQueryNode,
   isStringFilter,
   isTableAliasQueryNode,
@@ -28,6 +30,7 @@ import {
   type CteClause,
   type FilterGroup,
   type FilterTypes,
+  type JoinQueryNode,
   type RelationalQueryNode,
   type RowGenerator,
   type StringFilter,
@@ -151,20 +154,63 @@ function createCteMaterializer<
   }
 }
 
+function createJoinMaterializer<DataStoreType extends RelationalDataStore>(
+  join: JoinQueryNode<DataStoreType, RelationalDataTable, RelationalDataTable>,
+  temporaryTables: Map<string, unknown[]>
+): InMemoryQuerySegmentMaterializer<DataStoreType, Record<string, any>> {
+  return (store, node, projections) => {
+    const ret: Record<string, any>[] = []
+    if (isJoinQueryNode(node)) {
+      // Get the left source
+      const left = (temporaryTables.get(node.left.tableName) ?? []).filter(
+        isProjectedRow
+      )
+      const right = (temporaryTables.get(node.right.tableName) ?? []).filter(
+        isProjectedRow
+      )
+
+      // Need to combine, do this in place at first but have to make generic
+      // later
+
+      if (
+        isJoinColumnFilter(node.filter) &&
+        node.filter.op === ColumnFilteringOperation.EQ
+      ) {
+        for (const leftRow of left) {
+          for (const rightRow of right) {
+            if (
+              (leftRow[ORIGINAL] as any)[node.filter.leftColumn] ===
+              (rightRow[ORIGINAL] as any)[node.filter.rightColumn]
+            ) {
+              ret.push({
+                ...leftRow,
+                ...rightRow,
+              })
+            }
+          }
+        }
+      }
+    }
+
+    return ret
+  }
+}
+
 function createTableMaterializer<
   DataStoreType extends RelationalDataStore,
-  TargetTable extends keyof DataStoreType["tables"] & string,
+  TargetTable extends keyof DataStoreType["tables"],
   T extends RelationalDataTable = DataStoreType["tables"][TargetTable]
 >(table: TargetTable): InMemoryQuerySegmentMaterializer<DataStoreType, T> {
   return (store, node, projections) => {
     let ret: T[] = []
     if (isTableQueryNode(node)) {
       let rows =
-        node.tableName in store
-          ? store[node.tableName]
-          : (projections.get(
-              node.tableName as string
-            ) as DataStoreType["tables"][TargetTable][]) ?? []
+        // Read any projections first to get rid of filtered rows before reading
+        // raw table
+        (projections.get(
+          node.tableName as string
+        ) as DataStoreType["tables"][TargetTable][]) ??
+        (node.tableName in store ? store[node.tableName] : [])
 
       // Check for any filters to apply
       if (node.where !== undefined) {
@@ -191,6 +237,13 @@ function createTableMaterializer<
               entries.push([transform.has(c) ? transform.get(c)! : c, r[c]])
             )
           }
+
+          // Copy any projection context
+          if (isProjectedRow(r)) {
+            entries.push([PROJECTED, true])
+            entries.push([ORIGINAL, r[ORIGINAL]])
+          }
+
           return Object.fromEntries(entries) as T
         })
       } else {
@@ -200,6 +253,30 @@ function createTableMaterializer<
 
     return ret
   }
+}
+
+// Internal symbols for tracking projected information
+const PROJECTED: unique symbol = Symbol()
+const ORIGINAL: unique symbol = Symbol()
+
+// Need to a way to identified projected rows
+type ProjectedRow<T> = RelationalDataTable & {
+  [PROJECTED]: true
+  [ORIGINAL]?: T
+} & T
+
+function isProjectedRow<T>(row: T): row is ProjectedRow<T> {
+  return typeof row === "object" && row !== null && PROJECTED in row
+}
+
+function makeProjected<T>(row: T): ProjectedRow<T> {
+  return isProjectedRow(row)
+    ? row
+    : {
+        ...row,
+        [PROJECTED]: true,
+        [ORIGINAL]: row,
+      }
 }
 
 export class InMemoryRelationalQueryBuilder<
@@ -266,6 +343,49 @@ export class InMemoryRelationalQueryBuilder<
 
     if (isRelationalQueryNode(node) && isTableQueryNode(node)) {
       return createTableMaterializer(node.tableName)
+    }
+
+    if (isJoinQueryNode(node)) {
+      // Prevent corrupting the projections
+      const temporaryTables: Map<string, unknown[]> = new Map()
+
+      const leftRows =
+        projections.get(node.left.tableName) ??
+        source[node.left.tableName] ??
+        []
+
+      const rightRows =
+        projections.get(node.right.tableName) ??
+        source[node.right.tableName] ??
+        []
+
+      temporaryTables.set(node.left.tableName, leftRows.map(makeProjected))
+      temporaryTables.set(node.right.tableName, rightRows.map(makeProjected))
+
+      const leftMaterializer = this.unWrapProjections(
+        source,
+        node.left,
+        temporaryTables
+      )
+
+      const rightMaterializer = this.unWrapProjections(
+        source,
+        node.right,
+        temporaryTables
+      )
+
+      temporaryTables.set(
+        node.left.tableName,
+        leftMaterializer(source, node.left, temporaryTables)
+      )
+
+      temporaryTables.set(
+        node.right.tableName,
+        rightMaterializer(source, node.right, temporaryTables)
+      )
+
+      // Need t ocleanup temporary table materializations...
+      return createJoinMaterializer(node, temporaryTables)
     }
 
     console.log(`unsupported:\n\n${JSON.stringify(node, undefined, 2)}\n\n`)

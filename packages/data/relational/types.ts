@@ -25,10 +25,11 @@ export type ModifiedStore<
   N extends string,
   RowType extends RelationalDataTable
 > = {
-  tables: { [key in keyof Left["tables"]]: Left["tables"][key] } & Record<
-    N,
-    RowType
-  >
+  tables: {
+    [key in keyof Left["tables"] | N]: key extends keyof Left["tables"]
+      ? Left["tables"][key]
+      : RowType
+  }
 }
 
 /**
@@ -42,7 +43,7 @@ export enum JoinType {
 }
 
 /**
- * Represents different types of filters available
+ * Represents different types of column ifltring operations
  */
 export enum ColumnFilteringOperation {
   EQ = "=",
@@ -52,6 +53,9 @@ export enum ColumnFilteringOperation {
   GTE = ">=",
 }
 
+/**
+ * Represents differernt type of column containment operations
+ */
 export enum ColumnValueContainsOperation {
   IN = "in",
 }
@@ -77,7 +81,10 @@ export enum RelationalNodeType {
   MULTI_JOIN = "multi_join",
 }
 
-export type PropertiesOfType<TableType, TargetType> = {
+export type PropertiesOfType<
+  TableType extends RelationalDataTable,
+  TargetType
+> = {
   [K in keyof TableType]: TableType[K] extends TargetType ? K : never
 }[keyof TableType]
 
@@ -85,7 +92,7 @@ export type PropertiesOfType<TableType, TargetType> = {
  * Type that extracts keys that are arrays or strings which are valid for
  * {@link ColumnValueContainsOperation} filters
  */
-export type ArrayProperty<TableType> = {
+export type ArrayProperty<TableType extends RelationalDataTable> = {
   [K in keyof TableType]: TableType[K] extends Array<any> ? K : never
 }[keyof TableType]
 
@@ -93,7 +100,7 @@ export type ArrayProperty<TableType> = {
  * Helps to extract the type from the given {@link ArrayProperty}
  */
 export type ArrayItemType<
-  TableType,
+  TableType extends RelationalDataTable,
   Column extends ArrayProperty<TableType>
 > = TableType[Column] extends (infer ItemType)[] ? ItemType : never
 
