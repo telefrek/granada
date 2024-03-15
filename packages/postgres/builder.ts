@@ -147,8 +147,8 @@ function translateTableQuery(
   }`
 }
 
-function translateFilterGroup<RelationalDataTable>(
-  filter: FilterGroup<RelationalDataTable> | FilterTypes<RelationalDataTable>
+function translateFilterGroup<T extends RelationalDataTable>(
+  filter: FilterGroup<T> | FilterTypes<T>
 ): string {
   if (isFilterGroup(filter)) {
     return filter.filters
