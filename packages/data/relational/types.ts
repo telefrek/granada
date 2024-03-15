@@ -78,7 +78,6 @@ export enum RelationalNodeType {
   SELECT = "select",
   CTE = "cte",
   JOIN = "join",
-  MULTI_JOIN = "multi_join",
 }
 
 export type PropertiesOfType<

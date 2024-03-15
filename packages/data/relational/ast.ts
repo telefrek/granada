@@ -221,8 +221,7 @@ export function isGenerator(
 ): node is RowGenerator<RelationalDataStore, RelationalDataTable> {
   return (
     node.nodeType === RelationalNodeType.TABLE ||
-    node.nodeType === RelationalNodeType.JOIN ||
-    node.nodeType === RelationalNodeType.MULTI_JOIN
+    node.nodeType === RelationalNodeType.JOIN
   )
 }
 

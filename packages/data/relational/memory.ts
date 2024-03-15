@@ -40,10 +40,10 @@ import {
   BooleanOperation,
   ColumnFilteringOperation,
   ColumnValueContainsOperation,
+  RelationalNodeType,
   type ArrayItemType,
   type ArrayProperty,
   type PropertiesOfType,
-  type RelationalNodeType,
 } from "./types"
 
 /**
@@ -246,8 +246,6 @@ function createTableMaterializer<
 
           return Object.fromEntries(entries) as T
         })
-      } else {
-        ret = rows as T[]
       }
     }
 
@@ -341,7 +339,7 @@ export class InMemoryRelationalQueryBuilder<
       }
     }
 
-    if (isRelationalQueryNode(node) && isTableQueryNode(node)) {
+    if (isTableQueryNode(node)) {
       return createTableMaterializer(node.tableName)
     }
 
@@ -349,40 +347,65 @@ export class InMemoryRelationalQueryBuilder<
       // Prevent corrupting the projections
       const temporaryTables: Map<string, unknown[]> = new Map()
 
+      // Process the right side first since the left might be a subjoin...
+
+      if (isTableQueryNode(node.right) || isCteClause(node.right)) {
+        const rightRows =
+          projections.get(node.right.tableName) ??
+          source[node.right.tableName] ??
+          []
+
+        const previous = projections.get(node.right.tableName)
+        projections.set(node.right.tableName, rightRows.map(makeProjected))
+
+        const rightMaterializer = this.unWrapProjections(
+          source,
+          node.right,
+          projections
+        )
+
+        temporaryTables.set(
+          node.right.tableName,
+          rightMaterializer(source, node.right, projections)
+        )
+
+        // Clear temp state
+        if (previous) {
+          projections.set(node.right.tableName, previous)
+        } else {
+          projections.delete(node.right.tableName)
+        }
+      } else {
+        throw new QueryError(
+          `Invalid right source for join: ${node.right.nodeType}`
+        )
+      }
+
+      // Process the left side after the right
       const leftRows =
         projections.get(node.left.tableName) ??
         source[node.left.tableName] ??
         []
 
-      const rightRows =
-        projections.get(node.right.tableName) ??
-        source[node.right.tableName] ??
-        []
+      const previous = projections.get(node.left.tableName)
 
-      temporaryTables.set(node.left.tableName, leftRows.map(makeProjected))
-      temporaryTables.set(node.right.tableName, rightRows.map(makeProjected))
-
+      projections.set(node.left.tableName, leftRows.map(makeProjected))
       const leftMaterializer = this.unWrapProjections(
         source,
         node.left,
-        temporaryTables
-      )
-
-      const rightMaterializer = this.unWrapProjections(
-        source,
-        node.right,
-        temporaryTables
+        projections
       )
 
       temporaryTables.set(
         node.left.tableName,
-        leftMaterializer(source, node.left, temporaryTables)
+        leftMaterializer(source, node.left, projections)
       )
 
-      temporaryTables.set(
-        node.right.tableName,
-        rightMaterializer(source, node.right, temporaryTables)
-      )
+      if (previous) {
+        projections.set(node.left.tableName, previous)
+      } else {
+        projections.delete(node.left.tableName)
+      }
 
       // Need t ocleanup temporary table materializations...
       return createJoinMaterializer(node, temporaryTables)

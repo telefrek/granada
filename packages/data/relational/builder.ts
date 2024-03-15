@@ -258,7 +258,10 @@ class DefaultTableNodeBuilder<
       nodeType: RelationalNodeType.TABLE,
       tableName: this.tableName,
       tableAlias: this.tableAlias,
-      select: this.#select,
+      select: this.#select ?? {
+        nodeType: RelationalNodeType.SELECT,
+        columns: [],
+      },
       where: this.#where,
       parent: this.#parent,
     } as TableQueryNode<DataStoreType, TableName, RowType>
@@ -431,11 +434,33 @@ type JoinNodeBuilder<
   LeftTable extends keyof DataStoreType["tables"],
   RightTable extends keyof DataStoreType["tables"],
   LeftRowType extends RelationalDataTable = DataStoreType["tables"][LeftTable],
-  RightRowType extends RelationalDataTable = DataStoreType["tables"][RightTable]
+  RightRowType extends RelationalDataTable = DataStoreType["tables"][RightTable],
+  JoinedTables extends keyof DataStoreType["tables"] = LeftTable | RightTable
 > = RelationalRowProvider<
   DataStoreType,
   MergedNonOverlappingType<LeftRowType, RightRowType>
->
+> & {
+  join<
+    JoinTarget extends LeftTable | RightTable,
+    JoinTable extends keyof Exclude<DataStoreType["tables"], JoinedTables> &
+      string,
+    RowType extends RelationalDataTable
+  >(
+    target: JoinTarget,
+    source: NamedRelationalRowProvider<DataStoreType, JoinTable, RowType>,
+    filter: JoinColumnFilter<
+      DataStoreType["tables"][JoinTarget],
+      DataStoreType["tables"][JoinTable]
+    >
+  ): JoinNodeBuilder<
+    DataStoreType,
+    JoinTarget,
+    JoinTable,
+    MergedNonOverlappingType<LeftRowType, RightRowType>,
+    RowType,
+    JoinedTables | JoinTable
+  >
+}
 
 class DefaultJoinNodeBuilder<
   DataStoreType extends RelationalDataStore,
@@ -507,6 +532,37 @@ class DefaultJoinNodeBuilder<
     this.rightSource = rightSource
     this.filter = filter
     this.joinType = joinType
+  }
+
+  join<
+    JoinTarget extends LeftTable | RightTable,
+    JoinTable extends keyof Exclude<
+      DataStoreType["tables"],
+      LeftTable | RightTable
+    > &
+      string,
+    RowType extends RelationalDataTable
+  >(
+    target: JoinTarget,
+    source: NamedRelationalRowProvider<DataStoreType, JoinTable, RowType>,
+    filter: JoinColumnFilter<
+      DataStoreType["tables"][JoinTarget],
+      DataStoreType["tables"][JoinTable]
+    >
+  ): JoinNodeBuilder<
+    DataStoreType,
+    JoinTarget,
+    JoinTable,
+    MergedNonOverlappingType<LeftRowType, RightRowType>,
+    RowType,
+    LeftTable | RightTable | JoinTable
+  > {
+    return new DefaultJoinNodeBuilder(
+      { ...this, tableName: target, asNode: this.asNode.bind(this) },
+      source,
+      filter,
+      JoinType.INNER
+    )
   }
 
   asNode(): RelationalQueryNode<RelationalNodeType> {
