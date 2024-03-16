@@ -222,8 +222,8 @@ function createJoinMaterializer<
     const ret: Record<string, any>[] = []
 
     if (isJoinQueryNode(node)) {
-      const left: ProjectedRow<RelationalDataTable>[] = []
-      const right: ProjectedRow<RelationalDataTable>[] = []
+      const left: RowPointer<RelationalDataTable>[] = []
+      const right: RowPointer<RelationalDataTable>[] = []
 
       if (isTableQueryNode(node.left)) {
         left.push(
@@ -231,7 +231,7 @@ function createJoinMaterializer<
             store,
             node.left,
             projections
-          ).filter(isProjectedRow)
+          ).filter(isRowPointer)
         )
       } else if (isJoinQueryNode(node.left)) {
         left.push(
@@ -239,13 +239,13 @@ function createJoinMaterializer<
             store,
             node.left,
             projections
-          ).filter(isProjectedRow)
+          ).filter(isRowPointer)
         )
       } else {
         left.push(
           ...(
             projections.get(node.left.tableName) ?? store[node.left.tableName]
-          ).filter(isProjectedRow)
+          ).filter(isRowPointer)
         )
       }
 
@@ -255,7 +255,7 @@ function createJoinMaterializer<
             store,
             node.right,
             projections
-          ).filter(isProjectedRow)
+          ).filter(isRowPointer)
         )
       } else if (isJoinQueryNode(node.right)) {
         right.push(
@@ -263,13 +263,13 @@ function createJoinMaterializer<
             store,
             node.right,
             projections
-          ).filter(isProjectedRow)
+          ).filter(isRowPointer)
         )
       } else {
         right.push(
           ...(
             projections.get(node.right.tableName) ?? store[node.right.tableName]
-          ).filter(isProjectedRow)
+          ).filter(isRowPointer)
         )
       }
 
@@ -296,7 +296,7 @@ function createJoinMaterializer<
       }
     }
 
-    return ret.map(makeProjected) as MergedNonOverlappingType<
+    return ret.map(makePointer) as MergedNonOverlappingType<
       LeftRowType,
       RightRowType
     >[]
@@ -320,7 +320,7 @@ function createTableAliasMaterializer<
           store,
           alias,
           projections as Map<string, RelationalDataTable[]>
-        ).map(makeProjected)
+        ).map(makePointer)
       )
     }
   }
@@ -342,13 +342,13 @@ function createCteMaterializer<
           store,
           cte.source,
           projections
-        ).map(makeProjected)
+        ).map(makePointer)
       )
     } else if (isJoinQueryNode(cte.source)) {
       projections.set(
         cte.tableName as string,
         createJoinMaterializer(cte.source)(store, cte.source, projections).map(
-          makeProjected
+          makePointer
         )
       )
     }
@@ -372,7 +372,7 @@ function createTableMaterializer<
       (projections.get(
         node.tableName as string
       ) as DataStoreType["tables"][TableName][]) ??
-      (node.tableName in store ? store[node.tableName].map(makeProjected) : [])
+      (node.tableName in store ? store[node.tableName].map(makePointer) : [])
 
     // Check for any filters to apply
     if (node.where !== undefined) {
@@ -400,9 +400,8 @@ function createTableMaterializer<
           )
         }
 
-        // Copy any projection context
-        if (isProjectedRow(r)) {
-          entries.push([PROJECTED, true])
+        // Carry any pointer context
+        if (isRowPointer(r)) {
           entries.push([ORIGINAL, r[ORIGINAL]])
         }
 
@@ -415,25 +414,22 @@ function createTableMaterializer<
 }
 
 // Internal symbols for tracking projected information
-const PROJECTED: unique symbol = Symbol()
 const ORIGINAL: unique symbol = Symbol()
 
-// Need to a way to identified projected rows
-type ProjectedRow<T> = RelationalDataTable & {
-  [PROJECTED]: true
+// Need to a way to identified original row sources for joins
+type RowPointer<T> = RelationalDataTable & {
   [ORIGINAL]?: T
 } & T
 
-function isProjectedRow<T>(row: T): row is ProjectedRow<T> {
-  return typeof row === "object" && row !== null && PROJECTED in row
+function isRowPointer<T>(row: T): row is RowPointer<T> {
+  return typeof row === "object" && row !== null && ORIGINAL in row
 }
 
-function makeProjected<T>(row: T): ProjectedRow<T> {
-  return isProjectedRow(row)
+function makePointer<T>(row: T): RowPointer<T> {
+  return isRowPointer(row)
     ? row
     : {
         ...row,
-        [PROJECTED]: true,
         [ORIGINAL]: row,
       }
 }
