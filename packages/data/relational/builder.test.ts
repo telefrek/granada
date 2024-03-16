@@ -1,10 +1,10 @@
 import {
+  aliasTable,
   and,
   contains,
   containsItems,
   cte,
   eq,
-  from,
   gt,
   gte,
   joinEq,
@@ -269,8 +269,12 @@ describe("Relational query builder should support basic functionality", () => {
     // Note this more more useful for joins but need to verify this weird
     // signature still works...
     const result = await executor.run(
-      from("newOrders", useDataStore<TestDataStore>(), (builder) =>
-        builder.from("orders").select("name", "createdAt")
+      // from("newOrders", useDataStore<TestDataStore>(), (builder) =>
+      //   builder.from("orders").select("name", "createdAt")
+      // )
+      aliasTable(
+        "newOrders",
+        useDataStore<TestDataStore>().from("orders").select("name", "createdAt")
       )
         .from("newOrders")
         .select("*")
@@ -374,8 +378,9 @@ describe("Relational query builder should support basic functionality", () => {
   })
 
   it("should allow multiple joins", async () => {
-    const store = from("order2", useDataStore<TestDataStore>(), (builder) =>
-      builder.from("orders").select("*")
+    const store = aliasTable(
+      "order2",
+      useDataStore<TestDataStore>().from("orders").select("*")
     )
 
     const result = await executor.run(
@@ -435,6 +440,40 @@ describe("Relational query builder should support basic functionality", () => {
       expect(result.rows[0].firstName).toBe(customer.firstName) // user 1
       expect(result.rows[0].lastName).toBe(customer.lastName)
       expect(result.rows[0].createdAt).toBe(customer.createdAt)
+    }
+  })
+
+  it("should allow a join utilizing a cte", async () => {
+    const store = cte(
+      useDataStore<TestDataStore>(),
+      "customerOrders",
+      (builder) =>
+        builder
+          .from("orders")
+          .select("customerId", "id", "createdAt")
+          .alias("id", "orderId")
+    )
+
+    const result = await executor.run(
+      store
+        .from("customerOrders")
+        .select("*")
+        .join(
+          store.from("customers").select("firstName", "lastName"),
+          joinEq("customerId", "id")
+        )
+        .build(InMemoryRelationalQueryBuilder)
+    )
+
+    expect(Array.isArray(result.rows)).toBeTruthy()
+    if (Array.isArray(result.rows)) {
+      expect(result.rows.length).toBe(3)
+
+      expect(result.rows[0].orderId).toBe(1)
+      expect(result.rows[0].lastName).toBe("one")
+
+      expect(result.rows[2].orderId).toBe(3)
+      expect(result.rows[2].lastName).toBe("two")
     }
   })
 })

@@ -3,8 +3,6 @@
  * queries used in the framework
  */
 
-import type { OptionalProperties } from "@telefrek/core/type/utils.js"
-
 /**
  * Represents the basic information about a node in the query AST
  */
@@ -28,5 +26,5 @@ export type QueryOperation<
  * Represents a source of values and their types as well as optional default values
  */
 export type QuerySource<T> = QueryNode & {
-  defaults?: Partial<OptionalProperties<T>>
+  // defaults?: Partial<OptionalProperties<T>>
 }

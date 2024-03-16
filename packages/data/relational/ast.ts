@@ -14,6 +14,7 @@ import {
   type ArrayProperty,
   type JoinType,
   type MatchingProperty,
+  type MergedNonOverlappingType,
   type PropertiesOfType,
 } from "./types"
 
@@ -293,13 +294,14 @@ export type ColumnAlias<
  * Rename to match nomenclature
  */
 export type SelectClause<
-  TableType extends RelationalDataTable,
-  Column extends keyof TableType,
+  DataStoreType extends RelationalDataStore,
+  TableName extends keyof DataStoreType["tables"],
+  Column extends keyof DataStoreType["tables"][TableName],
   RowType extends RelationalDataTable
 > = QuerySource<RowType> &
   RelationalQueryNode<RelationalNodeType.SELECT> & {
     columns: Column[] | STAR
-    aliasing?: ColumnAlias<TableType, Column, string>[]
+    aliasing?: ColumnAlias<DataStoreType["tables"][TableName], Column, string>[]
   }
 
 /**
@@ -309,12 +311,16 @@ export type SelectClause<
  * @returns True if the node is a {@link SelectClause}
  */
 export function isSelectClause<
-  TableType extends RelationalDataTable,
-  Column extends keyof TableType,
-  RowType extends RelationalDataTable = Pick<TableType, Column>
+  DataStoreType extends RelationalDataStore,
+  TableName extends keyof DataStoreType["tables"]
 >(
   node: RelationalQueryNode<RelationalNodeType>
-): node is SelectClause<TableType, Column, RowType> {
+): node is SelectClause<
+  DataStoreType,
+  TableName,
+  keyof DataStoreType["tables"][TableName],
+  DataStoreType["tables"][TableName]
+> {
   return node.nodeType === RelationalNodeType.SELECT
 }
 
@@ -329,7 +335,8 @@ export type TableQueryNode<
   NamedRowGenerator<DataStoreType, TableName, RowType> & {
     tableName: TableName
     select?: SelectClause<
-      DataStoreType["tables"][TableName],
+      DataStoreType,
+      TableName,
       keyof DataStoreType["tables"][TableName],
       RowType
     >
@@ -341,17 +348,9 @@ export type TableAliasQueryNode<
   TableName extends keyof DataStoreType["tables"],
   TableAlias extends keyof DataStoreType["tables"],
   RowType extends RelationalDataTable = DataStoreType["tables"][TableName]
-> = RelationalQueryNode<RelationalNodeType.TABLE> &
-  NamedRowGenerator<DataStoreType, TableAlias, RowType> & {
-    tableName: TableName
-    tableAlias: TableAlias
-    select?: SelectClause<
-      DataStoreType["tables"][TableName],
-      keyof DataStoreType["tables"][TableName],
-      RowType
-    >
-    where?: WhereClause<DataStoreType["tables"][TableName]>
-  }
+> = TableQueryNode<DataStoreType, TableName, RowType> & {
+  tableAlias: TableAlias
+}
 
 /**
  * Type guard for {@link TableQueryNode} identification
@@ -441,27 +440,31 @@ export type JoinQueryNode<
   DataStoreType extends RelationalDataStore,
   LeftRowType extends RelationalDataTable,
   RightRowType extends RelationalDataTable
-> = RelationalQueryNode<RelationalNodeType.JOIN> & {
-  left: NamedRowGenerator<
+> = RelationalQueryNode<RelationalNodeType.JOIN> &
+  RowGenerator<
     DataStoreType,
-    keyof DataStoreType["tables"],
-    LeftRowType
-  >
-  right: NamedRowGenerator<
-    DataStoreType,
-    keyof DataStoreType["tables"],
-    RightRowType
-  >
-  filter:
-    | JoinGroupFilter<LeftRowType, RightRowType>
-    | JoinColumnFilter<
-        LeftRowType,
-        RightRowType,
-        keyof LeftRowType,
-        MatchingProperty<LeftRowType, RightRowType, keyof LeftRowType>
-      >
-  type: JoinType
-}
+    MergedNonOverlappingType<LeftRowType, RightRowType>
+  > & {
+    left: NamedRowGenerator<
+      DataStoreType,
+      keyof DataStoreType["tables"],
+      LeftRowType
+    >
+    right: NamedRowGenerator<
+      DataStoreType,
+      keyof DataStoreType["tables"],
+      RightRowType
+    >
+    filter:
+      | JoinGroupFilter<LeftRowType, RightRowType>
+      | JoinColumnFilter<
+          LeftRowType,
+          RightRowType,
+          keyof LeftRowType,
+          MatchingProperty<LeftRowType, RightRowType, keyof LeftRowType>
+        >
+    type: JoinType
+  }
 
 export function isJoinQueryNode<DataStoreType extends RelationalDataStore>(
   node: RelationalQueryNode<RelationalNodeType>
