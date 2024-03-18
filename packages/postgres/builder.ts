@@ -251,9 +251,7 @@ function extractProjections(
   return info
 }
 
-function translateCte(
-  cte: CteClause<RelationalDataStore, keyof RelationalDataStore["tables"]>,
-): string {
+function translateCte(cte: CteClause): string {
   return `${cte.tableName} AS (${
     isTableQueryNode(cte.source)
       ? translateTableQuery(cte.source)

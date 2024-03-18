@@ -63,7 +63,7 @@ describe("Postgres query syntax should be translated correctly", () => {
       .select("id", "categories")
       .alias("id", "orderId")
       .where(containsItems("categories", "purchase"))
-      .build(PostgresQueryBuilder)
+      .build(PostgresQueryBuilder, "testQuery")
 
     if (isPostgresRelationalQuery(query)) {
       expect(query.queryText).toEqual(
@@ -89,7 +89,7 @@ describe("Postgres query syntax should be translated correctly", () => {
     )
       .from("customerOrders")
       .select("*")
-      .build(PostgresQueryBuilder)
+      .build(PostgresQueryBuilder, "testQuery")
 
     if (isPostgresRelationalQuery(query)) {
       expect(query.queryText).toEqual(
@@ -122,7 +122,7 @@ describe("Postgres query syntax should be translated correctly", () => {
         context.from("customerNames").select("firstName", "lastName"),
         joinEq("customerId", "id"),
       )
-      .build(PostgresQueryBuilder)
+      .build(PostgresQueryBuilder, "testQuery")
 
     if (isPostgresRelationalQuery(query)) {
       expect(query.queryText).toEqual(
