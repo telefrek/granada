@@ -1,9 +1,4 @@
-import {
-  containsItems,
-  cte,
-  gt,
-  joinEq,
-} from "@telefrek/data/relational/builder"
+import { containsItems, gt } from "@telefrek/data/relational/builder"
 import {
   PostgresQueryBuilder,
   createRelationalQueryContext,
@@ -74,19 +69,21 @@ describe("Postgres query syntax should be translated correctly", () => {
 
   it("Should create a valid query from a builder with a cte and join", () => {
     const context = createRelationalQueryContext<TestDatabase>()
-    const query = cte(context, "customerOrders", (builder) =>
-      builder
-        .from("orders")
-        .select("id", "categories", "amount")
-        .alias("id", "orderId")
-        .where(gt("amount", 0))
-        .join(
-          context
-            .from("customers")
-            .select("firstName", "lastName", "createdAt"),
-          joinEq("customerId", "id"),
-        ),
-    )
+    const query = context
+      .withCte("customerOrders", (builder) =>
+        builder
+          .from("orders")
+          .select("id", "categories", "amount")
+          .alias("id", "orderId")
+          .where(gt("amount", 0))
+          .join(
+            "customers",
+            (customers) =>
+              customers.select("firstName", "lastName", "createdAt"),
+            "customerId",
+            "id",
+          ),
+      )
       .from("customerOrders")
       .select("*")
       .build(PostgresQueryBuilder, "testQuery")
@@ -99,28 +96,24 @@ describe("Postgres query syntax should be translated correctly", () => {
   })
 
   it("Should create a valid query for multiple cte and a join in the main query", () => {
-    const context = cte(
-      cte(
-        createRelationalQueryContext<TestDatabase>(),
-        "customerOrders",
-        (builder) =>
-          builder
-            .from("orders")
-            .select("id", "customerId", "categories", "amount")
-            .alias("id", "orderId")
-            .where(gt("amount", 0)),
-      ),
-      "customerNames",
-      (builder) =>
+    const query = createRelationalQueryContext<TestDatabase>()
+      .withCte("customerOrders", (builder) =>
+        builder
+          .from("orders")
+          .select("id", "customerId", "categories", "amount")
+          .alias("id", "orderId")
+          .where(gt("amount", 0)),
+      )
+      .withCte("customerNames", (builder) =>
         builder.from("customers").select("id", "firstName", "lastName"),
-    )
-
-    const query = context
+      )
       .from("customerOrders")
       .select("orderId", "amount", "categories")
       .join(
-        context.from("customerNames").select("firstName", "lastName"),
-        joinEq("customerId", "id"),
+        "customerNames",
+        (customerNames) => customerNames.select("firstName", "lastName"),
+        "customerId",
+        "id",
       )
       .build(PostgresQueryBuilder, "testQuery")
 

@@ -2,11 +2,9 @@ import {
   and,
   contains,
   containsItems,
-  cte,
   eq,
   gt,
   gte,
-  joinEq,
   not,
   useDataStore,
 } from "./builder"
@@ -285,9 +283,13 @@ describe("Relational query builder should support basic functionality", () => {
 
   it("should allow cte clauses", async () => {
     const result = await executor.run(
-      cte(useDataStore<TestDataStore>(), "foo", (builder) =>
-        builder.from("orders").select("name", "categories").where(gt("id", 1)),
-      )
+      useDataStore<TestDataStore>()
+        .withCte("foo", (builder) =>
+          builder
+            .from("orders")
+            .select("name", "categories")
+            .where(gt("id", 1)),
+        )
         .from("foo")
         .select("name")
         .where(containsItems("categories", Category.PURCHASE))
@@ -302,20 +304,19 @@ describe("Relational query builder should support basic functionality", () => {
 
   it("should allow multiple cte clauses", async () => {
     const result = await executor.run(
-      cte(
-        cte(useDataStore<TestDataStore>(), "foo", (builder) =>
+      useDataStore<TestDataStore>()
+        .withCte("foo", (builder) =>
           builder
             .from("orders")
             .select("name", "categories")
             .where(gt("id", 1)),
-        ),
-        "bar",
-        (builder) =>
+        )
+        .withCte("bar", (builder) =>
           builder
             .from("foo")
             .select("name")
             .where(containsItems("categories", Category.PURCHASE)),
-      )
+        )
         .from("bar")
         .select("*")
         .build(InMemoryRelationalQueryBuilder, "testQuery"),
@@ -336,11 +337,11 @@ describe("Relational query builder should support basic functionality", () => {
         .select("id")
         .alias("id", "order_id")
         .join(
-          store
-            .from("customers")
-            .where(eq("id", 2))
-            .select("firstName", "lastName"),
-          joinEq("customerId", "id"),
+          "customers",
+          (customers) =>
+            customers.where(eq("id", 2)).select("firstName", "lastName"),
+          "customerId",
+          "id",
         )
         .build(InMemoryRelationalQueryBuilder, "testQuery"),
     )
@@ -361,8 +362,10 @@ describe("Relational query builder should support basic functionality", () => {
         .from("orders")
         .select("id")
         .join(
-          store.from("customers").where(gt("id", 1)),
-          joinEq("customerId", "id"),
+          "customers",
+          (customers) => customers.where(gt("id", 1)),
+          "customerId",
+          "id",
         )
         .build(InMemoryRelationalQueryBuilder, "testQuery"),
     )
@@ -375,23 +378,23 @@ describe("Relational query builder should support basic functionality", () => {
   })
 
   it("should allow multiple joins", async () => {
-    const store = useDataStore<TestDataStore>().withTableAlias(
-      "orders",
-      "orders2",
-    )
-
     const result = await executor.run(
-      store
+      useDataStore<TestDataStore>()
+        .withTableAlias("orders", "orders2")
         .from("orders")
         .select("id")
         .join(
-          store.from("orders2").select("customerId").where(eq("id", 2)),
-          joinEq("id", "id"),
+          "orders2",
+          (orders2) => orders2.select("customerId").where(eq("id", 2)),
+          "id",
+          "id",
         )
         .join(
           "orders",
-          store.from("customers").select("firstName", "lastName"),
-          joinEq("customerId", "id"),
+          "customers",
+          (customers) => customers.select("firstName", "lastName"),
+          "customerId",
+          "id",
         )
         .build(InMemoryRelationalQueryBuilder, "testQuery"),
     )
@@ -406,25 +409,28 @@ describe("Relational query builder should support basic functionality", () => {
   })
 
   it("should allow a join inside of a cte", async () => {
-    const store = useDataStore<TestDataStore>()
-
     const result = await executor.run(
-      cte(store, "customerOrders", (builder) =>
-        builder
-          .from("orders")
-          .select("id")
-          .alias("id", "orderId")
-          .join(
-            builder.from("customers").select("firstName", "lastName"),
-            joinEq("customerId", "id"),
-          ),
-      )
+      useDataStore<TestDataStore>()
+        .withCte("customerOrders", (builder) =>
+          builder
+            .from("orders")
+            .select("id")
+            .alias("id", "orderId")
+            .join(
+              "customers",
+              (customers) => customers.select("firstName", "lastName"),
+              "customerId",
+              "id",
+            ),
+        )
         .from("customerOrders")
         .select("*")
         .where(eq("lastName", "one"))
         .join(
-          store.from("customers").select("createdAt"), // Add an additional column that wasn't part of cte...
-          joinEq("lastName", "lastName"),
+          "customers",
+          (customers) => customers.select("createdAt"),
+          "lastName",
+          "lastName",
         )
 
         .build(InMemoryRelationalQueryBuilder, "testQuery"),
@@ -441,23 +447,21 @@ describe("Relational query builder should support basic functionality", () => {
   })
 
   it("should allow a join utilizing a cte", async () => {
-    const store = cte(
-      useDataStore<TestDataStore>(),
-      "customerOrders",
-      (builder) =>
-        builder
-          .from("orders")
-          .select("customerId", "id", "createdAt")
-          .alias("id", "orderId"),
-    )
-
     const result = await executor.run(
-      store
+      useDataStore<TestDataStore>()
+        .withCte("customerOrders", (builder) =>
+          builder
+            .from("orders")
+            .select("customerId", "id", "createdAt")
+            .alias("id", "orderId"),
+        )
         .from("customerOrders")
         .select("*")
         .join(
-          store.from("customers").select("firstName", "lastName"),
-          joinEq("customerId", "id"),
+          "customers",
+          (from) => from.select("firstName", "lastName"),
+          "customerId",
+          "id",
         )
         .build(InMemoryRelationalQueryBuilder, "testQuery"),
     )
