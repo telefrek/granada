@@ -269,9 +269,6 @@ describe("Relational query builder should support basic functionality", () => {
     // Note this more more useful for joins but need to verify this weird
     // signature still works...
     const result = await executor.run(
-      // from("newOrders", useDataStore<TestDataStore>(), (builder) =>
-      //   builder.from("orders").select("name", "createdAt")
-      // )
       aliasTable(
         "newOrders",
         useDataStore<TestDataStore>().from("orders").select("name", "createdAt")

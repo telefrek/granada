@@ -1,3 +1,9 @@
+import util from "util"
+
+export function getDebugInfo(target: unknown, depth: number = 25): string {
+  return util.inspect(target, false, depth, true)
+}
+
 /** Simple type representing `void | PromiseLike<void>` */
 export type MaybeAwaitable<T> = T | PromiseLike<T>
 
