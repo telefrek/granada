@@ -193,7 +193,7 @@ function translateNode(node: RelationalQueryNode<RelationalNodeType>): string {
     let CTE = `WITH ${info.projections
       .filter(isCteClause)
       .map(translateCte)
-      .join(",")}`
+      .join(", ")}`
 
     return `${CTE} ${
       isTableQueryNode(info.queryNode)
