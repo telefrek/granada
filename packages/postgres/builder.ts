@@ -12,7 +12,6 @@ import {
   isFilterGroup,
   isJoinClauseNode,
   isRelationalQueryNode,
-  isTableAliasQueryNode,
   isTableQueryNode,
   type CteClause,
   type FilterGroup,
@@ -27,7 +26,6 @@ import {
 } from "@telefrek/data/relational/builder"
 import {
   CteNodeManager,
-  TableAliasNodeManager,
   TableNodeManager,
   getTreeRoot,
   hasProjections,
@@ -134,8 +132,8 @@ function translateTableQuery(
 
   const select = manager.select
 
-  const aliasing: Map<string, string> = select?.aliasing
-    ? select.aliasing.reduce(
+  const aliasing: Map<string, string> = manager.columnAlias
+    ? manager.columnAlias.reduce(
         (temp, alias) => temp.set(alias.column as string, alias.alias),
         new Map<string, string>()
       )
@@ -150,6 +148,8 @@ function translateTableQuery(
         : "*"
       : "*"
   } FROM ${node.tableName}${
+    manager.tableAlias ? `AS ${manager.tableAlias}` : ""
+  }${
     manager.where ? ` WHERE ${translateFilterGroup(manager.where.filter)}` : ""
   }`
 }
@@ -206,11 +206,6 @@ function extractProjections(
     if (isCteClause(current)) {
       info.projections.push(current)
       current = new CteNodeManager(current).child
-    } else if (isTableAliasQueryNode(current)) {
-      info.aliasing.set(
-        current.tableName,
-        new TableAliasNodeManager(current).child!
-      )
     }
   }
 

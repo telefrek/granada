@@ -9,17 +9,16 @@ import { QueryBuilderBase } from "../query/builder"
 import { QueryError } from "../query/error"
 import {
   ContainmentObjectType,
+  type ColumnAlias,
   type CteClause,
   type FilterGroup,
   type FilterTypes,
   type JoinClauseQueryNode,
   type JoinColumnFilter,
-  type JoinGroupFilter,
   type NamedRowGenerator,
   type RelationalQueryNode,
   type RowGenerator,
   type SelectClause,
-  type TableAliasNode,
   type TableQueryNode,
   type WhereClause,
 } from "./ast"
@@ -54,9 +53,23 @@ export abstract class RelationalQueryBuilder<
  */
 export type RelationalNodeBuilder<
   DataStoreType extends RelationalDataStore,
-  RowType extends RelationalDataTable = never
+  RowType extends RelationalDataTable = never,
+  Aliasing extends keyof DataStoreType["tables"] = never
 > = RelationalRowProvider<DataStoreType, RowType> & {
   context?: RelationalQueryNode<RelationalNodeType>
+  tableAlias: TableAlias
+
+  withTableAlias<
+    TableName extends keyof Omit<DataStoreType["tables"], Aliasing>,
+    Alias extends string
+  >(
+    table: TableName,
+    alias: Alias
+  ): RelationalNodeBuilder<
+    ModifiedStore<DataStoreType, Alias, DataStoreType["tables"][TableName]>,
+    RowType,
+    Aliasing | Alias
+  >
 
   from<TableName extends keyof DataStoreType["tables"]>(
     tableName: TableName
@@ -233,39 +246,6 @@ type NamedRelationalRowProvider<
   tableName: TableName
 }
 
-export function aliasTable<
-  DataStoreType extends RelationalDataStore,
-  TableName extends keyof DataStoreType["tables"],
-  TableAlias extends string,
-  RowType extends RelationalDataTable
->(
-  tableAlias: TableAlias,
-  original: NamedRelationalRowProvider<DataStoreType, TableName, RowType>
-): RelationalNodeBuilder<
-  ModifiedStore<DataStoreType, TableAlias, RowType>,
-  RowType
-> {
-  const source = original.asNode()
-
-  // const original = source(builder)
-  const aliasNode: TableAliasNode<
-    ModifiedStore<DataStoreType, TableAlias, RowType>,
-    TableAlias,
-    RowType
-  > = {
-    nodeType: RelationalNodeType.ALIAS,
-    tableName: tableAlias,
-    children: [source],
-  }
-
-  source.parent = aliasNode
-
-  return new DefaultRelationalNodeBuilder<
-    ModifiedStore<DataStoreType, TableAlias, RowType>,
-    RowType
-  >(source)
-}
-
 export function cte<
   DataStoreType extends RelationalDataStore,
   Alias extends string,
@@ -306,15 +286,23 @@ export function cte<
     generator.parent = cte
   }
 
-  return new DefaultRelationalNodeBuilder(cte)
+  return new DefaultRelationalNodeBuilder(cte, builder.tableAlias)
+}
+
+type TableAlias = {
+  [
+    key: keyof RelationalDataStore["tables"]
+  ]: keyof RelationalDataStore["tables"]
 }
 
 export class DefaultRelationalNodeBuilder<
   DataStoreType extends RelationalDataStore,
-  RowType extends RelationalDataTable = never
-> implements RelationalNodeBuilder<DataStoreType, RowType>
+  RowType extends RelationalDataTable = never,
+  Aliasing extends keyof DataStoreType["tables"] = never
+> implements RelationalNodeBuilder<DataStoreType, RowType, Aliasing>
 {
   #context?: RelationalQueryNode<RelationalNodeType>
+  #tableAlias: TableAlias = {}
 
   // Only all the context to transit to the next node in the chain
   get context(): RelationalQueryNode<RelationalNodeType> | undefined {
@@ -324,12 +312,42 @@ export class DefaultRelationalNodeBuilder<
     return current
   }
 
+  get tableAlias(): TableAlias {
+    return this.#tableAlias
+  }
+
   asNode(): RelationalQueryNode<RelationalNodeType> {
     throw new QueryError("No context exists on the current query builder")
   }
 
-  constructor(context?: RelationalQueryNode<RelationalNodeType>) {
+  constructor(
+    context?: RelationalQueryNode<RelationalNodeType>,
+    tableAlias: TableAlias = {}
+  ) {
     this.#context = context
+    this.#tableAlias = tableAlias
+  }
+
+  withTableAlias<
+    TableName extends keyof Omit<DataStoreType["tables"], Aliasing>,
+    Alias extends string
+  >(
+    table: TableName,
+    alias: Alias
+  ): RelationalNodeBuilder<
+    ModifiedStore<DataStoreType, Alias, DataStoreType["tables"][TableName]>,
+    RowType,
+    Aliasing | Alias
+  > {
+    const a = Object.fromEntries([[alias, table as string]])
+    return new DefaultRelationalNodeBuilder<
+      ModifiedStore<DataStoreType, Alias, DataStoreType["tables"][TableName]>,
+      RowType,
+      Aliasing | Alias
+    >(this.#context, {
+      ...this.tableAlias,
+      ...a,
+    })
   }
 
   from<TableName extends keyof DataStoreType["tables"]>(
@@ -339,11 +357,16 @@ export class DefaultRelationalNodeBuilder<
     TableName,
     DataStoreType["tables"][TableName]
   > {
+    const alias: keyof DataStoreType["tables"] | undefined =
+      tableName in this.#tableAlias
+        ? this.#tableAlias[tableName as string]
+        : undefined
+
     return new DefaultTableNodeBuilder<
       DataStoreType,
       TableName,
       DataStoreType["tables"][TableName]
-    >(tableName, undefined, undefined, this.context)
+    >(tableName, alias, undefined, undefined, undefined, this.context)
   }
 
   build(ctor: QueryBuilderCtor<RowType>): Query<RowType> {
@@ -392,15 +415,10 @@ type TableNodeBuilder<
       JoinTable,
       JoinRowType
     >,
-    filter:
-      | JoinColumnFilter<
-          DataStoreType["tables"][TableName],
-          DataStoreType["tables"][JoinTable]
-        >
-      | JoinGroupFilter<
-          DataStoreType["tables"][TableName],
-          DataStoreType["tables"][JoinTable]
-        >,
+    filter: JoinColumnFilter<
+      DataStoreType["tables"][TableName],
+      DataStoreType["tables"][JoinTable]
+    >,
     type?: JoinType
   ): JoinNodeBuilder<
     DataStoreType,
@@ -433,6 +451,21 @@ class DefaultTableNodeBuilder<
   RowType extends RelationalDataTable = {}
 > implements TableNodeBuilder<DataStoreType, TableName, RowType>
 {
+  tableName: TableName
+  tableAlias?: keyof DataStoreType["tables"]
+
+  #select?: SelectClause<
+    DataStoreType,
+    TableName,
+    keyof DataStoreType["tables"][TableName],
+    RowType
+  >
+  #where?: WhereClause<DataStoreType["tables"][TableName]>
+  #alias?: ColumnAlias<
+    DataStoreType["tables"][TableName],
+    keyof DataStoreType["tables"][TableName],
+    string
+  >[]
   #parent?: RelationalQueryNode<RelationalNodeType>
 
   asNode(): RelationalQueryNode<RelationalNodeType> {
@@ -443,9 +476,12 @@ class DefaultTableNodeBuilder<
 
     const where = this.#where
 
+    const aliasing = this.#alias
+
     const node = {
       nodeType: RelationalNodeType.TABLE,
       tableName: this.tableName,
+      alias: this.tableAlias,
     } as TableQueryNode<DataStoreType, TableName, RowType>
 
     select.parent = node
@@ -453,6 +489,13 @@ class DefaultTableNodeBuilder<
     if (where) {
       where.parent = node
       node.children.push(where)
+    }
+
+    if (aliasing) {
+      aliasing.forEach((a) => {
+        a.parent = node
+        node.children?.push(a)
+      })
     }
 
     if (node.parent) {
@@ -475,17 +518,9 @@ class DefaultTableNodeBuilder<
     return node
   }
 
-  tableName: TableName
-  #select?: SelectClause<
-    DataStoreType,
-    TableName,
-    keyof DataStoreType["tables"][TableName],
-    RowType
-  >
-  #where?: WhereClause<DataStoreType["tables"][TableName]>
-
   constructor(
     tableName: TableName,
+    tableAlias?: keyof DataStoreType["tables"],
     select?: SelectClause<
       DataStoreType,
       TableName,
@@ -493,11 +528,17 @@ class DefaultTableNodeBuilder<
       RowType
     >,
     where?: WhereClause<DataStoreType["tables"][TableName]>,
+    alias?: ColumnAlias<
+      DataStoreType["tables"][TableName],
+      keyof DataStoreType["tables"][TableName],
+      string
+    >[],
     parent?: RelationalQueryNode<RelationalNodeType>
   ) {
     this.tableName = tableName
-    this.#select = select
+    ;(this.tableAlias = tableAlias), (this.#select = select)
     this.#where = where
+    this.#alias = alias
     this.#parent = parent
   }
 
@@ -572,12 +613,13 @@ class DefaultTableNodeBuilder<
         DataStoreType["tables"][TableName]
       >(
         this.tableName,
+        this.tableAlias,
         {
           nodeType: RelationalNodeType.SELECT,
           columns: column,
-          aliasing: this.#select?.aliasing,
         },
         this.#where,
+        this.#alias,
         this.#parent
       )
     }
@@ -588,12 +630,13 @@ class DefaultTableNodeBuilder<
       Pick<DataStoreType["tables"][TableName], Column>
     >(
       this.tableName,
+      this.tableAlias,
       {
         nodeType: RelationalNodeType.SELECT,
         columns: [column as Column].concat(rest as Column[]),
-        aliasing: this.#select?.aliasing,
       },
       this.#where,
+      this.#alias,
       this.#parent
     )
   }
@@ -613,16 +656,17 @@ class DefaultTableNodeBuilder<
     TableName,
     AliasedType<RowType, Column, Alias>
   > {
+    const aliasing = this.#alias ?? []
+    aliasing.push({ nodeType: RelationalNodeType.ALIAS, column, alias })
     return new DefaultTableNodeBuilder(
       this.tableName,
+      this.tableAlias,
       {
         nodeType: RelationalNodeType.SELECT,
         columns: this.#select?.columns ?? [],
-        aliasing: (this.#select?.aliasing ?? []).concat([
-          { column: column, alias },
-        ]),
       },
       this.#where,
+      aliasing,
       this.#parent
     )
   }
@@ -634,11 +678,13 @@ class DefaultTableNodeBuilder<
   ): Omit<TableNodeBuilder<DataStoreType, TableName, RowType>, "where"> {
     return new DefaultTableNodeBuilder(
       this.tableName,
+      this.tableAlias,
       this.#select,
       {
         nodeType: RelationalNodeType.WHERE,
         filter,
       },
+      this.#alias,
       this.#parent
     )
   }

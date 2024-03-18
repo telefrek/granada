@@ -21,11 +21,8 @@ import {
   isGenerator,
   isJoinQueryNode,
   isRelationalQueryNode,
-  isSelectClause,
   isStringFilter,
-  isTableAliasQueryNode,
   isTableQueryNode,
-  isWhereClause,
   type ArrayFilter,
   type ColumnFilter,
   type CteClause,
@@ -35,7 +32,6 @@ import {
   type JoinQueryNode,
   type RelationalQueryNode,
   type StringFilter,
-  type TableAliasNode,
   type TableQueryNode,
 } from "./ast"
 import { RelationalQueryBuilder } from "./builder"
@@ -236,7 +232,7 @@ function materializeTable(
       const entries: Array<readonly [PropertyKey, any]> = []
 
       const transform = new Map<string, string>()
-      for (const alias of manager.select!.aliasing ?? []) {
+      for (const alias of manager.columnAlias ?? []) {
         transform.set(alias.column as string, alias.alias)
       }
 
@@ -263,11 +259,7 @@ function materializeTable(
 }
 
 function materializeJoin(
-  join: JoinQueryNode<
-    RelationalDataStore,
-    keyof RelationalDataStore["tables"],
-    RelationalDataTable
-  >,
+  join: JoinQueryNode<RelationalDataStore, RelationalDataTable>,
   context: MaterializerContext
 ): RelationalDataTable[] {
   let rows: RelationalDataTable[] = []
@@ -367,39 +359,30 @@ function materializeCte(
   return
 }
 
-function materializeAlias(
-  cte: TableAliasNode<
-    RelationalDataStore,
-    keyof RelationalDataStore["tables"],
-    RelationalDataTable
-  >,
+function materializeTableAlias(
+  root: RelationalQueryNode<RelationalNodeType>,
   context: MaterializerContext
-): RelationalQueryNode<RelationalNodeType> | undefined {
-  if (cte.children) {
-    const child = cte.children.filter(isRelationalQueryNode).at(0)!
-    if (isRelationalQueryNode(child)) {
-      switch (true) {
-        case isTableQueryNode(child):
-          context.set(cte.tableName, materializeTable(child, context))
-          break
-      }
+): void {
+  const nodes: RelationalQueryNode<RelationalNodeType>[] = [root]
+  while (nodes.length > 0) {
+    const next = nodes.shift()!
+
+    // Any tables that are pulling from an alias need to have that alias created
+    if (isTableQueryNode(next) && next.alias) {
+      context.set(next.tableName, context.get(next.alias))
     }
 
-    if (child.children) {
-      return child.children
-        .filter(isRelationalQueryNode)
-        .filter((r) => !isWhereClause(r) && !isSelectClause(r)) // Filter select and where
-        .at(0)
-    }
+    nodes.push(...(next.children?.filter(isRelationalQueryNode) ?? []))
   }
-
-  return
 }
 
 function materializeProjections(
   root: RelationalQueryNode<RelationalNodeType>,
   context: MaterializerContext
 ): RelationalQueryNode<RelationalNodeType> {
+  // Fill any table projections
+  materializeTableAlias(root, context)
+
   let current = root
   while (current) {
     if (isTableQueryNode(current) || isJoinQueryNode(current)) {
@@ -408,8 +391,6 @@ function materializeProjections(
 
     if (isCteClause(current)) {
       current = materializeCte(current, context)!
-    } else if (isTableAliasQueryNode(current)) {
-      current = materializeAlias(current, context)!
     } else {
       throw new QueryError(`Unspuported projection type: ${current.nodeType}`)
     }

@@ -1,5 +1,4 @@
 import {
-  aliasTable,
   and,
   contains,
   containsItems,
@@ -269,12 +268,10 @@ describe("Relational query builder should support basic functionality", () => {
     // Note this more more useful for joins but need to verify this weird
     // signature still works...
     const result = await executor.run(
-      aliasTable(
-        "newOrders",
-        useDataStore<TestDataStore>().from("orders").select("name", "createdAt")
-      )
+      useDataStore<TestDataStore>()
+        .withTableAlias("orders", "newOrders")
         .from("newOrders")
-        .select("*")
+        .select("name", "createdAt")
         .build(InMemoryRelationalQueryBuilder)
     )
 
@@ -375,9 +372,9 @@ describe("Relational query builder should support basic functionality", () => {
   })
 
   it("should allow multiple joins", async () => {
-    const store = aliasTable(
-      "order2",
-      useDataStore<TestDataStore>().from("orders").select("*")
+    const store = useDataStore<TestDataStore>().withTableAlias(
+      "orders",
+      "orders2"
     )
 
     const result = await executor.run(
@@ -385,7 +382,7 @@ describe("Relational query builder should support basic functionality", () => {
         .from("orders")
         .select("id")
         .join(
-          store.from("order2").select("customerId").where(eq("id", 2)),
+          store.from("orders2").select("customerId").where(eq("id", 2)),
           joinEq("id", "id")
         )
         .join(

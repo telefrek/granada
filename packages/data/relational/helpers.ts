@@ -4,18 +4,19 @@
 
 import { getDebugInfo } from "@telefrek/core"
 import {
+  isColumnAlias,
   isGenerator,
   isJoinClauseNode,
   isRelationalQueryNode,
   isSelectClause,
   isTableQueryNode,
   isWhereClause,
+  type ColumnAlias,
   type CteClause,
   type JoinClauseQueryNode,
   type JoinQueryNode,
   type RelationalQueryNode,
   type SelectClause,
-  type TableAliasNode,
   type TableQueryNode,
   type WhereClause,
 } from "./ast"
@@ -59,8 +60,12 @@ export function hasProjections(node: RNode): boolean {
     // compositional sets, etc.)
     switch (next.nodeType) {
       case RelationalNodeType.CTE:
-      case RelationalNodeType.ALIAS:
         return true
+      case RelationalNodeType.TABLE:
+        if (isTableQueryNode(next) && next.alias) {
+          return true
+        }
+        break
     }
 
     // Queue the children to search
@@ -113,6 +118,18 @@ export class TableNodeManager extends RelationalASTNodeManager<
     super(node)
   }
 
+  get tableAlias(): keyof RelationalDataStore["tables"] | undefined {
+    return this.node.alias
+  }
+
+  get columnAlias(): ColumnAlias<
+    RelationalDataTable,
+    keyof RelationalDataTable,
+    string
+  >[] {
+    return this.node.children?.filter(isColumnAlias) ?? []
+  }
+
   /**
    * Get the {@link SelectClause} if present
    */
@@ -150,28 +167,10 @@ export class CteNodeManager extends RelationalASTNodeManager<
   }
 }
 
-export class TableAliasNodeManager extends RelationalASTNodeManager<
-  TableAliasNode<
-    RelationalDataStore,
-    keyof RelationalDataStore["tables"],
-    RelationalDataTable
-  >
-> {}
-
 export class JoinNodeManager extends RelationalASTNodeManager<
-  JoinQueryNode<
-    RelationalDataStore,
-    keyof RelationalDataStore["tables"],
-    RelationalDataTable
-  >
+  JoinQueryNode<RelationalDataStore, RelationalDataTable>
 > {
-  constructor(
-    node: JoinQueryNode<
-      RelationalDataStore,
-      keyof RelationalDataStore["tables"],
-      RelationalDataTable
-    >
-  ) {
+  constructor(node: JoinQueryNode<RelationalDataStore, RelationalDataTable>) {
     super(node)
   }
 
