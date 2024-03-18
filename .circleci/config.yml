@@ -16,13 +16,7 @@ jobs:
       - node/install-packages:
           pkg-manager: npm
       - run:
-          command: npm run -ws build
-          name: Build packages
-      - run:
-          command: npm run test
-          name: Run tests
-      - run:
-          command: npm run package
+          command: npm run ci
           name: Build app for publishing
       - persist_to_workspace:
           root: ~/project
