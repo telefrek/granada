@@ -93,6 +93,7 @@ type PostgresColumnTypeMapping = {
   [PostgresColumnTypeName.INT4]: number
   [PostgresColumnTypeName.JSON]: string
   [PostgresColumnTypeName.JSONB]: object
+  [PostgresColumnTypeName.REAL]: number
   [PostgresColumnTypeName.SERIAL]: number
   [PostgresColumnTypeName.SERIAL2]: number
   [PostgresColumnTypeName.SERIAL4]: number

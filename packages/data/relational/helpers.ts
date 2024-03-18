@@ -118,6 +118,10 @@ export class TableNodeManager extends RelationalASTNodeManager<
     super(node)
   }
 
+  get tableName(): keyof RelationalDataStore["tables"] {
+    return this.node.tableName
+  }
+
   get tableAlias(): keyof RelationalDataStore["tables"] | undefined {
     return this.node.alias
   }
@@ -133,15 +137,13 @@ export class TableNodeManager extends RelationalASTNodeManager<
   /**
    * Get the {@link SelectClause} if present
    */
-  get select():
-    | SelectClause<
-        RelationalDataStore,
-        keyof RelationalDataStore["tables"],
-        keyof RelationalDataStore["tables"][keyof RelationalDataStore["tables"]],
-        RelationalDataTable
-      >
-    | undefined {
-    return this.node.children?.filter(isSelectClause).at(0)
+  get select(): SelectClause<
+    RelationalDataStore,
+    keyof RelationalDataStore["tables"],
+    keyof RelationalDataStore["tables"][keyof RelationalDataStore["tables"]],
+    RelationalDataTable
+  > {
+    return this.node.children!.filter(isSelectClause).at(0)!
   }
 
   /**
