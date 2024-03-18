@@ -67,7 +67,7 @@ describe("Postgres query syntax should be translated correctly", () => {
 
     if (isPostgresRelationalQuery(query)) {
       expect(query.queryText).toEqual(
-        "SELECT id AS orderId, categories FROM orders WHERE 'purchase'=ANY(categories)"
+        "SELECT id AS orderId, categories FROM orders WHERE 'purchase'=ANY(categories)",
       )
     }
   })
@@ -84,8 +84,8 @@ describe("Postgres query syntax should be translated correctly", () => {
           context
             .from("customers")
             .select("firstName", "lastName", "createdAt"),
-          joinEq("customerId", "id")
-        )
+          joinEq("customerId", "id"),
+        ),
     )
       .from("customerOrders")
       .select("*")
@@ -93,7 +93,7 @@ describe("Postgres query syntax should be translated correctly", () => {
 
     if (isPostgresRelationalQuery(query)) {
       expect(query.queryText).toEqual(
-        "WITH customerOrders AS (SELECT customers.createdAt, customers.firstName, customers.lastName, orders.amount, orders.categories, orders.id AS orderId FROM orders JOIN customers ON orders.customerId = customers.id WHERE orders.amount > 0) SELECT * FROM customerOrders"
+        "WITH customerOrders AS (SELECT customers.createdAt, customers.firstName, customers.lastName, orders.amount, orders.categories, orders.id AS orderId FROM orders JOIN customers ON orders.customerId = customers.id WHERE orders.amount > 0) SELECT * FROM customerOrders",
       )
     }
   })
@@ -108,11 +108,11 @@ describe("Postgres query syntax should be translated correctly", () => {
             .from("orders")
             .select("id", "customerId", "categories", "amount")
             .alias("id", "orderId")
-            .where(gt("amount", 0))
+            .where(gt("amount", 0)),
       ),
       "customerNames",
       (builder) =>
-        builder.from("customers").select("id", "firstName", "lastName")
+        builder.from("customers").select("id", "firstName", "lastName"),
     )
 
     const query = context
@@ -120,13 +120,13 @@ describe("Postgres query syntax should be translated correctly", () => {
       .select("orderId", "amount", "categories")
       .join(
         context.from("customerNames").select("firstName", "lastName"),
-        joinEq("customerId", "id")
+        joinEq("customerId", "id"),
       )
       .build(PostgresQueryBuilder)
 
     if (isPostgresRelationalQuery(query)) {
       expect(query.queryText).toEqual(
-        "WITH customerOrders AS (SELECT id AS orderId, customerId, categories, amount FROM orders WHERE amount > 0), customerNames AS (SELECT id, firstName, lastName FROM customers) SELECT customerNames.firstName, customerNames.lastName, customerOrders.amount, customerOrders.categories, customerOrders.orderId FROM customerOrders JOIN customerNames ON customerOrders.customerId = customerNames.id"
+        "WITH customerOrders AS (SELECT id AS orderId, customerId, categories, amount FROM orders WHERE amount > 0), customerNames AS (SELECT id, firstName, lastName FROM customers) SELECT customerNames.firstName, customerNames.lastName, customerOrders.amount, customerOrders.categories, customerOrders.orderId FROM customerOrders JOIN customerNames ON customerOrders.customerId = customerNames.id",
       )
     }
   })

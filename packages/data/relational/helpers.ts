@@ -148,9 +148,7 @@ export class TableNodeManager extends RelationalASTNodeManager<
   }
 }
 
-export class CteNodeManager extends RelationalASTNodeManager<
-  CteClause<RelationalDataStore, keyof RelationalDataStore["tables"]>
-> {
+export class CteNodeManager extends RelationalASTNodeManager<CteClause> {
   override get child(): RNode | undefined {
     return this.node.children
       ?.filter(isRelationalQueryNode)
@@ -175,11 +173,7 @@ export class JoinNodeManager extends RelationalASTNodeManager<JoinQueryNode> {
     )
   }
 
-  get filters(): JoinClauseQueryNode<
-    RelationalDataStore,
-    keyof RelationalDataStore["tables"],
-    keyof RelationalDataStore["tables"]
-  >[] {
+  get filters(): JoinClauseQueryNode[] {
     return (
       this.node.children
         ?.filter(isJoinClauseNode)

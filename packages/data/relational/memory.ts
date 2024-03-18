@@ -148,12 +148,20 @@ export class InMemoryRelationalQueryBuilder<
     super(queryNode)
   }
 
-  protected override buildQuery(node: QueryNode): Query<RowType> {
+  protected override buildQuery(
+    node: QueryNode,
+    name: string,
+    mode: ExecutionMode,
+  ): Query<RowType> {
     // Verify we have a relational node
     if (isRelationalQueryNode(node) && isGenerator(node)) {
-      return new InMemoryQuery("name", (store) => {
-        return materializeNode<RowType>(getTreeRoot(node), store)
-      })
+      return new InMemoryQuery(
+        name,
+        (store) => {
+          return materializeNode<RowType>(getTreeRoot(node), store)
+        },
+        mode,
+      )
     }
 
     throw new QueryError("Node is not a RelationalQueryNode")
@@ -331,7 +339,7 @@ function materializeJoin(
 }
 
 function materializeCte(
-  cte: CteClause<RelationalDataStore, keyof RelationalDataStore["tables"]>,
+  cte: CteClause,
   context: MaterializerContext,
 ): RelationalQueryNode<RelationalNodeType> | undefined {
   if (isRelationalQueryNode(cte.source)) {
@@ -417,7 +425,7 @@ function buildJoinFilter<
   LeftTable extends RelationalDataTable,
   RightTable extends RelationalDataTable,
 >(
-  filter: JoinColumnFilter<LeftTable, RightTable>,
+  filter: JoinColumnFilter,
 ): (l: RowPointer<LeftTable>, r: RowPointer<RightTable>) => boolean {
   return (l, r) =>
     (l[ORIGINAL][filter.leftColumn] as unknown) ===
