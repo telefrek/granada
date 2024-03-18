@@ -458,11 +458,7 @@ class DefaultTableNodeBuilder<
   tableName: TableName
   tableAlias?: keyof DataStoreType["tables"]
 
-  #select?: SelectClause<
-    DataStoreType,
-    TableName,
-    keyof DataStoreType["tables"][TableName]
-  >
+  #select?: SelectClause
   #where?: WhereClause<DataStoreType["tables"][TableName]>
   #alias?: ColumnAlias<
     DataStoreType["tables"][TableName],
@@ -524,11 +520,7 @@ class DefaultTableNodeBuilder<
   constructor(
     tableName: TableName,
     tableAlias?: keyof DataStoreType["tables"],
-    select?: SelectClause<
-      DataStoreType,
-      TableName,
-      keyof DataStoreType["tables"][TableName]
-    >,
+    select?: SelectClause,
     where?: WhereClause<DataStoreType["tables"][TableName]>,
     alias?: ColumnAlias<
       DataStoreType["tables"][TableName],
@@ -632,7 +624,7 @@ class DefaultTableNodeBuilder<
       this.tableAlias,
       {
         nodeType: RelationalNodeType.SELECT,
-        columns: [column as Column].concat(rest as Column[]),
+        columns: [column as string].concat(rest as string[]),
       },
       this.#where,
       this.#alias,

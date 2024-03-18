@@ -121,11 +121,7 @@ export class TableNodeManager extends RelationalASTNodeManager<TableQueryNode> {
   /**
    * Get the {@link SelectClause} if present
    */
-  get select(): SelectClause<
-    RelationalDataStore,
-    keyof RelationalDataStore["tables"],
-    keyof RelationalDataStore["tables"][keyof RelationalDataStore["tables"]]
-  > {
+  get select(): SelectClause {
     return this.node.children!.filter(isSelectClause).at(0)!
   }
 

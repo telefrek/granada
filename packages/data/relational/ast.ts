@@ -3,7 +3,7 @@
  */
 
 import type { OptionalProperties } from "@telefrek/core/type/utils"
-import type { RelationalDataStore, RelationalDataTable, STAR } from "."
+import type { RelationalDataTable, STAR } from "."
 import type { QueryNode } from "../query/ast"
 import {
   BooleanOperation,
@@ -197,13 +197,8 @@ export type TableQueryNode = RelationalQueryNode<RelationalNodeType.TABLE> &
 /**
  * Rename to match nomenclature
  */
-export type SelectClause<
-  DataStoreType extends RelationalDataStore,
-  TableName extends keyof DataStoreType["tables"],
-  Column extends
-    keyof DataStoreType["tables"][TableName] = keyof DataStoreType["tables"][TableName],
-> = RelationalQueryNode<RelationalNodeType.SELECT> & {
-  columns: Column[] | STAR
+export type SelectClause = RelationalQueryNode<RelationalNodeType.SELECT> & {
+  columns: string[] | STAR
 }
 
 /**
@@ -341,12 +336,7 @@ export function isWhereClause(
  * @param node The {@link RelationalQueryNode} to inspect
  * @returns True if the node is a {@link SelectClause}
  */
-export function isSelectClause(
-  node: QueryNode,
-): node is SelectClause<
-  RelationalDataStore,
-  keyof RelationalDataStore["tables"]
-> {
+export function isSelectClause(node: QueryNode): node is SelectClause {
   return (
     isRelationalQueryNode(node) && node.nodeType === RelationalNodeType.SELECT
   )
