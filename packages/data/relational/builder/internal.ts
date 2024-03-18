@@ -1,288 +1,41 @@
-/**
- * Extensions for creating relational queries
- */
-
 import type { AliasedType } from "@telefrek/core/type/utils"
-import type { RelationalDataStore, RelationalDataTable, STAR } from "."
-import type { ExecutionMode, Query } from "../query"
+import { QueryError } from "../../query/error"
+import type { ExecutionMode, Query } from "../../query/index"
+import type {
+  ColumnAlias,
+  CteClause,
+  FilterGroup,
+  FilterTypes,
+  JoinClauseQueryNode,
+  JoinColumnFilter,
+  NamedRowGenerator,
+  RelationalQueryNode,
+  SelectClause,
+  TableQueryNode,
+  WhereClause,
+} from "../ast"
+import type { RelationalDataStore, RelationalDataTable, STAR } from "../index"
 import {
-  ParameterizedQueryBuilderBase,
-  QueryBuilderBase,
-} from "../query/builder"
-import { QueryError } from "../query/error"
-import {
-  ContainmentObjectType,
-  type ColumnAlias,
-  type CteClause,
-  type FilterGroup,
-  type FilterTypes,
-  type JoinClauseQueryNode,
-  type JoinColumnFilter,
-  type NamedRowGenerator,
-  type RelationalQueryNode,
-  type SelectClause,
-  type TableQueryNode,
-  type WhereClause,
-} from "./ast"
-import {
-  BooleanOperation,
   ColumnFilteringOperation,
-  ColumnValueContainsOperation,
   JoinType,
   RelationalNodeType,
-  type ArrayItemType,
-  type ArrayProperty,
   type MergedNonOverlappingType,
   type ModifiedStore,
-  type PropertiesOfType,
-} from "./types"
-
-/**
- * Represents a {@link QueryBuilder} that is specifically for relational
- * database queries
- */
-export abstract class RelationalQueryBuilder<
-  T extends RelationalDataTable,
-> extends QueryBuilderBase<T> {
-  constructor(queryNode: RelationalQueryNode<RelationalNodeType>) {
-    super(queryNode)
-  }
-}
-
-export abstract class ParameterizedRelationalQueryBuilder<
-  T extends Record<string, unknown>,
-  U extends RelationalDataTable,
-> extends ParameterizedQueryBuilderBase<T, U> {
-  constructor(queryNode: RelationalQueryNode<RelationalNodeType>) {
-    super(queryNode)
-  }
-}
-
-type RowProviderBuilder<
-  DataStoreType extends RelationalDataStore,
-  RowType extends RelationalDataTable,
-  Aliasing extends keyof DataStoreType["tables"],
-  TableType extends RelationalDataTable,
-> = (
-  builder: RelationalNodeBuilder<DataStoreType, RowType, Aliasing>,
-) => RelationalRowProvider<TableType>
-
-/**
- * Type that is capable of buliding {@link RelationalQueryNode} trees
- */
-export type RelationalNodeBuilder<
-  DataStoreType extends RelationalDataStore,
-  RowType extends RelationalDataTable = never,
-  Aliasing extends keyof DataStoreType["tables"] = never,
-> = RelationalRowProvider<RowType> & {
-  context?: RelationalQueryNode<RelationalNodeType>
-  tableAlias: TableAlias
-
-  withTableAlias<
-    TableName extends keyof Omit<DataStoreType["tables"], Aliasing>,
-    Alias extends string,
-  >(
-    table: TableName,
-    alias: Alias,
-  ): RelationalNodeBuilder<
-    ModifiedStore<DataStoreType, Alias, DataStoreType["tables"][TableName]>,
-    RowType,
-    Aliasing | Alias
-  >
-
-  withCte<Alias extends string, TableType extends RelationalDataTable>(
-    alias: Alias,
-    source: RowProviderBuilder<DataStoreType, RowType, Aliasing, TableType>,
-  ): RelationalNodeBuilder<
-    ModifiedStore<DataStoreType, Alias, TableType>,
-    RowType,
-    Aliasing
-  >
-
-  from<TableName extends keyof DataStoreType["tables"]>(
-    tableName: TableName,
-  ): TableNodeBuilder<DataStoreType, TableName>
-}
-
-/**
- * Use the given {@link DataStoreType} to build a query
- *
- * @returns A {@link RelationalNodeBuilder} for the given {@link DataStoreType}
- */
-export function useDataStore<
-  DataStoreType extends RelationalDataStore,
->(): RelationalNodeBuilder<DataStoreType> {
-  return new DefaultRelationalNodeBuilder()
-}
-
-/**
- * Filter for rows where `column=value`
- *
- * @param column The column to use
- * @param value The value to use for the query
- * @returns A filter
- */
-export const eq: ColumnFilterFn = (column, value) =>
-  ColumnFilterBuilder(column, value, ColumnFilteringOperation.EQ)
-/**
- * Join for rows where `left.column=right.column``
- *
- * @param leftColumn The column to use for the left table comparison
- * @param rightColumn The column to use for the right table comparison
- * @returns A filter
- */
-export const joinEq: JoinColumnFilterFn = (leftColumn, rightColumn) =>
-  JoinColumnFilterBuilder(leftColumn, rightColumn, ColumnFilteringOperation.EQ)
-/**
- * Filter for rows where `column>value`
- *
- * @param column The column to use
- * @param value The value to use for the query
- * @returns A filter
- */
-export const gt: ColumnFilterFn = (column, value) =>
-  ColumnFilterBuilder(column, value, ColumnFilteringOperation.GT)
-/**
- * Filter for rows where `column>=value`
- *
- * @param column The column to use
- * @param value The value to use for the query
- * @returns A filter
- */
-export const gte: ColumnFilterFn = (column, value) =>
-  ColumnFilterBuilder(column, value, ColumnFilteringOperation.GTE)
-/**
- * Filter for rows where `column<value`
- *
- * @param column The column to use
- * @param value The value to use for the query
- * @returns A filter
- */
-export const lt: ColumnFilterFn = (column, value) =>
-  ColumnFilterBuilder(column, value, ColumnFilteringOperation.LT)
-
-/**
- * Filter for rows where `column<=value`
- *
- * @param column The column to use
- * @param value The value to use for the query
- * @returns A filter
- */
-export const lte: ColumnFilterFn = (column, value) =>
-  ColumnFilterBuilder(column, value, ColumnFilteringOperation.LTE)
-
-/**
- * Groups a set of filters with `AND` clauses
- * @param clauses The filters to group
- * @returns A group of filters
- */
-export const and: BooleanFilter = (...clauses) =>
-  ColumnGroupFilterBuilder(BooleanOperation.AND, ...clauses)
-/**
- * Groups a set of filters with `OR` clauses
- * @param clauses The filters to group
- * @returns A group of filters
- */
-export const or: BooleanFilter = (...clauses) =>
-  ColumnGroupFilterBuilder(BooleanOperation.OR, ...clauses)
-/**
- * Groups a set of filters with `NOT` clauses
- * @param clauses The filters to group
- * @returns A group of filters
- */
-export const not: BooleanFilter = (...clauses) =>
-  ColumnGroupFilterBuilder(BooleanOperation.NOT, ...clauses)
-
-/**
- * Filter for rows where `column.contains(value)` (often as regex)
- * @param column The string typed column to check for containment
- * @param value The value to check for the string containing
- * @returns A filter
- */
-export const contains = <
-  TableType extends RelationalDataTable,
-  Column extends PropertiesOfType<TableType, string>,
->(
-  column: Column,
-  value: string,
-): FilterTypes<TableType> => {
-  return {
-    type: ContainmentObjectType.STRING,
-    column,
-    value,
-    op: ColumnValueContainsOperation.IN,
-  }
-}
-
-/**
- * Filter for rows where `values in column`
- * @param column The array typed column to check for item containment
- * @param values The set of values to check for existence of in the array
- * @returns A filter
- */
-export const containsItems = <
-  RowType extends RelationalDataTable,
-  ContainingColumn extends ArrayProperty<RowType>,
-  ColumnValue extends ArrayItemType<RowType, ContainingColumn>,
->(
-  column: ContainingColumn,
-  ...values: ColumnValue[]
-): FilterTypes<RowType> => {
-  return {
-    type: ContainmentObjectType.ARRAY,
-    column,
-    value: values.length === 1 ? values[0] : values,
-    op: ColumnValueContainsOperation.IN,
-  }
-}
+} from "../types"
+import {
+  RelationalNodeBuilder,
+  type JoinNodeBuilder,
+  type NamedRelationalRowProvider,
+  type QueryBuilderCtor,
+  type RowProviderBuilder,
+  type TableAlias,
+  type TableGenerator,
+  type TableNodeBuilder,
+} from "./index"
 
 /******************************************************************************
  * Internal implementation
  ******************************************************************************/
-
-/**
- * Constructor type
- */
-type QueryBuilderCtor<RowType extends RelationalDataTable> = new (
-  node: RelationalQueryNode<RelationalNodeType>,
-) => RelationalQueryBuilder<RowType>
-
-/**
- * Represents a relational query that will return some value of {@link RowType}
- * from the given {@link DataStoreType}
- */
-interface RelationalRowProvider<
-  RowType extends RelationalDataTable,
-  NodeType extends
-    RelationalQueryNode<RelationalNodeType> = RelationalQueryNode<RelationalNodeType>,
-> {
-  asNode(): NodeType
-
-  /**
-   * Retrieve a builder that can be used to create {@link Query} objects
-   *
-   * @param ctor A class the implements the given constructor
-   * @returns A new {@link RelationalQueryBuilder} for the table
-   */
-  build(
-    ctor: QueryBuilderCtor<RowType>,
-    name: string,
-    mode?: ExecutionMode,
-  ): Query<RowType>
-}
-
-interface NamedRelationalRowProvider<
-  DataStoreType extends RelationalDataStore,
-  TableName extends keyof DataStoreType["tables"],
-  RowType extends RelationalDataTable,
-> extends RelationalRowProvider<RowType, NamedRowGenerator> {
-  tableName: TableName
-}
-
-type TableAlias = Record<
-  keyof RelationalDataStore["tables"],
-  keyof RelationalDataStore["tables"]
->
 
 export class DefaultRelationalNodeBuilder<
   DataStoreType extends RelationalDataStore,
@@ -406,73 +159,6 @@ export class DefaultRelationalNodeBuilder<
   }
 }
 
-type TableNodeBuilder<
-  DataStoreType extends RelationalDataStore,
-  TableName extends keyof DataStoreType["tables"],
-  RowType extends RelationalDataTable = DataStoreType["tables"][TableName],
-> = NamedRelationalRowProvider<DataStoreType, TableName, RowType> & {
-  tableName: TableName
-  builder: RelationalNodeBuilder<DataStoreType>
-  tableAlias?: keyof DataStoreType["tables"]
-
-  select(
-    column: STAR,
-  ): Omit<
-    TableNodeBuilder<
-      DataStoreType,
-      TableName,
-      DataStoreType["tables"][TableName]
-    >,
-    "select"
-  >
-
-  select<Column extends keyof DataStoreType["tables"][TableName]>(
-    ...columns: Column[]
-  ): Omit<
-    TableNodeBuilder<
-      DataStoreType,
-      TableName,
-      Pick<DataStoreType["tables"][TableName], Column>
-    >,
-    "select"
-  >
-
-  join<
-    JoinTable extends keyof DataStoreType["tables"],
-    JoinRowType extends RelationalDataTable,
-  >(
-    joinTable: JoinTable,
-    builder: (
-      from: TableNodeBuilder<DataStoreType, JoinTable>,
-    ) => NamedRelationalRowProvider<DataStoreType, JoinTable, JoinRowType>,
-    leftColumn: keyof DataStoreType["tables"][TableName],
-    rightColumn: keyof DataStoreType["tables"][JoinTable],
-    type?: JoinType,
-  ): JoinNodeBuilder<
-    DataStoreType,
-    TableName | JoinTable,
-    MergedNonOverlappingType<RowType, JoinRowType>
-  >
-
-  alias<
-    Column extends keyof RowType & keyof DataStoreType["tables"][TableName],
-    Alias extends string,
-  >(
-    column: Column,
-    alias: Alias,
-  ): TableNodeBuilder<
-    DataStoreType,
-    TableName,
-    AliasedType<RowType, Column, Alias>
-  >
-
-  where(
-    filter:
-      | FilterGroup<DataStoreType["tables"][TableName]>
-      | FilterTypes<DataStoreType["tables"][TableName]>,
-  ): Omit<TableNodeBuilder<DataStoreType, TableName, RowType>, "where">
-}
-
 class DefaultTableNodeBuilder<
   DataStoreType extends RelationalDataStore,
   TableName extends keyof DataStoreType["tables"],
@@ -569,9 +255,7 @@ class DefaultTableNodeBuilder<
     JoinRowType extends RelationalDataTable,
   >(
     joinTable: JoinTable,
-    builder: (
-      from: TableNodeBuilder<DataStoreType, JoinTable>,
-    ) => NamedRelationalRowProvider<DataStoreType, JoinTable, JoinRowType>,
+    tableGenerator: TableGenerator<DataStoreType, JoinTable, JoinRowType>,
     leftColumn: keyof DataStoreType["tables"][TableName],
     rightColumn: keyof DataStoreType["tables"][JoinTable],
     type: JoinType = JoinType.INNER,
@@ -585,8 +269,12 @@ class DefaultTableNodeBuilder<
     return new SingleJoinNodeBuilder(
       this.builder,
       this,
-      builder(this.builder.from(joinTable)),
-      joinEq(leftColumn as string, rightColumn as string),
+      tableGenerator(this.builder.from(joinTable)),
+      {
+        leftColumn: leftColumn as string,
+        rightColumn: rightColumn as string,
+        op: ColumnFilteringOperation.EQ,
+      },
       type,
       parent,
     )
@@ -724,30 +412,6 @@ class DefaultTableNodeBuilder<
   }
 }
 
-type JoinNodeBuilder<
-  DataStoreType extends RelationalDataStore,
-  Tables extends keyof DataStoreType["tables"],
-  RowType extends RelationalDataTable,
-> = RelationalRowProvider<RowType> & {
-  join<
-    JoinTarget extends Tables,
-    JoinTable extends keyof Exclude<DataStoreType["tables"], Tables> & string,
-    TableType extends RelationalDataTable,
-  >(
-    target: JoinTarget,
-    joinTable: JoinTable,
-    builder: (
-      from: TableNodeBuilder<DataStoreType, JoinTable>,
-    ) => NamedRelationalRowProvider<DataStoreType, JoinTable, TableType>,
-    leftColumn: keyof DataStoreType["tables"][JoinTarget],
-    rightColumn: keyof DataStoreType["tables"][JoinTable],
-  ): JoinNodeBuilder<
-    DataStoreType,
-    Tables | JoinTable,
-    MergedNonOverlappingType<RowType, TableType>
-  >
-}
-
 class MultiJoinNodeBuilder<
   DataStoreType extends RelationalDataStore,
   Tables extends keyof DataStoreType["tables"],
@@ -775,9 +439,7 @@ class MultiJoinNodeBuilder<
   >(
     _target: JoinTarget,
     _joinTable: JoinTable,
-    _builder: (
-      from: TableNodeBuilder<DataStoreType, JoinTable>,
-    ) => NamedRelationalRowProvider<DataStoreType, JoinTable, TableType>,
+    _tableGenerator: TableGenerator<DataStoreType, JoinTable, TableType>,
     _leftColumn: keyof DataStoreType["tables"][JoinTarget],
     _rightColumn: keyof DataStoreType["tables"][JoinTable],
   ): JoinNodeBuilder<
@@ -880,9 +542,7 @@ class SingleJoinNodeBuilder<
   >(
     target: JoinTarget,
     joinTable: JoinTable,
-    builder: (
-      from: TableNodeBuilder<DataStoreType, JoinTable>,
-    ) => NamedRelationalRowProvider<DataStoreType, JoinTable, TableType>,
+    tableGenerator: TableGenerator<DataStoreType, JoinTable, TableType>,
     leftColumn: keyof DataStoreType["tables"][JoinTarget],
     rightColumn: keyof DataStoreType["tables"][JoinTable],
   ): JoinNodeBuilder<
@@ -895,7 +555,7 @@ class SingleJoinNodeBuilder<
   > {
     const f = this.filter.filter
 
-    const source = builder(this.builder.from(joinTable))
+    const source = tableGenerator(this.builder.from(joinTable))
 
     return new MultiJoinNodeBuilder<
       DataStoreType,
@@ -967,67 +627,5 @@ class SingleJoinNodeBuilder<
     mode?: ExecutionMode,
   ): Query<MergedNonOverlappingType<LeftType, RightType>> {
     return new ctor(this.asNode()).build(name, mode)
-  }
-}
-
-type BooleanFilter = <RowType extends RelationalDataTable>(
-  ...clauses: (FilterGroup<RowType> | FilterTypes<RowType>)[]
-) => FilterGroup<RowType>
-
-type ColumnFilterFn = <
-  RowType extends RelationalDataTable,
-  Column extends keyof RowType,
-  ColumnType extends RowType[Column],
->(
-  column: Column,
-  value: ColumnType,
-) => FilterTypes<RowType>
-
-function ColumnGroupFilterBuilder<RowType extends RelationalDataTable>(
-  op: BooleanOperation,
-  ...clauses: (FilterGroup<RowType> | FilterTypes<RowType>)[]
-): FilterGroup<RowType> {
-  return {
-    op,
-    filters: clauses,
-  }
-}
-
-function ColumnFilterBuilder<
-  RowType extends RelationalDataTable,
-  Column extends keyof RowType,
-  ColumnType extends RowType[Column],
->(
-  column: Column,
-  value: ColumnType,
-  op: ColumnFilteringOperation,
-): FilterTypes<RowType> {
-  return {
-    column,
-    value,
-    op,
-  }
-}
-
-type JoinColumnFilterFn = <
-  LeftColumn extends keyof RelationalDataTable,
-  RightColumn extends keyof RelationalDataTable,
->(
-  leftColumn: LeftColumn,
-  rightColumn: RightColumn,
-) => JoinColumnFilter
-
-function JoinColumnFilterBuilder<
-  LeftColumn extends keyof RelationalDataTable,
-  RightColumn extends keyof RelationalDataTable,
->(
-  leftColumn: LeftColumn,
-  rightColumn: RightColumn,
-  op: ColumnFilteringOperation,
-): JoinColumnFilter {
-  return {
-    leftColumn: leftColumn,
-    rightColumn: rightColumn,
-    op,
   }
 }

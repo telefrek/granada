@@ -1,18 +1,9 @@
-import {
-  and,
-  contains,
-  containsItems,
-  eq,
-  gt,
-  gte,
-  not,
-  useDataStore,
-} from "./builder"
+import { and, contains, containsItems, eq, gt, gte, not, useDataStore } from "."
 import {
   InMemoryQueryExecutor,
   InMemoryRelationalQueryBuilder,
   type InMemoryRelationalDataStore,
-} from "./memory"
+} from "../memory"
 
 enum Category {
   TEST,

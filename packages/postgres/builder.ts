@@ -21,10 +21,10 @@ import {
   type TableQueryNode,
 } from "@telefrek/data/relational/ast"
 import {
-  DefaultRelationalNodeBuilder,
   RelationalQueryBuilder,
   type RelationalNodeBuilder,
 } from "@telefrek/data/relational/builder"
+import { DefaultRelationalNodeBuilder } from "@telefrek/data/relational/builder/internal"
 import {
   CteNodeManager,
   JoinNodeManager,
