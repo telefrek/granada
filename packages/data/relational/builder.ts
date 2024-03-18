@@ -510,15 +510,10 @@ class DefaultTableNodeBuilder<
       JoinTable,
       JoinRowType
     >,
-    filter:
-      | JoinColumnFilter<
-          DataStoreType["tables"][TableName],
-          DataStoreType["tables"][JoinTable]
-        >
-      | JoinGroupFilter<
-          DataStoreType["tables"][TableName],
-          DataStoreType["tables"][JoinTable]
-        >,
+    filter: JoinColumnFilter<
+      DataStoreType["tables"][TableName],
+      DataStoreType["tables"][JoinTable]
+    >,
     type: JoinType = JoinType.INNER
   ): JoinNodeBuilder<
     DataStoreType,
@@ -672,6 +667,78 @@ type JoinNodeBuilder<
   >
 }
 
+class MultiJoinNodeBuilder<
+  DataStoreType extends RelationalDataStore,
+  Tables extends keyof DataStoreType["tables"],
+  RowType extends RelationalDataTable
+> implements JoinNodeBuilder<DataStoreType, Tables, RowType>
+{
+  tables: NamedRowGenerator<
+    DataStoreType,
+    keyof DataStoreType["tables"],
+    RelationalDataTable
+  >[]
+  filters: JoinClauseQueryNode<DataStoreType, Tables, Tables>[]
+  parent?: RelationalQueryNode<RelationalNodeType>
+
+  constructor(
+    tables: NamedRowGenerator<DataStoreType, Tables, RelationalDataTable>[],
+    filters: JoinClauseQueryNode<DataStoreType, Tables, Tables>[],
+    parent?: RelationalQueryNode<RelationalNodeType>
+  ) {
+    this.tables = tables
+    this.filters = filters
+    this.parent = parent
+  }
+
+  join<
+    JoinTarget extends Tables,
+    JoinTable extends keyof Exclude<DataStoreType["tables"], Tables> & string,
+    TableType extends RelationalDataTable
+  >(
+    target: JoinTarget,
+    source: NamedRelationalRowProvider<DataStoreType, JoinTable, TableType>,
+    filter: JoinColumnFilter<
+      DataStoreType["tables"][JoinTarget],
+      DataStoreType["tables"][JoinTable]
+    >
+  ): JoinNodeBuilder<
+    DataStoreType,
+    Tables | JoinTable,
+    MergedNonOverlappingType<RowType, TableType>
+  > {
+    throw new Error("no")
+  }
+
+  asNode(): RelationalQueryNode<RelationalNodeType> {
+    const join: RelationalQueryNode<RelationalNodeType.JOIN> = {
+      parent: this.parent,
+      nodeType: RelationalNodeType.JOIN,
+    }
+
+    if (join.parent) {
+      if (join.parent.children) {
+        join.parent.children?.push(join)
+      } else {
+        join.parent.children = [join]
+      }
+    }
+
+    for (const table of this.tables) {
+      table.parent = join
+    }
+
+    join.children = [...this.tables]
+    join.children.push(...this.filters)
+
+    return join
+  }
+
+  build(ctor: QueryBuilderCtor<RowType>): Query<RowType> {
+    return new ctor(this.asNode()).build()
+  }
+}
+
 class SingleJoinNodeBuilder<
   DataStoreType extends RelationalDataStore,
   LeftTable extends keyof DataStoreType["tables"],
@@ -689,21 +756,7 @@ class SingleJoinNodeBuilder<
   readonly rightSource: NamedRowGenerator<DataStoreType, RightTable, RightType>
   readonly parent?: RelationalQueryNode<RelationalNodeType>
 
-  readonly filter:
-    | JoinColumnFilter<
-        DataStoreType["tables"][LeftTable],
-        DataStoreType["tables"][RightTable],
-        keyof DataStoreType["tables"][LeftTable],
-        MatchingProperty<
-          DataStoreType["tables"][LeftTable],
-          DataStoreType["tables"][RightTable],
-          keyof DataStoreType["tables"][LeftTable]
-        >
-      >
-    | JoinGroupFilter<
-        DataStoreType["tables"][LeftTable],
-        DataStoreType["tables"][RightTable]
-      >
+  readonly filter: JoinClauseQueryNode<DataStoreType, LeftTable, RightTable>
 
   readonly joinType: JoinType
 
@@ -714,21 +767,16 @@ class SingleJoinNodeBuilder<
       RightTable,
       RightType
     >,
-    filter:
-      | JoinColumnFilter<
-          DataStoreType["tables"][LeftTable],
-          DataStoreType["tables"][RightTable],
-          keyof DataStoreType["tables"][LeftTable],
-          MatchingProperty<
-            DataStoreType["tables"][LeftTable],
-            DataStoreType["tables"][RightTable],
-            keyof DataStoreType["tables"][LeftTable]
-          >
-        >
-      | JoinGroupFilter<
-          DataStoreType["tables"][LeftTable],
-          DataStoreType["tables"][RightTable]
-        >,
+    filter: JoinColumnFilter<
+      DataStoreType["tables"][LeftTable],
+      DataStoreType["tables"][RightTable],
+      keyof DataStoreType["tables"][LeftTable],
+      MatchingProperty<
+        DataStoreType["tables"][LeftTable],
+        DataStoreType["tables"][RightTable],
+        keyof DataStoreType["tables"][LeftTable]
+      >
+    >,
     joinType: JoinType,
     parent?: RelationalQueryNode<RelationalNodeType>
   ) {
@@ -742,7 +790,13 @@ class SingleJoinNodeBuilder<
       RightTable,
       RightType
     >
-    this.filter = filter
+    this.filter = {
+      nodeType: RelationalNodeType.ON,
+      filter,
+      type: joinType,
+      left: this.leftSource.tableName,
+      right: this.rightSource.tableName,
+    }
     this.joinType = joinType
     this.parent = parent
   }
@@ -770,7 +824,63 @@ class SingleJoinNodeBuilder<
       TableType
     >
   > {
-    throw new Error("fooey")
+    const f = this.filter.filter
+
+    return new MultiJoinNodeBuilder<
+      DataStoreType,
+      LeftTable | RightTable | JoinTable,
+      MergedNonOverlappingType<
+        MergedNonOverlappingType<LeftType, RightType>,
+        TableType
+      >
+    >(
+      [
+        this.leftSource,
+        this.rightSource,
+        source.asNode() as NamedRowGenerator<
+          DataStoreType,
+          LeftTable | RightTable | JoinTable,
+          RelationalDataTable
+        >,
+      ],
+      [
+        {
+          nodeType: RelationalNodeType.ON,
+          filter: {
+            leftColumn: f.leftColumn as keyof DataStoreType["tables"][
+              | LeftTable
+              | RightTable
+              | JoinTable],
+            rightColumn: f.rightColumn as keyof DataStoreType["tables"][
+              | LeftTable
+              | RightTable
+              | JoinTable],
+            op: this.filter.filter.op,
+          },
+          type: this.filter.type,
+          left: this.filter.left,
+          right: this.filter.right,
+        },
+        {
+          nodeType: RelationalNodeType.ON,
+          filter: {
+            leftColumn: filter.leftColumn as keyof DataStoreType["tables"][
+              | LeftTable
+              | RightTable
+              | JoinTable],
+            rightColumn: filter.rightColumn as keyof DataStoreType["tables"][
+              | LeftTable
+              | RightTable
+              | JoinTable],
+            op: filter.op,
+          },
+          type: JoinType.INNER,
+          left: target,
+          right: source.tableName,
+        },
+      ],
+      this.parent
+    )
   }
 
   asNode(): RelationalQueryNode<RelationalNodeType> {
@@ -794,17 +904,8 @@ class SingleJoinNodeBuilder<
     right.parent = join
 
     join.children = [left, right]
-
-    const filter: JoinClauseQueryNode<DataStoreType, LeftTable, RightTable> = {
-      nodeType: RelationalNodeType.ON,
-      filter: this.filter,
-      type: this.joinType,
-      parent: join,
-      left: this.leftSource.tableName,
-      right: this.rightSource.tableName,
-    }
-
-    join.children.push(filter)
+    this.filter.parent = join
+    join.children.push(this.filter)
 
     return join
   }

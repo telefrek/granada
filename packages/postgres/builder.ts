@@ -8,12 +8,16 @@ import { ExecutionMode, Query } from "@telefrek/data/query/index"
 import {
   IsArrayFilter,
   isColumnFilter,
+  isCteClause,
   isFilterGroup,
+  isJoinClauseNode,
   isRelationalQueryNode,
   isTableAliasQueryNode,
   isTableQueryNode,
+  type CteClause,
   type FilterGroup,
   type FilterTypes,
+  type RelationalQueryNode,
   type TableQueryNode,
 } from "@telefrek/data/relational/ast"
 import {
@@ -21,10 +25,18 @@ import {
   RelationalQueryBuilder,
   type RelationalNodeBuilder,
 } from "@telefrek/data/relational/builder"
+import {
+  CteNodeManager,
+  TableAliasNodeManager,
+  TableNodeManager,
+  getTreeRoot,
+  hasProjections,
+} from "@telefrek/data/relational/helpers"
 import type {
   RelationalDataStore,
   RelationalDataTable,
 } from "@telefrek/data/relational/index"
+import type { RelationalNodeType } from "@telefrek/data/relational/types"
 import type {
   PostgresColumnType,
   PostgresColumnTypes,
@@ -107,8 +119,8 @@ export class PostgresQueryBuilder<
   RowType extends RelationalDataTable
 > extends RelationalQueryBuilder<RowType> {
   protected override buildQuery<T>(ast: QueryNode): Query<T> {
-    if (isRelationalQueryNode(ast) && isTableQueryNode(ast)) {
-      return new PostgresRelationalQuery("foo", translateTableQuery(ast))
+    if (isRelationalQueryNode(ast)) {
+      return new PostgresRelationalQuery("foo", translateNode(getTreeRoot(ast)))
     }
 
     throw new QueryError("Invalid QueryNode, expected RelationalQueryNode.")
@@ -116,39 +128,109 @@ export class PostgresQueryBuilder<
 }
 
 function translateTableQuery(
-  tableQueryNode: TableQueryNode<
-    RelationalDataStore,
-    keyof RelationalDataStore["tables"]
-  >
+  node: TableQueryNode<RelationalDataStore, keyof RelationalDataStore["tables"]>
 ): string {
-  const aliasing: Map<string, string> = tableQueryNode.select?.aliasing
-    ? tableQueryNode.select.aliasing.reduce(
+  const manager = new TableNodeManager(node)
+
+  const select = manager.select
+
+  const aliasing: Map<string, string> = select?.aliasing
+    ? select.aliasing.reduce(
         (temp, alias) => temp.set(alias.column as string, alias.alias),
         new Map<string, string>()
       )
     : new Map()
 
   return `SELECT ${
-    tableQueryNode.select
-      ? tableQueryNode.select.columns !== "*"
-        ? tableQueryNode.select.columns
+    select
+      ? select.columns !== "*"
+        ? select.columns
             .map((c) => (aliasing.has(c) ? `${c} AS ${aliasing.get(c)!}` : c))
             .join(", ")
         : "*"
       : "*"
-  } FROM ${tableQueryNode.tableName}${
-    isTableAliasQueryNode(tableQueryNode)
-      ? ` AS ${tableQueryNode.tableAlias}`
-      : ""
-  } ${
-    tableQueryNode.where
-      ? `WHERE ${translateFilterGroup(tableQueryNode.where.filter)}`
-      : ""
+  } FROM ${node.tableName}${
+    manager.where ? ` WHERE ${translateFilterGroup(manager.where.filter)}` : ""
   }`
 }
 
-function translateFilterGroup<T extends RelationalDataTable>(
-  filter: FilterGroup<T> | FilterTypes<T>
+function translateNode(node: RelationalQueryNode<RelationalNodeType>): string {
+  if (hasProjections(node)) {
+    const info = extractProjections(node)
+
+    let CTE = `WITH ${info.projections
+      .filter(isCteClause)
+      .map(translateCte)
+      .join(",")}`
+
+    return `${CTE} ${
+      isTableQueryNode(info.queryNode)
+        ? translateTableQuery(info.queryNode)
+        : ""
+    }`
+  } else {
+    if (isTableQueryNode(node)) {
+      return translateTableQuery(node)
+    }
+  }
+
+  return ""
+}
+
+type ProjectionInfo = {
+  projections: RelationalQueryNode<RelationalNodeType>[]
+  aliasing: Map<
+    keyof RelationalDataStore["tables"],
+    RelationalQueryNode<RelationalNodeType>
+  >
+  queryNode: RelationalQueryNode<RelationalNodeType>
+}
+
+function extractProjections(
+  root: RelationalQueryNode<RelationalNodeType>
+): ProjectionInfo {
+  const info: ProjectionInfo = {
+    projections: [],
+    queryNode: root,
+    aliasing: new Map(),
+  }
+
+  let current: RelationalQueryNode<RelationalNodeType> | undefined = root
+  while (current) {
+    // Terminal cases
+    if (isTableQueryNode(current) || isJoinClauseNode(current)) {
+      info.queryNode = current
+      break
+    }
+
+    if (isCteClause(current)) {
+      info.projections.push(current)
+      current = new CteNodeManager(current).child
+    } else if (isTableAliasQueryNode(current)) {
+      info.aliasing.set(
+        current.tableName,
+        new TableAliasNodeManager(current).child!
+      )
+    }
+  }
+
+  return info
+}
+
+function translateCte(
+  cte: CteClause<
+    RelationalDataStore,
+    keyof RelationalDataStore["tables"],
+    RelationalDataTable
+  >
+): string {
+  return `${cte.tableName} AS (${
+    isTableQueryNode(cte.source) ? translateTableQuery(cte.source) : ""
+  })`
+}
+
+function translateFilterGroup(
+  filter: FilterGroup<RelationalDataTable> | FilterTypes<RelationalDataTable>
 ): string {
   if (isFilterGroup(filter)) {
     return filter.filters
@@ -164,14 +246,14 @@ function translateFilterGroup<T extends RelationalDataTable>(
   throw new QueryError("Unsupported query filter type")
 }
 
-function wrap<T>(value: T): string {
+function wrap(value: unknown): string {
   return typeof value === "string"
     ? `'${value}'`
     : value === "object"
     ? value === null
       ? "null"
       : Array.isArray(value)
-      ? `{${value.map((i) => wrap(i))}}`
+      ? `{${value.map((i) => wrap(i)).join(",")}}`
       : `'${JSON.stringify(value)}'`
     : (value as string)
 }

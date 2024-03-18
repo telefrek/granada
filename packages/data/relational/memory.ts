@@ -19,8 +19,6 @@ import {
   isCteClause,
   isFilterGroup,
   isGenerator,
-  isJoinClauseNode,
-  isJoinColumnFilter,
   isJoinQueryNode,
   isRelationalQueryNode,
   isSelectClause,
@@ -33,6 +31,7 @@ import {
   type CteClause,
   type FilterGroup,
   type FilterTypes,
+  type JoinColumnFilter,
   type JoinQueryNode,
   type RelationalQueryNode,
   type StringFilter,
@@ -40,6 +39,12 @@ import {
   type TableQueryNode,
 } from "./ast"
 import { RelationalQueryBuilder } from "./builder"
+import {
+  JoinNodeManager,
+  TableNodeManager,
+  getTreeRoot,
+  hasProjections,
+} from "./helpers"
 import {
   BooleanOperation,
   ColumnFilteringOperation,
@@ -134,6 +139,35 @@ function isInMemoryQuery<
     typeof query.source === "function"
   )
 }
+/**
+ * Translates queries into a set of functions on top of an in memory set of tables
+ *
+ * NOTE: Seriously, don't use this for anything but
+ * testing...it's....sloooooowwwwww (and quite probably wrong)
+ */
+export class InMemoryRelationalQueryBuilder<
+  RowType extends RelationalDataTable
+> extends RelationalQueryBuilder<RowType> {
+  constructor(queryNode: RelationalQueryNode<RelationalNodeType>) {
+    super(queryNode)
+  }
+
+  protected override buildQuery(node: QueryNode): Query<RowType> {
+    // Verify we have a relational node
+    if (isRelationalQueryNode(node) && isGenerator(node)) {
+      return new InMemoryQuery("name", (store) => {
+        return materializeNode<RowType>(getTreeRoot(node), store)
+      })
+    }
+
+    throw new QueryError("Node is not a RelationalQueryNode")
+  }
+}
+
+type Projections = Map<
+  keyof RelationalDataStore["tables"],
+  RelationalDataTable[]
+>
 
 // Internal symbols for tracking projected information
 const ORIGINAL: unique symbol = Symbol()
@@ -156,85 +190,62 @@ function makePointer<T>(row: T): RowPointer<T> {
       }
 }
 
-/**
- * Translates queries into a set of functions on top of an in memory set of tables
- *
- * NOTE: Seriously, don't use this for anything but
- * testing...it's....sloooooowwwwww (and quite probably wrong)
- */
-export class InMemoryRelationalQueryBuilder<
-  RowType extends RelationalDataTable
-> extends RelationalQueryBuilder<RowType> {
-  constructor(queryNode: RelationalQueryNode<RelationalNodeType>) {
-    super(queryNode)
+class MaterializerContext {
+  projections: Projections = new Map()
+  store: InMemoryRelationalDataStore<RelationalDataStore>
+
+  constructor(store: InMemoryRelationalDataStore<RelationalDataStore>) {
+    this.store = store
   }
 
-  protected override buildQuery(node: QueryNode): Query<RowType> {
-    // Verify we have a relational node
-    if (isRelationalQueryNode(node) && isGenerator(node)) {
-      // Go up to the root
-      let root = node
-      let limit = 100
-      while (root.parent !== undefined && isRelationalQueryNode(root.parent)) {
-        root = root.parent
-        if (--limit == 0) {
-          throw new QueryError("boom")
-        }
-      }
+  get(table: keyof RelationalDataStore["tables"]): RelationalDataTable[] {
+    return (
+      this.projections.get(table) ??
+      (table in this.store ? this.store[table].map(makePointer) : [])
+    )
+  }
 
-      return new InMemoryQuery("name", (store) => {
-        return materializeNode<RowType>(root, store)
-      })
-    }
-
-    throw new QueryError("Node is not a RelationalQueryNode")
+  set(
+    table: keyof RelationalDataStore["tables"],
+    rows: RelationalDataTable[]
+  ): void {
+    this.projections.set(table, rows)
   }
 }
-
-type Projections = Map<
-  keyof RelationalDataStore["tables"],
-  RelationalDataTable[]
->
 
 function materializeTable(
   table: TableQueryNode<
     RelationalDataStore,
     keyof RelationalDataStore["tables"]
   >,
-  projections: Projections,
-  store: InMemoryRelationalDataStore<RelationalDataStore>
+  context: MaterializerContext
 ): RelationalDataTable[] {
   let ret: RelationalDataTable[] = []
-  let rows =
-    // Read any projections first to get rid of filtered rows before reading
-    // raw table
-    projections.get(table.tableName) ??
-    (table.tableName in store ? store[table.tableName].map(makePointer) : [])
+  let rows = context.get(table.tableName)
 
-  let where = table.children?.filter(isWhereClause).at(0)
-  let select = table.children?.filter(isSelectClause).at(0)
+  const manager = new TableNodeManager(table)
 
   // Check for any filters to apply
-  if (where !== undefined) {
-    rows = rows.filter(buildFilter(where.filter))
+  if (manager.where !== undefined) {
+    rows = rows.filter(buildFilter(manager.where.filter))
   }
 
   // Apply any select projections on the set firts
-  if (select !== undefined) {
+  if (manager.select !== undefined) {
     ret = rows.map((r) => {
       const entries: Array<readonly [PropertyKey, any]> = []
 
       const transform = new Map<string, string>()
-      for (const alias of select!.aliasing ?? []) {
+      for (const alias of manager.select!.aliasing ?? []) {
         transform.set(alias.column as string, alias.alias)
       }
 
-      if (select!.columns === "*") {
+      if (manager.select!.columns === "*") {
         Object.keys(r).map((c) =>
           entries.push([transform.has(c) ? transform.get(c)! : c, r[c]])
         )
       } else {
-        ;(select!.columns as string[]).map((c) =>
+        ;(manager.select!.columns as string[]).map((c) =>
           entries.push([transform.has(c) ? transform.get(c)! : c, r[c]])
         )
       }
@@ -257,78 +268,69 @@ function materializeJoin(
     keyof RelationalDataStore["tables"],
     RelationalDataTable
   >,
-  projections: Projections,
-  store: InMemoryRelationalDataStore<RelationalDataStore>
+  context: MaterializerContext
 ): RelationalDataTable[] {
   let rows: RelationalDataTable[] = []
+
+  const manager = new JoinNodeManager(join)
 
   // Need to find all the table nodes and map them to data
   const tables: Map<
     keyof RelationalDataStore["tables"],
     RowPointer<RelationalDataTable>[]
   > = new Map()
-  for (const table of join.children?.filter(isTableQueryNode) ?? []) {
+  for (const table of manager.tables) {
     tables.set(
       table.tableName,
-      materializeTable(table, projections, store).filter(isRowPointer)
+      materializeTable(table, context).filter(isRowPointer)
     )
   }
 
-  // Apply all the filtering sets...
-  for (const filter of join.children?.filter(isJoinClauseNode) ?? []) {
+  // Apply all the filtering sets before joining
+  for (const filter of manager.filters) {
     const left = tables.get(filter.left)!
     const right = tables.get(filter.right)!
 
-    if (isJoinColumnFilter(filter.filter)) {
-      const f = filter.filter
-      tables.set(
-        filter.left,
-        left.filter((l) =>
-          right.some(
-            (r) =>
-              (l as any)[ORIGINAL][f.leftColumn] ===
-              (r as any)[ORIGINAL][f.rightColumn]
-          )
-        )
-      )
-      tables.set(
-        filter.right,
-        right.filter((r) =>
-          left.some(
-            (l) =>
-              (l as any)[ORIGINAL][f.leftColumn] ===
-              (r as any)[ORIGINAL][f.rightColumn]
-          )
-        )
-      )
+    const check = buildJoinFilter(filter.filter)
+
+    const f = filter.filter
+    tables.set(
+      filter.left,
+      left.filter((l) => right.some((r) => check(l, r)))
+    )
+    tables.set(
+      filter.right,
+      right.filter((r) => left.some((l) => check(l, r)))
+    )
+
+    // Early abandon filters that generate no valid rows
+    if (
+      tables.get(filter.left)!.length === 0 ||
+      tables.get(filter.right)!.length === 0
+    ) {
+      return []
     }
   }
 
   // Build all the rows...
-  for (const filter of join.children?.filter(isJoinClauseNode) ?? []) {
+  for (const filter of manager.filters) {
     const left = tables.get(filter.left)!
     const right = tables.get(filter.right)!
 
-    if (isJoinColumnFilter(filter.filter)) {
-      const f = filter.filter
+    const check = buildJoinFilter(filter.filter)
 
-      const current = [...rows]
-      rows = []
-      for (const l of left) {
-        for (const r of right.filter(
-          (r) =>
-            (l as any)[ORIGINAL][f.leftColumn] ===
-            (r as any)[ORIGINAL][f.rightColumn]
-        )) {
-          // Spread the values
-          const m: RelationalDataTable = { ...l, ...r }
-          if (current.length > 0) {
-            for (const c of current) {
-              rows.push({ ...c, ...m })
-            }
-          } else {
-            rows.push(m)
+    const current = [...rows]
+    rows = []
+    for (const l of left) {
+      for (const r of right.filter((r) => check(l, r))) {
+        // Spread the values
+        const m: RelationalDataTable = { ...l, ...r }
+        if (current.length > 0) {
+          for (const c of current) {
+            rows.push({ ...c, ...m })
           }
+        } else {
+          rows.push(m)
         }
       }
     }
@@ -343,22 +345,15 @@ function materializeCte(
     keyof RelationalDataStore["tables"],
     RelationalDataTable
   >,
-  projections: Projections,
-  store: InMemoryRelationalDataStore<RelationalDataStore>
+  context: MaterializerContext
 ): RelationalQueryNode<RelationalNodeType> | undefined {
   if (isRelationalQueryNode(cte.source)) {
     switch (true) {
       case isTableQueryNode(cte.source):
-        projections.set(
-          cte.tableName,
-          materializeTable(cte.source, projections, store)
-        )
+        context.set(cte.tableName, materializeTable(cte.source, context))
         break
       case isJoinQueryNode(cte.source):
-        projections.set(
-          cte.tableName,
-          materializeJoin(cte.source, projections, store)
-        )
+        context.set(cte.tableName, materializeJoin(cte.source, context))
     }
 
     if (cte.children) {
@@ -378,18 +373,14 @@ function materializeAlias(
     keyof RelationalDataStore["tables"],
     RelationalDataTable
   >,
-  projections: Projections,
-  store: InMemoryRelationalDataStore<RelationalDataStore>
+  context: MaterializerContext
 ): RelationalQueryNode<RelationalNodeType> | undefined {
   if (cte.children) {
     const child = cte.children.filter(isRelationalQueryNode).at(0)!
     if (isRelationalQueryNode(child)) {
       switch (true) {
         case isTableQueryNode(child):
-          projections.set(
-            cte.tableName,
-            materializeTable(child, projections, store)
-          )
+          context.set(cte.tableName, materializeTable(child, context))
           break
       }
     }
@@ -405,37 +396,56 @@ function materializeAlias(
   return
 }
 
+function materializeProjections(
+  root: RelationalQueryNode<RelationalNodeType>,
+  context: MaterializerContext
+): RelationalQueryNode<RelationalNodeType> {
+  let current = root
+  while (current) {
+    if (isTableQueryNode(current) || isJoinQueryNode(current)) {
+      return current
+    }
+
+    if (isCteClause(current)) {
+      current = materializeCte(current, context)!
+    } else if (isTableAliasQueryNode(current)) {
+      current = materializeAlias(current, context)!
+    } else {
+      throw new QueryError(`Unspuported projection type: ${current.nodeType}`)
+    }
+  }
+
+  return current
+}
+
 function materializeNode<RowType extends RelationalDataTable>(
   root: RelationalQueryNode<RelationalNodeType>,
   store: InMemoryRelationalDataStore<RelationalDataStore>
 ): RowType[] {
-  const projections: Projections = new Map()
+  const context = new MaterializerContext(store)
 
-  let current: RelationalQueryNode<RelationalNodeType> | undefined = root
-  while (
-    current != undefined &&
-    !isTableQueryNode(current) &&
-    !isJoinQueryNode(current) &&
-    current.children
-  ) {
-    if (isCteClause(current)) {
-      current = materializeCte(current, projections, store)
-    } else if (isTableAliasQueryNode(current)) {
-      current = materializeAlias(current, projections, store)
-    } else {
-      throw new QueryError("never ending...")
-    }
+  let current = hasProjections(root)
+    ? materializeProjections(root, context)
+    : root
+
+  if (isTableQueryNode(current)) {
+    return materializeTable(current, context) as RowType[]
+  } else if (isJoinQueryNode(current)) {
+    return materializeJoin(current, context) as RowType[]
+  } else {
+    throw new QueryError(`Unsupported generator type: ${current.nodeType}`)
   }
+}
 
-  if (current !== undefined) {
-    if (isTableQueryNode(current)) {
-      return materializeTable(current, projections, store) as RowType[]
-    } else if (isJoinQueryNode(current)) {
-      return materializeJoin(current, projections, store) as RowType[]
-    }
-  }
-
-  return []
+function buildJoinFilter<
+  LeftTable extends RelationalDataTable,
+  RightTable extends RelationalDataTable
+>(
+  filter: JoinColumnFilter<LeftTable, RightTable>
+): (l: RowPointer<LeftTable>, r: RowPointer<RightTable>) => boolean {
+  return (l, r) =>
+    (l as any)[ORIGINAL][filter.leftColumn] ===
+    (r as any)[ORIGINAL][filter.rightColumn]
 }
 
 function buildFilter(

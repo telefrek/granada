@@ -330,21 +330,16 @@ export type JoinClauseQueryNode<
 > = RelationalQueryNode<RelationalNodeType.ON> & {
   left: LeftTable
   right: RightTable
-  filter:
-    | JoinGroupFilter<
-        DataStoreType["tables"][LeftTable],
-        DataStoreType["tables"][RightTable]
-      >
-    | JoinColumnFilter<
-        DataStoreType["tables"][LeftTable],
-        DataStoreType["tables"][RightTable],
-        keyof DataStoreType["tables"][LeftTable],
-        MatchingProperty<
-          DataStoreType["tables"][LeftTable],
-          DataStoreType["tables"][RightTable],
-          keyof DataStoreType["tables"][LeftTable]
-        >
-      >
+  filter: JoinColumnFilter<
+    DataStoreType["tables"][LeftTable],
+    DataStoreType["tables"][RightTable],
+    keyof DataStoreType["tables"][LeftTable],
+    MatchingProperty<
+      DataStoreType["tables"][LeftTable],
+      DataStoreType["tables"][RightTable],
+      keyof DataStoreType["tables"][LeftTable]
+    >
+  >
   type: JoinType
 }
 

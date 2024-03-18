@@ -1,8 +1,8 @@
-import { containsItems } from "@telefrek/data/relational/builder"
+import { containsItems, cte } from "@telefrek/data/relational/builder"
 import {
+  PostgresQueryBuilder,
   createRelationalQueryContext,
   isPostgresRelationalQuery,
-  PostgresQueryBuilder,
   type PostgresTableRow,
 } from "./builder"
 import { PostgresArray, PostgresColumnTypeName, PostgresEnum } from "./index"
@@ -28,6 +28,7 @@ type Order = NumericIdentiry &
   TimeTrackedObject & {
     name: PostgresColumnTypeName.TEXT
     categories: PostgresArray<PostgresEnum<typeof Category>>
+    customerId: PostgresColumnTypeName.INT
   }
 
 type OrderTable = {
@@ -46,23 +47,42 @@ const order: PostgresTableRow<OrderTable> = {
   createdAt: 1,
   categories: ["purchase"],
   updatedAt: 1,
+  customerId: 1,
 }
 
-const foo: CategoryEnum = "purchase"
-
 describe("Postgres query syntax should be translated correctly", () => {
-  it("Should create a valid query from  a builder", () => {
+  it("Should create a valid query from a builder", () => {
     const context = createRelationalQueryContext<TestDatabase>()
     const query = context
       .from("orders")
       .select("id", "categories")
-      .alias("id", "order_id")
+      .alias("id", "orderId")
       .where(containsItems("categories", "purchase"))
       .build(PostgresQueryBuilder)
 
     if (isPostgresRelationalQuery(query)) {
       expect(query.queryText).toEqual(
-        "SELECT id AS order_id, categories FROM orders WHERE 'purchase'=ANY(categories)"
+        "SELECT id AS orderId, categories FROM orders WHERE 'purchase'=ANY(categories)"
+      )
+    }
+  })
+
+  it("Should create a valid query from a builder with a cte", () => {
+    const context = createRelationalQueryContext<TestDatabase>()
+    const query = cte(context, "customerOrders", (builder) =>
+      builder
+        .from("orders")
+        .select("customerId", "id", "categories")
+        .alias("id", "orderId")
+        .where(containsItems("categories", "purchase"))
+    )
+      .from("customerOrders")
+      .select("*")
+      .build(PostgresQueryBuilder)
+
+    if (isPostgresRelationalQuery(query)) {
+      expect(query.queryText).toEqual(
+        "WITH customerOrders AS (SELECT customerId, id AS orderId, categories FROM orders WHERE 'purchase'=ANY(categories)) SELECT * FROM customerOrders"
       )
     }
   })
