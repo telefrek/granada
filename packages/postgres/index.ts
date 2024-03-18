@@ -44,7 +44,9 @@ export type PostgresEnum<EnumType extends Record<string, string>> =
  * Represents an array of {@link PostgresColumnTypes}
  */
 export interface PostgresArray<
-  ItemType extends PostgresColumnTypeName | PostgresEnum<any>
+  ItemType extends
+    | PostgresColumnTypeName
+    | PostgresEnum<Record<string, string>>,
 > {
   itemType: ItemType
 }
@@ -57,29 +59,25 @@ export type PostgresColumnTypes =
 export type PostgresColumnType<ColumnType extends PostgresColumnTypes> =
   ColumnType extends keyof PostgresColumnTypeMapping
     ? PostgresColumnTypeMapping[ColumnType]
-    : ColumnType extends PostgresArray<PostgresColumnTypes>
-    ? ColumnType["itemType"] extends keyof PostgresColumnTypeMapping
-      ? PostgresColumnTypeMapping[ColumnType["itemType"]]
-      : ColumnType["itemType"] extends PostgresEnum<Record<string, string>>
-      ? ColumnType["itemType"][]
-      : never
-    : ColumnType extends PostgresEnum<Record<string, string>>
-    ? ColumnType
-    : never
+    : ColumnType extends PostgresArray<PostgresColumnTypeName>
+      ? ColumnType["itemType"] extends keyof PostgresColumnTypeMapping
+        ? PostgresColumnTypeMapping[ColumnType["itemType"]]
+        : ColumnType["itemType"] extends PostgresEnum<Record<string, string>>
+          ? ColumnType["itemType"][]
+          : never
+      : ColumnType extends PostgresEnum<Record<string, string>>
+        ? ColumnType
+        : never
 
 export interface PostgresTable {
-  schema: {
-    [key: string]: PostgresColumnTypes
-  }
+  schema: Record<string, PostgresColumnTypes>
 }
 
 export interface PostgresDatabase {
-  tables: {
-    [key: string]: PostgresTable
-  }
+  tables: Record<string, PostgresTable>
 }
 
-type PostgresColumnTypeMapping = {
+interface PostgresColumnTypeMapping {
   [PostgresColumnTypeName.BIGINT]: bigint
   [PostgresColumnTypeName.BIGSERIAL]: bigint
   [PostgresColumnTypeName.BOOLEAN]: boolean

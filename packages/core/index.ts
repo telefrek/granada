@@ -1,6 +1,6 @@
 import util from "util"
 
-export function getDebugInfo(target: unknown, depth: number = 25): string {
+export function getDebugInfo(target: unknown, depth = 25): string {
   return util.inspect(target, false, depth, true)
 }
 

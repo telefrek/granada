@@ -4,7 +4,7 @@
 
 import type { OptionalProperties } from "@telefrek/core/type/utils"
 import type { RelationalDataStore, RelationalDataTable, STAR } from "."
-import type { QueryNode, QuerySource } from "../query/ast"
+import type { QueryNode } from "../query/ast"
 import {
   BooleanOperation,
   ColumnFilteringOperation,
@@ -32,14 +32,14 @@ export type RelationalQueryNode<NodeType extends RelationalNodeType> =
  * @returns True if the node is a {@link RelationalQueryNode}
  */
 export function isRelationalQueryNode(
-  node: QueryNode
+  node: QueryNode,
 ): node is RelationalQueryNode<RelationalNodeType> {
   return (
     typeof node === "object" &&
     node !== null &&
     "nodeType" in node &&
     Object.values(RelationalNodeType).includes(
-      node.nodeType as RelationalNodeType
+      node.nodeType as RelationalNodeType,
     )
   )
 }
@@ -47,10 +47,10 @@ export function isRelationalQueryNode(
 /**
  * Represents a filter on a given column like:`table.column {op} value`
  */
-export type ColumnFilter<
+export interface ColumnFilter<
   TableType extends RelationalDataTable,
-  Column extends keyof TableType
-> = {
+  Column extends keyof TableType,
+> {
   column: Column
   op: ColumnFilteringOperation
   value: TableType[Column]
@@ -61,7 +61,7 @@ export enum ContainmentObjectType {
   STRING,
 }
 
-export type ContainmentFilter<ContainmentObjectType> = {
+export interface ContainmentFilter<ContainmentObjectType> {
   type: ContainmentObjectType
 }
 
@@ -71,7 +71,7 @@ export type ContainmentFilter<ContainmentObjectType> = {
 export type ArrayFilter<
   TableType extends RelationalDataTable,
   Column extends ArrayProperty<TableType>,
-  ColumnItemType extends ArrayItemType<TableType, Column>
+  ColumnItemType extends ArrayItemType<TableType, Column>,
 > = ContainmentFilter<ContainmentObjectType.ARRAY> & {
   column: Column
   op: ColumnValueContainsOperation.IN
@@ -80,7 +80,7 @@ export type ArrayFilter<
 
 export type StringFilter<
   TableType extends RelationalDataTable,
-  Column extends PropertiesOfType<TableType, string>
+  Column extends PropertiesOfType<TableType, string>,
 > = ContainmentFilter<ContainmentObjectType.STRING> & {
   column: Column
   op: ColumnValueContainsOperation
@@ -94,7 +94,7 @@ export type StringFilter<
  * @returns True if the filter is a {@link ColumnFilter}
  */
 export function isColumnFilter<TableType extends RelationalDataTable>(
-  filter: FilterTypes<TableType> | FilterGroup<TableType>
+  filter: FilterTypes<TableType> | FilterGroup<TableType>,
 ): filter is ColumnFilter<TableType, keyof TableType> {
   return (
     typeof filter === "object" &&
@@ -104,7 +104,7 @@ export function isColumnFilter<TableType extends RelationalDataTable>(
     "op" in filter &&
     typeof filter.op === "string" &&
     Object.values(ColumnFilteringOperation).includes(
-      filter.op as ColumnFilteringOperation
+      filter.op as ColumnFilteringOperation,
     )
   )
 }
@@ -116,7 +116,7 @@ export function isColumnFilter<TableType extends RelationalDataTable>(
  * @returns True if the filter is a {@link ArrayFilter}
  */
 export function IsArrayFilter<TableType extends RelationalDataTable>(
-  filter: FilterTypes<TableType> | FilterGroup<TableType>
+  filter: FilterTypes<TableType> | FilterGroup<TableType>,
 ): filter is ArrayFilter<
   TableType,
   ArrayProperty<TableType>,
@@ -132,7 +132,7 @@ export function IsArrayFilter<TableType extends RelationalDataTable>(
     "op" in filter &&
       typeof filter.op === "string" &&
       Object.values(ColumnValueContainsOperation).includes(
-        filter.op as ColumnValueContainsOperation
+        filter.op as ColumnValueContainsOperation,
       )
   )
 }
@@ -144,7 +144,7 @@ export function IsArrayFilter<TableType extends RelationalDataTable>(
  * @returns True if the filter is a {@link StringFilter}
  */
 export function isStringFilter<TableType extends RelationalDataTable>(
-  filter: FilterTypes<TableType> | FilterGroup<TableType>
+  filter: FilterTypes<TableType> | FilterGroup<TableType>,
 ): filter is StringFilter<TableType, PropertiesOfType<TableType, string>> {
   return (
     typeof filter === "object" &&
@@ -156,7 +156,7 @@ export function isStringFilter<TableType extends RelationalDataTable>(
     "op" in filter &&
       typeof filter.op === "string" &&
       Object.values(ColumnValueContainsOperation).includes(
-        filter.op as ColumnValueContainsOperation
+        filter.op as ColumnValueContainsOperation,
       )
   )
 }
@@ -164,10 +164,10 @@ export function isStringFilter<TableType extends RelationalDataTable>(
 /**
  * Filter for columns that are nullable
  */
-export type NullColumnFilter<
+export interface NullColumnFilter<
   TableType extends RelationalDataTable,
-  Column extends keyof OptionalProperties<TableType>
-> = {
+  Column extends keyof OptionalProperties<TableType>,
+> {
   column: Column
 }
 
@@ -187,7 +187,7 @@ export type FilterTypes<TableType extends RelationalDataTable> =
 /**
  * Represents a group of filters that are bound by a {@link BooleanOperation}
  */
-export type FilterGroup<TableType extends RelationalDataTable> = {
+export interface FilterGroup<TableType extends RelationalDataTable> {
   filters: (FilterTypes<TableType> | FilterGroup<TableType>)[]
   op: BooleanOperation
 }
@@ -199,7 +199,7 @@ export type FilterGroup<TableType extends RelationalDataTable> = {
  * @returns True if the filter is a {@link FilterGroup}
  */
 export function isFilterGroup<TableType extends RelationalDataTable>(
-  filter: FilterTypes<TableType> | FilterGroup<TableType>
+  filter: FilterTypes<TableType> | FilterGroup<TableType>,
 ): filter is FilterGroup<TableType> {
   return (
     typeof filter === "object" &&
@@ -211,14 +211,9 @@ export function isFilterGroup<TableType extends RelationalDataTable>(
   )
 }
 
-export type RowGenerator<
-  DataStoreType extends RelationalDataStore,
-  RowType extends RelationalDataTable
-> = RelationalQueryNode<RelationalNodeType>
-
 export function isGenerator(
-  node: QueryNode
-): node is RowGenerator<RelationalDataStore, RelationalDataTable> {
+  node: QueryNode,
+): node is RelationalQueryNode<RelationalNodeType> {
   return (
     isRelationalQueryNode(node) &&
     (node.nodeType === RelationalNodeType.TABLE ||
@@ -228,11 +223,10 @@ export function isGenerator(
   )
 }
 
-export type NamedRowGenerator<
+export interface NamedRowGenerator<
   DataStoreType extends RelationalDataStore,
   TableName extends keyof DataStoreType["tables"],
-  RowType extends RelationalDataTable
-> = RowGenerator<DataStoreType, RowType> & {
+> extends RelationalQueryNode<RelationalNodeType> {
   tableName: TableName
 }
 
@@ -242,10 +236,9 @@ export type NamedRowGenerator<
 export type CteClause<
   DataStoreType extends RelationalDataStore,
   Alias extends keyof DataStoreType["tables"],
-  RowType extends RelationalDataTable
-> = NamedRowGenerator<DataStoreType, Alias, RowType> &
+> = NamedRowGenerator<DataStoreType, Alias> &
   RelationalQueryNode<RelationalNodeType.CTE> & {
-    source: RowGenerator<DataStoreType, RowType>
+    source: RelationalQueryNode<RelationalNodeType>
   }
 
 /**
@@ -254,9 +247,8 @@ export type CteClause<
 export type TableQueryNode<
   DataStoreType extends RelationalDataStore,
   TableName extends keyof DataStoreType["tables"],
-  RowType extends RelationalDataTable = DataStoreType["tables"][TableName]
 > = RelationalQueryNode<RelationalNodeType.TABLE> &
-  NamedRowGenerator<DataStoreType, TableName, RowType> & {
+  NamedRowGenerator<DataStoreType, TableName> & {
     tableName: TableName
     alias?: keyof DataStoreType["tables"]
   }
@@ -267,12 +259,11 @@ export type TableQueryNode<
 export type SelectClause<
   DataStoreType extends RelationalDataStore,
   TableName extends keyof DataStoreType["tables"],
-  Column extends keyof DataStoreType["tables"][TableName] = keyof DataStoreType["tables"][TableName],
-  RowType extends RelationalDataTable = DataStoreType["tables"][TableName]
-> = QuerySource<RowType> &
-  RelationalQueryNode<RelationalNodeType.SELECT> & {
-    columns: Column[] | STAR
-  }
+  Column extends
+    keyof DataStoreType["tables"][TableName] = keyof DataStoreType["tables"][TableName],
+> = RelationalQueryNode<RelationalNodeType.SELECT> & {
+  columns: Column[] | STAR
+}
 
 /**
  * Reipresents a column alias value
@@ -280,7 +271,7 @@ export type SelectClause<
 export type ColumnAlias<
   TableType extends RelationalDataTable,
   Column extends keyof TableType,
-  Alias extends string
+  Alias extends string,
 > = RelationalQueryNode<RelationalNodeType.ALIAS> & {
   column: Column
   alias: Alias
@@ -294,7 +285,7 @@ export type WhereClause<TableType extends RelationalDataTable> =
     filter: FilterGroup<TableType> | FilterTypes<TableType>
   }
 
-export type JoinColumnFilter<
+export interface JoinColumnFilter<
   LeftTable extends RelationalDataTable,
   RightTable extends RelationalDataTable,
   LeftColumn extends keyof LeftTable = keyof LeftTable,
@@ -302,23 +293,19 @@ export type JoinColumnFilter<
     LeftTable,
     RightTable,
     LeftColumn
-  > = MatchingProperty<LeftTable, RightTable, LeftColumn>
-> = {
+  > = MatchingProperty<LeftTable, RightTable, LeftColumn>,
+> {
   leftColumn: LeftColumn
   rightColumn: RightColumn
   op: ColumnFilteringOperation
 }
 
-export type JoinQueryNode<
-  DataStoreType extends RelationalDataStore,
-  RowType extends RelationalDataTable
-> = RelationalQueryNode<RelationalNodeType.JOIN> &
-  RowGenerator<DataStoreType, RowType>
+export type JoinQueryNode = RelationalQueryNode<RelationalNodeType.JOIN>
 
 export type JoinClauseQueryNode<
   DataStoreType extends RelationalDataStore,
   LeftTable extends keyof DataStoreType["tables"],
-  RightTable extends keyof DataStoreType["tables"]
+  RightTable extends keyof DataStoreType["tables"],
 > = RelationalQueryNode<RelationalNodeType.ON> & {
   left: LeftTable
   right: RightTable
@@ -337,10 +324,8 @@ export type JoinClauseQueryNode<
 
 export function isNamedGenerator<
   DataStoreType extends RelationalDataStore,
-  TableName extends keyof DataStoreType["tables"]
->(
-  node: RelationalQueryNode<RelationalNodeType>
-): node is NamedRowGenerator<DataStoreType, TableName, RelationalDataTable> {
+  TableName extends keyof DataStoreType["tables"],
+>(node: QueryNode): node is NamedRowGenerator<DataStoreType, TableName> {
   return (
     isGenerator(node) &&
     "tableName" in node &&
@@ -355,8 +340,8 @@ export function isNamedGenerator<
  * @returns True if the node is a {@link WhereClause}
  */
 export function isCteClause<DataStoreType extends RelationalDataStore>(
-  node: RelationalQueryNode<RelationalNodeType>
-): node is CteClause<DataStoreType, string, RelationalDataTable> {
+  node: RelationalQueryNode<RelationalNodeType>,
+): node is CteClause<DataStoreType, string> {
   return node.nodeType === RelationalNodeType.CTE
 }
 
@@ -367,7 +352,7 @@ export function isCteClause<DataStoreType extends RelationalDataStore>(
  * @returns True if the node is a {@link WhereClause}
  */
 export function isWhereClause(
-  node: QueryNode
+  node: QueryNode,
 ): node is WhereClause<RelationalDataTable> {
   return (
     isRelationalQueryNode(node) && node.nodeType === RelationalNodeType.WHERE
@@ -381,7 +366,7 @@ export function isWhereClause(
  * @returns True if the node is a {@link SelectClause}
  */
 export function isSelectClause(
-  node: QueryNode
+  node: QueryNode,
 ): node is SelectClause<
   RelationalDataStore,
   keyof RelationalDataStore["tables"]
@@ -392,7 +377,7 @@ export function isSelectClause(
 }
 
 export function isColumnAlias(
-  node: QueryNode
+  node: QueryNode,
 ): node is ColumnAlias<RelationalDataTable, keyof RelationalDataTable, string> {
   return (
     isRelationalQueryNode(node) && node.nodeType === RelationalNodeType.ALIAS
@@ -408,17 +393,14 @@ export function isColumnAlias(
 export function isTableQueryNode<
   DataStoreType extends RelationalDataStore,
   TargetTable extends keyof DataStoreType["tables"],
-  RowType extends RelationalDataTable = DataStoreType["tables"][TargetTable]
->(
-  node: QueryNode
-): node is TableQueryNode<DataStoreType, TargetTable, RowType> {
+>(node: QueryNode): node is TableQueryNode<DataStoreType, TargetTable> {
   return (
     isRelationalQueryNode(node) && node.nodeType === RelationalNodeType.TABLE
   )
 }
 
 export function isJoinColumnFilter(
-  filter: unknown
+  filter: unknown,
 ): filter is JoinColumnFilter<RelationalDataTable, RelationalDataTable> {
   return (
     typeof filter === "object" &&
@@ -428,21 +410,19 @@ export function isJoinColumnFilter(
     "op" in filter &&
     typeof filter.op === "string" &&
     Object.values(ColumnFilteringOperation).includes(
-      filter.op as ColumnFilteringOperation
+      filter.op as ColumnFilteringOperation,
     )
   )
 }
 
-export function isJoinQueryNode(
-  node: QueryNode
-): node is JoinQueryNode<RelationalDataStore, RelationalDataTable> {
+export function isJoinQueryNode(node: QueryNode): node is JoinQueryNode {
   return (
     isRelationalQueryNode(node) && node.nodeType === RelationalNodeType.JOIN
   )
 }
 
 export function isJoinClauseNode<DataStoreType extends RelationalDataStore>(
-  node: QueryNode
+  node: QueryNode,
 ): node is JoinClauseQueryNode<
   DataStoreType,
   keyof DataStoreType["tables"],

@@ -9,7 +9,7 @@ import type { QueryNode } from "./ast"
 /**
  * Defines the generatl structure for a {@link Query} builder
  */
-export type QueryBuilder<T> = {
+export interface QueryBuilder<T> {
   /**
    * Build the {@link Query} with the information already provided
    *
@@ -36,7 +36,7 @@ export abstract class QueryBuilderBase<T> implements QueryBuilder<T> {
    *
    * @returns A {@link Query} that represents that AST
    */
-  protected abstract buildQuery<T>(node: QueryNode): Query<T>
+  protected abstract buildQuery(node: QueryNode): Query<T>
 
   build(): Query<T> {
     return this.buildQuery(this.node)

@@ -17,7 +17,6 @@ import {
   type JoinColumnFilter,
   type NamedRowGenerator,
   type RelationalQueryNode,
-  type RowGenerator,
   type SelectClause,
   type TableQueryNode,
   type WhereClause,
@@ -41,7 +40,7 @@ import {
  * database queries
  */
 export abstract class RelationalQueryBuilder<
-  T extends RelationalDataTable
+  T extends RelationalDataTable,
 > extends QueryBuilderBase<T> {
   constructor(queryNode: RelationalQueryNode<RelationalNodeType>) {
     super(queryNode)
@@ -54,17 +53,17 @@ export abstract class RelationalQueryBuilder<
 export type RelationalNodeBuilder<
   DataStoreType extends RelationalDataStore,
   RowType extends RelationalDataTable = never,
-  Aliasing extends keyof DataStoreType["tables"] = never
-> = RelationalRowProvider<DataStoreType, RowType> & {
+  Aliasing extends keyof DataStoreType["tables"] = never,
+> = RelationalRowProvider<RowType> & {
   context?: RelationalQueryNode<RelationalNodeType>
   tableAlias: TableAlias
 
   withTableAlias<
     TableName extends keyof Omit<DataStoreType["tables"], Aliasing>,
-    Alias extends string
+    Alias extends string,
   >(
     table: TableName,
-    alias: Alias
+    alias: Alias,
   ): RelationalNodeBuilder<
     ModifiedStore<DataStoreType, Alias, DataStoreType["tables"][TableName]>,
     RowType,
@@ -72,7 +71,7 @@ export type RelationalNodeBuilder<
   >
 
   from<TableName extends keyof DataStoreType["tables"]>(
-    tableName: TableName
+    tableName: TableName,
   ): TableNodeBuilder<DataStoreType, TableName>
 }
 
@@ -82,7 +81,7 @@ export type RelationalNodeBuilder<
  * @returns A {@link RelationalNodeBuilder} for the given {@link DataStoreType}
  */
 export function useDataStore<
-  DataStoreType extends RelationalDataStore
+  DataStoreType extends RelationalDataStore,
 >(): RelationalNodeBuilder<DataStoreType> {
   return new DefaultRelationalNodeBuilder()
 }
@@ -173,10 +172,10 @@ export const not: BooleanFilter = (...clauses) =>
  */
 export const contains = <
   TableType extends RelationalDataTable,
-  Column extends PropertiesOfType<TableType, string>
+  Column extends PropertiesOfType<TableType, string>,
 >(
   column: Column,
-  value: string
+  value: string,
 ): FilterTypes<TableType> => {
   return {
     type: ContainmentObjectType.STRING,
@@ -195,7 +194,7 @@ export const contains = <
 export const containsItems = <
   RowType extends RelationalDataTable,
   ContainingColumn extends ArrayProperty<RowType>,
-  ColumnValue extends ArrayItemType<RowType, ContainingColumn>
+  ColumnValue extends ArrayItemType<RowType, ContainingColumn>,
 >(
   column: ContainingColumn,
   ...values: ColumnValue[]
@@ -216,18 +215,19 @@ export const containsItems = <
  * Constructor type
  */
 type QueryBuilderCtor<RowType extends RelationalDataTable> = new (
-  node: RelationalQueryNode<RelationalNodeType>
+  node: RelationalQueryNode<RelationalNodeType>,
 ) => RelationalQueryBuilder<RowType>
 
 /**
  * Represents a relational query that will return some value of {@link RowType}
  * from the given {@link DataStoreType}
  */
-type RelationalRowProvider<
-  DataStoreType extends RelationalDataStore,
-  RowType extends RelationalDataTable
-> = {
-  asNode(): RelationalQueryNode<RelationalNodeType>
+interface RelationalRowProvider<
+  RowType extends RelationalDataTable,
+  NodeType extends
+    RelationalQueryNode<RelationalNodeType> = RelationalQueryNode<RelationalNodeType>,
+> {
+  asNode(): NodeType
 
   /**
    * Retrieve a builder that can be used to create {@link Query} objects
@@ -238,38 +238,34 @@ type RelationalRowProvider<
   build(ctor: QueryBuilderCtor<RowType>): Query<RowType>
 }
 
-type NamedRelationalRowProvider<
+interface NamedRelationalRowProvider<
   DataStoreType extends RelationalDataStore,
   TableName extends keyof DataStoreType["tables"],
-  RowType extends RelationalDataTable
-> = RelationalRowProvider<DataStoreType, RowType> & {
+  RowType extends RelationalDataTable,
+> extends RelationalRowProvider<
+    RowType,
+    NamedRowGenerator<DataStoreType, TableName>
+  > {
   tableName: TableName
 }
 
 export function cte<
   DataStoreType extends RelationalDataStore,
   Alias extends string,
-  RowType extends RelationalDataTable
+  RowType extends RelationalDataTable,
 >(
   builder: RelationalNodeBuilder<DataStoreType>,
   alias: Alias,
   source: (
-    builder: RelationalNodeBuilder<DataStoreType>
-  ) => RelationalRowProvider<DataStoreType, RowType>
+    builder: RelationalNodeBuilder<DataStoreType>,
+  ) => RelationalRowProvider<RowType>,
 ): RelationalNodeBuilder<ModifiedStore<DataStoreType, Alias, RowType>> {
   // Get the row generator
-  let generator = source(builder).asNode() as RowGenerator<
-    DataStoreType,
-    RowType
-  >
+  const generator = source(builder).asNode()
 
   const parent = generator.parent
 
-  const cte: CteClause<
-    ModifiedStore<DataStoreType, Alias, RowType>,
-    Alias,
-    RowType
-  > = {
+  const cte: CteClause<ModifiedStore<DataStoreType, Alias, RowType>, Alias> = {
     tableName: alias,
     nodeType: RelationalNodeType.CTE,
     source: generator,
@@ -289,16 +285,15 @@ export function cte<
   return new DefaultRelationalNodeBuilder(cte, builder.tableAlias)
 }
 
-type TableAlias = {
-  [
-    key: keyof RelationalDataStore["tables"]
-  ]: keyof RelationalDataStore["tables"]
-}
+type TableAlias = Record<
+  keyof RelationalDataStore["tables"],
+  keyof RelationalDataStore["tables"]
+>
 
 export class DefaultRelationalNodeBuilder<
   DataStoreType extends RelationalDataStore,
   RowType extends RelationalDataTable = never,
-  Aliasing extends keyof DataStoreType["tables"] = never
+  Aliasing extends keyof DataStoreType["tables"] = never,
 > implements RelationalNodeBuilder<DataStoreType, RowType, Aliasing>
 {
   #context?: RelationalQueryNode<RelationalNodeType>
@@ -322,7 +317,7 @@ export class DefaultRelationalNodeBuilder<
 
   constructor(
     context?: RelationalQueryNode<RelationalNodeType>,
-    tableAlias: TableAlias = {}
+    tableAlias: TableAlias = {},
   ) {
     this.#context = context
     this.#tableAlias = tableAlias
@@ -330,10 +325,10 @@ export class DefaultRelationalNodeBuilder<
 
   withTableAlias<
     TableName extends keyof Omit<DataStoreType["tables"], Aliasing>,
-    Alias extends string
+    Alias extends string,
   >(
     table: TableName,
-    alias: Alias
+    alias: Alias,
   ): RelationalNodeBuilder<
     ModifiedStore<DataStoreType, Alias, DataStoreType["tables"][TableName]>,
     RowType,
@@ -351,7 +346,7 @@ export class DefaultRelationalNodeBuilder<
   }
 
   from<TableName extends keyof DataStoreType["tables"]>(
-    tableName: TableName
+    tableName: TableName,
   ): TableNodeBuilder<
     DataStoreType,
     TableName,
@@ -369,9 +364,9 @@ export class DefaultRelationalNodeBuilder<
     >(tableName, alias, undefined, undefined, undefined, this.context)
   }
 
-  build(ctor: QueryBuilderCtor<RowType>): Query<RowType> {
+  build(_: QueryBuilderCtor<RowType>): Query<RowType> {
     throw new QueryError(
-      "invalid to build a query from a RelationalQueryNodeBuilder"
+      "invalid to build a query from a RelationalQueryNodeBuilder",
     )
   }
 }
@@ -379,13 +374,13 @@ export class DefaultRelationalNodeBuilder<
 type TableNodeBuilder<
   DataStoreType extends RelationalDataStore,
   TableName extends keyof DataStoreType["tables"],
-  RowType extends RelationalDataTable = DataStoreType["tables"][TableName]
+  RowType extends RelationalDataTable = DataStoreType["tables"][TableName],
 > = NamedRelationalRowProvider<DataStoreType, TableName, RowType> & {
   tableName: TableName
   tableAlias?: keyof DataStoreType["tables"]
 
   select(
-    column: STAR
+    column: STAR,
   ): Omit<
     TableNodeBuilder<
       DataStoreType,
@@ -408,7 +403,7 @@ type TableNodeBuilder<
 
   join<
     JoinTable extends keyof DataStoreType["tables"],
-    JoinRowType extends RelationalDataTable
+    JoinRowType extends RelationalDataTable,
   >(
     joinTable: NamedRelationalRowProvider<
       DataStoreType,
@@ -419,7 +414,7 @@ type TableNodeBuilder<
       DataStoreType["tables"][TableName],
       DataStoreType["tables"][JoinTable]
     >,
-    type?: JoinType
+    type?: JoinType,
   ): JoinNodeBuilder<
     DataStoreType,
     TableName | JoinTable,
@@ -428,10 +423,10 @@ type TableNodeBuilder<
 
   alias<
     Column extends keyof RowType & keyof DataStoreType["tables"][TableName],
-    Alias extends string
+    Alias extends string,
   >(
     column: Column,
-    alias: Alias
+    alias: Alias,
   ): TableNodeBuilder<
     DataStoreType,
     TableName,
@@ -441,14 +436,14 @@ type TableNodeBuilder<
   where(
     filter:
       | FilterGroup<DataStoreType["tables"][TableName]>
-      | FilterTypes<DataStoreType["tables"][TableName]>
+      | FilterTypes<DataStoreType["tables"][TableName]>,
   ): Omit<TableNodeBuilder<DataStoreType, TableName, RowType>, "where">
 }
 
 class DefaultTableNodeBuilder<
   DataStoreType extends RelationalDataStore,
   TableName extends keyof DataStoreType["tables"],
-  RowType extends RelationalDataTable = {}
+  RowType extends RelationalDataTable = DataStoreType["tables"][TableName],
 > implements TableNodeBuilder<DataStoreType, TableName, RowType>
 {
   tableName: TableName
@@ -457,8 +452,7 @@ class DefaultTableNodeBuilder<
   #select?: SelectClause<
     DataStoreType,
     TableName,
-    keyof DataStoreType["tables"][TableName],
-    RowType
+    keyof DataStoreType["tables"][TableName]
   >
   #where?: WhereClause<DataStoreType["tables"][TableName]>
   #alias?: ColumnAlias<
@@ -468,7 +462,7 @@ class DefaultTableNodeBuilder<
   >[]
   #parent?: RelationalQueryNode<RelationalNodeType>
 
-  asNode(): RelationalQueryNode<RelationalNodeType> {
+  asNode(): NamedRowGenerator<DataStoreType, TableName> {
     const select = this.#select ?? {
       nodeType: RelationalNodeType.SELECT,
       columns: [],
@@ -482,7 +476,7 @@ class DefaultTableNodeBuilder<
       nodeType: RelationalNodeType.TABLE,
       tableName: this.tableName,
       alias: this.tableAlias,
-    } as TableQueryNode<DataStoreType, TableName, RowType>
+    } as TableQueryNode<DataStoreType, TableName>
 
     select.parent = node
     node.children = [select]
@@ -524,8 +518,7 @@ class DefaultTableNodeBuilder<
     select?: SelectClause<
       DataStoreType,
       TableName,
-      keyof DataStoreType["tables"][TableName],
-      RowType
+      keyof DataStoreType["tables"][TableName]
     >,
     where?: WhereClause<DataStoreType["tables"][TableName]>,
     alias?: ColumnAlias<
@@ -533,7 +526,7 @@ class DefaultTableNodeBuilder<
       keyof DataStoreType["tables"][TableName],
       string
     >[],
-    parent?: RelationalQueryNode<RelationalNodeType>
+    parent?: RelationalQueryNode<RelationalNodeType>,
   ) {
     this.tableName = tableName
     ;(this.tableAlias = tableAlias), (this.#select = select)
@@ -544,7 +537,7 @@ class DefaultTableNodeBuilder<
 
   join<
     JoinTable extends keyof DataStoreType["tables"],
-    JoinRowType extends RelationalDataTable
+    JoinRowType extends RelationalDataTable,
   >(
     joinTable: NamedRelationalRowProvider<
       DataStoreType,
@@ -555,7 +548,7 @@ class DefaultTableNodeBuilder<
       DataStoreType["tables"][TableName],
       DataStoreType["tables"][JoinTable]
     >,
-    type: JoinType = JoinType.INNER
+    type: JoinType = JoinType.INNER,
   ): JoinNodeBuilder<
     DataStoreType,
     TableName | JoinTable,
@@ -567,7 +560,7 @@ class DefaultTableNodeBuilder<
   }
 
   select(
-    column: STAR
+    column: STAR,
   ): Omit<
     TableNodeBuilder<
       DataStoreType,
@@ -620,7 +613,7 @@ class DefaultTableNodeBuilder<
         },
         this.#where,
         this.#alias,
-        this.#parent
+        this.#parent,
       )
     }
 
@@ -637,7 +630,7 @@ class DefaultTableNodeBuilder<
       },
       this.#where,
       this.#alias,
-      this.#parent
+      this.#parent,
     )
   }
 
@@ -647,10 +640,10 @@ class DefaultTableNodeBuilder<
 
   alias<
     Column extends keyof RowType & keyof DataStoreType["tables"][TableName],
-    Alias extends string
+    Alias extends string,
   >(
     column: Column,
-    alias: Alias
+    alias: Alias,
   ): TableNodeBuilder<
     DataStoreType,
     TableName,
@@ -667,14 +660,14 @@ class DefaultTableNodeBuilder<
       },
       this.#where,
       aliasing,
-      this.#parent
+      this.#parent,
     )
   }
 
   where(
     filter:
       | FilterGroup<DataStoreType["tables"][TableName]>
-      | FilterTypes<DataStoreType["tables"][TableName]>
+      | FilterTypes<DataStoreType["tables"][TableName]>,
   ): Omit<TableNodeBuilder<DataStoreType, TableName, RowType>, "where"> {
     return new DefaultTableNodeBuilder(
       this.tableName,
@@ -685,7 +678,7 @@ class DefaultTableNodeBuilder<
         filter,
       },
       this.#alias,
-      this.#parent
+      this.#parent,
     )
   }
 }
@@ -693,19 +686,19 @@ class DefaultTableNodeBuilder<
 type JoinNodeBuilder<
   DataStoreType extends RelationalDataStore,
   Tables extends keyof DataStoreType["tables"],
-  RowType extends RelationalDataTable
-> = RelationalRowProvider<DataStoreType, RowType> & {
+  RowType extends RelationalDataTable,
+> = RelationalRowProvider<RowType> & {
   join<
     JoinTarget extends Tables,
     JoinTable extends keyof Exclude<DataStoreType["tables"], Tables> & string,
-    TableType extends RelationalDataTable
+    TableType extends RelationalDataTable,
   >(
     target: JoinTarget,
     source: NamedRelationalRowProvider<DataStoreType, JoinTable, TableType>,
     filter: JoinColumnFilter<
       DataStoreType["tables"][JoinTarget],
       DataStoreType["tables"][JoinTable]
-    >
+    >,
   ): JoinNodeBuilder<
     DataStoreType,
     Tables | JoinTable,
@@ -716,21 +709,17 @@ type JoinNodeBuilder<
 class MultiJoinNodeBuilder<
   DataStoreType extends RelationalDataStore,
   Tables extends keyof DataStoreType["tables"],
-  RowType extends RelationalDataTable
+  RowType extends RelationalDataTable,
 > implements JoinNodeBuilder<DataStoreType, Tables, RowType>
 {
-  tables: NamedRowGenerator<
-    DataStoreType,
-    keyof DataStoreType["tables"],
-    RelationalDataTable
-  >[]
+  tables: NamedRowGenerator<DataStoreType, keyof DataStoreType["tables"]>[]
   filters: JoinClauseQueryNode<DataStoreType, Tables, Tables>[]
   parent?: RelationalQueryNode<RelationalNodeType>
 
   constructor(
-    tables: NamedRowGenerator<DataStoreType, Tables, RelationalDataTable>[],
+    tables: NamedRowGenerator<DataStoreType, Tables>[],
     filters: JoinClauseQueryNode<DataStoreType, Tables, Tables>[],
-    parent?: RelationalQueryNode<RelationalNodeType>
+    parent?: RelationalQueryNode<RelationalNodeType>,
   ) {
     this.tables = tables
     this.filters = filters
@@ -740,14 +729,18 @@ class MultiJoinNodeBuilder<
   join<
     JoinTarget extends Tables,
     JoinTable extends keyof Exclude<DataStoreType["tables"], Tables> & string,
-    TableType extends RelationalDataTable
+    TableType extends RelationalDataTable,
   >(
-    target: JoinTarget,
-    source: NamedRelationalRowProvider<DataStoreType, JoinTable, TableType>,
-    filter: JoinColumnFilter<
+    _target: JoinTarget,
+    _source: NamedRelationalRowProvider<
+      DataStoreType,
+      JoinTable,
+      RelationalDataTable
+    >,
+    _filter: JoinColumnFilter<
       DataStoreType["tables"][JoinTarget],
       DataStoreType["tables"][JoinTable]
-    >
+    >,
   ): JoinNodeBuilder<
     DataStoreType,
     Tables | JoinTable,
@@ -790,7 +783,7 @@ class SingleJoinNodeBuilder<
   LeftTable extends keyof DataStoreType["tables"],
   RightTable extends keyof DataStoreType["tables"],
   LeftType extends RelationalDataTable,
-  RightType extends RelationalDataTable
+  RightType extends RelationalDataTable,
 > implements
     JoinNodeBuilder<
       DataStoreType,
@@ -798,8 +791,8 @@ class SingleJoinNodeBuilder<
       MergedNonOverlappingType<LeftType, RightType>
     >
 {
-  readonly leftSource: NamedRowGenerator<DataStoreType, LeftTable, LeftType>
-  readonly rightSource: NamedRowGenerator<DataStoreType, RightTable, RightType>
+  readonly leftSource: NamedRowGenerator<DataStoreType, LeftTable>
+  readonly rightSource: NamedRowGenerator<DataStoreType, RightTable>
   readonly parent?: RelationalQueryNode<RelationalNodeType>
 
   readonly filter: JoinClauseQueryNode<DataStoreType, LeftTable, RightTable>
@@ -824,18 +817,10 @@ class SingleJoinNodeBuilder<
       >
     >,
     joinType: JoinType,
-    parent?: RelationalQueryNode<RelationalNodeType>
+    parent?: RelationalQueryNode<RelationalNodeType>,
   ) {
-    this.leftSource = leftSource.asNode() as NamedRowGenerator<
-      DataStoreType,
-      LeftTable,
-      LeftType
-    >
-    this.rightSource = rightSource.asNode() as NamedRowGenerator<
-      DataStoreType,
-      RightTable,
-      RightType
-    >
+    this.leftSource = leftSource.asNode()
+    this.rightSource = rightSource.asNode()
     this.filter = {
       nodeType: RelationalNodeType.ON,
       filter,
@@ -854,14 +839,14 @@ class SingleJoinNodeBuilder<
       LeftTable | RightTable
     > &
       string,
-    TableType extends RelationalDataTable
+    TableType extends RelationalDataTable,
   >(
     target: JoinTarget,
     source: NamedRelationalRowProvider<DataStoreType, JoinTable, TableType>,
     filter: JoinColumnFilter<
       DataStoreType["tables"][JoinTarget],
       DataStoreType["tables"][JoinTable]
-    >
+    >,
   ): JoinNodeBuilder<
     DataStoreType,
     LeftTable | RightTable | JoinTable,
@@ -885,8 +870,7 @@ class SingleJoinNodeBuilder<
         this.rightSource,
         source.asNode() as NamedRowGenerator<
           DataStoreType,
-          LeftTable | RightTable | JoinTable,
-          RelationalDataTable
+          LeftTable | RightTable | JoinTable
         >,
       ],
       [
@@ -925,7 +909,7 @@ class SingleJoinNodeBuilder<
           right: source.tableName,
         },
       ],
-      this.parent
+      this.parent,
     )
   }
 
@@ -957,7 +941,7 @@ class SingleJoinNodeBuilder<
   }
 
   build(
-    ctor: QueryBuilderCtor<MergedNonOverlappingType<LeftType, RightType>>
+    ctor: QueryBuilderCtor<MergedNonOverlappingType<LeftType, RightType>>,
   ): Query<MergedNonOverlappingType<LeftType, RightType>> {
     return new ctor(this.asNode()).build()
   }
@@ -970,10 +954,10 @@ type BooleanFilter = <RowType extends RelationalDataTable>(
 type ColumnFilterFn = <
   RowType extends RelationalDataTable,
   Column extends keyof RowType,
-  ColumnType extends RowType[Column]
+  ColumnType extends RowType[Column],
 >(
   column: Column,
-  value: ColumnType
+  value: ColumnType,
 ) => FilterTypes<RowType>
 
 function ColumnGroupFilterBuilder<RowType extends RelationalDataTable>(
@@ -989,11 +973,11 @@ function ColumnGroupFilterBuilder<RowType extends RelationalDataTable>(
 function ColumnFilterBuilder<
   RowType extends RelationalDataTable,
   Column extends keyof RowType,
-  ColumnType extends RowType[Column]
+  ColumnType extends RowType[Column],
 >(
   column: Column,
   value: ColumnType,
-  op: ColumnFilteringOperation
+  op: ColumnFilteringOperation,
 ): FilterTypes<RowType> {
   return {
     column,
@@ -1006,10 +990,10 @@ type JoinColumnFilterFn = <
   LeftType extends RelationalDataTable,
   RightType extends RelationalDataTable,
   LeftColumn extends keyof LeftType,
-  RightColumn extends MatchingProperty<LeftType, RightType, LeftColumn>
+  RightColumn extends MatchingProperty<LeftType, RightType, LeftColumn>,
 >(
   leftColumn: LeftColumn,
-  rightColumn: RightColumn
+  rightColumn: RightColumn,
 ) => JoinColumnFilter<
   LeftType,
   RightType,
@@ -1021,11 +1005,11 @@ function JoinColumnFilterBuilder<
   LeftType extends RelationalDataTable,
   RightType extends RelationalDataTable,
   LeftColumn extends keyof LeftType,
-  RightColumn extends MatchingProperty<LeftType, RightType, LeftColumn>
+  RightColumn extends MatchingProperty<LeftType, RightType, LeftColumn>,
 >(
   leftColumn: LeftColumn,
   rightColumn: RightColumn,
-  op: ColumnFilteringOperation
+  op: ColumnFilteringOperation,
 ): JoinColumnFilter<
   LeftType,
   RightType,

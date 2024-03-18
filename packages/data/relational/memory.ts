@@ -61,14 +61,14 @@ export type InMemoryTable<TableType> = TableType[]
  * name, {@link InMemoryTable} for the given type
  */
 export type InMemoryRelationalDataStore<
-  DataStoreType extends RelationalDataStore
+  DataStoreType extends RelationalDataStore,
 > = {
   [key in keyof DataStoreType["tables"]]: InMemoryTable<
     DataStoreType["tables"][key]
   >
 }
 export function createInMemoryStore<
-  DataStoreType extends RelationalDataStore
+  DataStoreType extends RelationalDataStore,
 >(): InMemoryRelationalDataStore<DataStoreType> {
   return {
     sources: {},
@@ -76,7 +76,7 @@ export function createInMemoryStore<
 }
 
 export class InMemoryQueryExecutor<DataStoreType extends RelationalDataStore>
-  implements QueryExecutor<RelationalDataTable>
+  implements QueryExecutor
 {
   store: InMemoryRelationalDataStore<DataStoreType>
 
@@ -85,7 +85,7 @@ export class InMemoryQueryExecutor<DataStoreType extends RelationalDataStore>
   }
 
   run<RowType>(
-    query: Query<RowType>
+    query: Query<RowType>,
   ): Promise<QueryResult<RowType> | StreamingQueryResult<RowType>> {
     if (isInMemoryQuery(query)) {
       const res = query.source(this.store)
@@ -101,12 +101,12 @@ export class InMemoryQueryExecutor<DataStoreType extends RelationalDataStore>
 
 type InMemoryQuerySourceMaterializer<
   DataStoreType extends RelationalDataStore,
-  RowType
+  RowType,
 > = (store: InMemoryRelationalDataStore<DataStoreType>) => RowType[]
 
 class InMemoryQuery<
   DataStoreType extends RelationalDataStore,
-  RowType extends RelationalDataTable
+  RowType extends RelationalDataTable,
 > implements Query<RowType>
 {
   name: string
@@ -116,7 +116,7 @@ class InMemoryQuery<
   constructor(
     name: string,
     source: InMemoryQuerySourceMaterializer<DataStoreType, RowType>,
-    mode: ExecutionMode = ExecutionMode.Normal
+    mode: ExecutionMode = ExecutionMode.Normal,
   ) {
     this.name = name
     this.mode = mode
@@ -126,7 +126,7 @@ class InMemoryQuery<
 
 function isInMemoryQuery<
   DataStoreType extends RelationalDataStore,
-  RowType extends RelationalDataTable
+  RowType extends RelationalDataTable,
 >(query: Query<RowType>): query is InMemoryQuery<DataStoreType, RowType> {
   return (
     typeof query === "object" &&
@@ -142,7 +142,7 @@ function isInMemoryQuery<
  * testing...it's....sloooooowwwwww (and quite probably wrong)
  */
 export class InMemoryRelationalQueryBuilder<
-  RowType extends RelationalDataTable
+  RowType extends RelationalDataTable,
 > extends RelationalQueryBuilder<RowType> {
   constructor(queryNode: RelationalQueryNode<RelationalNodeType>) {
     super(queryNode)
@@ -170,7 +170,7 @@ const ORIGINAL: unique symbol = Symbol()
 
 // Need to a way to identified original row sources for joins
 type RowPointer<T> = RelationalDataTable & {
-  [ORIGINAL]?: T
+  [ORIGINAL]: T
 } & T
 
 function isRowPointer<T>(row: T): row is RowPointer<T> {
@@ -203,7 +203,7 @@ class MaterializerContext {
 
   set(
     table: keyof RelationalDataStore["tables"],
-    rows: RelationalDataTable[]
+    rows: RelationalDataTable[],
   ): void {
     this.projections.set(table, rows)
   }
@@ -214,7 +214,7 @@ function materializeTable(
     RelationalDataStore,
     keyof RelationalDataStore["tables"]
   >,
-  context: MaterializerContext
+  context: MaterializerContext,
 ): RelationalDataTable[] {
   let ret: RelationalDataTable[] = []
   let rows = context.get(table.tableName)
@@ -229,20 +229,20 @@ function materializeTable(
   // Apply any select projections on the set firts
   if (manager.select !== undefined) {
     ret = rows.map((r) => {
-      const entries: Array<readonly [PropertyKey, any]> = []
+      const entries: (readonly [PropertyKey, object])[] = []
 
       const transform = new Map<string, string>()
       for (const alias of manager.columnAlias ?? []) {
-        transform.set(alias.column as string, alias.alias)
+        transform.set(alias.column, alias.alias)
       }
 
-      if (manager.select!.columns === "*") {
+      if (manager.select.columns === "*") {
         Object.keys(r).map((c) =>
-          entries.push([transform.has(c) ? transform.get(c)! : c, r[c]])
+          entries.push([transform.has(c) ? transform.get(c)! : c, r[c]]),
         )
       } else {
-        ;(manager.select!.columns as string[]).map((c) =>
-          entries.push([transform.has(c) ? transform.get(c)! : c, r[c]])
+        manager.select.columns.map((c) =>
+          entries.push([transform.has(c) ? transform.get(c)! : c, r[c]]),
         )
       }
 
@@ -259,22 +259,22 @@ function materializeTable(
 }
 
 function materializeJoin(
-  join: JoinQueryNode<RelationalDataStore, RelationalDataTable>,
-  context: MaterializerContext
+  join: JoinQueryNode,
+  context: MaterializerContext,
 ): RelationalDataTable[] {
   let rows: RelationalDataTable[] = []
 
   const manager = new JoinNodeManager(join)
 
   // Need to find all the table nodes and map them to data
-  const tables: Map<
+  const tables = new Map<
     keyof RelationalDataStore["tables"],
     RowPointer<RelationalDataTable>[]
-  > = new Map()
+  >()
   for (const table of manager.tables) {
     tables.set(
       table.tableName,
-      materializeTable(table, context).filter(isRowPointer)
+      materializeTable(table, context).filter(isRowPointer),
     )
   }
 
@@ -285,14 +285,13 @@ function materializeJoin(
 
     const check = buildJoinFilter(filter.filter)
 
-    const f = filter.filter
     tables.set(
       filter.left,
-      left.filter((l) => right.some((r) => check(l, r)))
+      left.filter((l) => right.some((r) => check(l, r))),
     )
     tables.set(
       filter.right,
-      right.filter((r) => left.some((l) => check(l, r)))
+      right.filter((r) => left.some((l) => check(l, r))),
     )
 
     // Early abandon filters that generate no valid rows
@@ -332,12 +331,8 @@ function materializeJoin(
 }
 
 function materializeCte(
-  cte: CteClause<
-    RelationalDataStore,
-    keyof RelationalDataStore["tables"],
-    RelationalDataTable
-  >,
-  context: MaterializerContext
+  cte: CteClause<RelationalDataStore, keyof RelationalDataStore["tables"]>,
+  context: MaterializerContext,
 ): RelationalQueryNode<RelationalNodeType> | undefined {
   if (isRelationalQueryNode(cte.source)) {
     switch (true) {
@@ -361,7 +356,7 @@ function materializeCte(
 
 function materializeTableAlias(
   root: RelationalQueryNode<RelationalNodeType>,
-  context: MaterializerContext
+  context: MaterializerContext,
 ): void {
   const nodes: RelationalQueryNode<RelationalNodeType>[] = [root]
   while (nodes.length > 0) {
@@ -378,7 +373,7 @@ function materializeTableAlias(
 
 function materializeProjections(
   root: RelationalQueryNode<RelationalNodeType>,
-  context: MaterializerContext
+  context: MaterializerContext,
 ): RelationalQueryNode<RelationalNodeType> {
   // Fill any table projections
   materializeTableAlias(root, context)
@@ -401,11 +396,11 @@ function materializeProjections(
 
 function materializeNode<RowType extends RelationalDataTable>(
   root: RelationalQueryNode<RelationalNodeType>,
-  store: InMemoryRelationalDataStore<RelationalDataStore>
+  store: InMemoryRelationalDataStore<RelationalDataStore>,
 ): RowType[] {
   const context = new MaterializerContext(store)
 
-  let current = hasProjections(root)
+  const current = hasProjections(root)
     ? materializeProjections(root, context)
     : root
 
@@ -420,17 +415,17 @@ function materializeNode<RowType extends RelationalDataTable>(
 
 function buildJoinFilter<
   LeftTable extends RelationalDataTable,
-  RightTable extends RelationalDataTable
+  RightTable extends RelationalDataTable,
 >(
-  filter: JoinColumnFilter<LeftTable, RightTable>
+  filter: JoinColumnFilter<LeftTable, RightTable>,
 ): (l: RowPointer<LeftTable>, r: RowPointer<RightTable>) => boolean {
   return (l, r) =>
-    (l as any)[ORIGINAL][filter.leftColumn] ===
-    (r as any)[ORIGINAL][filter.rightColumn]
+    (l[ORIGINAL][filter.leftColumn] as unknown) ===
+    (r[ORIGINAL][filter.rightColumn] as unknown)
 }
 
 function buildFilter(
-  clause: FilterGroup<RelationalDataTable> | FilterTypes<RelationalDataTable>
+  clause: FilterGroup<RelationalDataTable> | FilterTypes<RelationalDataTable>,
 ): (input: RelationalDataTable) => boolean {
   if (isFilterGroup(clause)) {
     const filters = clause.filters.map((f) => buildFilter(f))
@@ -463,12 +458,12 @@ function buildArrayFilter(
     RelationalDataTable,
     ArrayProperty<RelationalDataTable>,
     ArrayItemType<RelationalDataTable, ArrayProperty<RelationalDataTable>>
-  >
+  >,
 ): (input: RelationalDataTable) => boolean {
   switch (columnFilter.op) {
     case ColumnValueContainsOperation.IN:
       return (row) => {
-        const v = row[columnFilter.column]
+        const v = row[columnFilter.column] as unknown[]
 
         if (Array.isArray(columnFilter.value)) {
           return columnFilter.value.some((val) => v.includes(val))
@@ -483,20 +478,19 @@ function buildStringFilter(
   columnFilter: StringFilter<
     RelationalDataTable,
     PropertiesOfType<RelationalDataTable, string>
-  >
+  >,
 ): (input: RelationalDataTable) => boolean {
   switch (columnFilter.op) {
     case ColumnValueContainsOperation.IN:
       return (row) => {
-        const v = row[columnFilter.column]
-
-        return v.indexOf(columnFilter.value as string) >= 0
+        const v = row[columnFilter.column] as string
+        return v.indexOf(columnFilter.value) >= 0
       }
   }
 }
 
 function buildColumnFilter(
-  columnFilter: ColumnFilter<RelationalDataTable, keyof RelationalDataTable>
+  columnFilter: ColumnFilter<RelationalDataTable, keyof RelationalDataTable>,
 ): (input: RelationalDataTable) => boolean {
   switch (columnFilter.op) {
     case ColumnFilteringOperation.EQ:

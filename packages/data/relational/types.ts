@@ -20,11 +20,11 @@ export type MergedNonOverlappingType<A, B> = MergedType<
 /**
  * A modiefied {@link RelationalDataStore} with a new key and table definition
  */
-export type ModifiedStore<
+export interface ModifiedStore<
   Left extends RelationalDataStore,
   N extends string,
-  RowType extends RelationalDataTable
-> = {
+  RowType extends RelationalDataTable,
+> {
   tables: {
     [key in keyof Left["tables"] | N]: key extends keyof Left["tables"]
       ? Left["tables"][key]
@@ -84,7 +84,7 @@ export enum RelationalNodeType {
 
 export type PropertiesOfType<
   TableType extends RelationalDataTable,
-  TargetType
+  TargetType,
 > = {
   [K in keyof TableType]: TableType[K] extends TargetType ? K : never
 }[keyof TableType]
@@ -94,7 +94,7 @@ export type PropertiesOfType<
  * {@link ColumnValueContainsOperation} filters
  */
 export type ArrayProperty<TableType extends RelationalDataTable> = {
-  [K in keyof TableType]: TableType[K] extends Array<any> ? K : never
+  [K in keyof TableType]: TableType[K] extends unknown[] ? K : never
 }[keyof TableType]
 
 /**
@@ -102,13 +102,13 @@ export type ArrayProperty<TableType extends RelationalDataTable> = {
  */
 export type ArrayItemType<
   TableType extends RelationalDataTable,
-  Column extends ArrayProperty<TableType>
+  Column extends ArrayProperty<TableType>,
 > = TableType[Column] extends (infer ItemType)[] ? ItemType : never
 
 export type MatchingProperty<
   Left,
   Right,
-  LeftColumn extends keyof Left
+  LeftColumn extends keyof Left,
 > = PropertyOfType<Right, Left[LeftColumn]>
 
 export type PropertyOfType<T, K> = {

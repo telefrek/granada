@@ -50,14 +50,16 @@ export type PostgresTableRow<Table extends PostgresTable> = {
     : never
 }
 
-export type PostgresRelationalDataStore<Database extends PostgresDatabase> = {
+export interface PostgresRelationalDataStore<
+  Database extends PostgresDatabase,
+> {
   tables: {
     [key in keyof Database["tables"]]: PostgresTableRow<Database["tables"][key]>
   }
 }
 
 export function createRelationalQueryContext<
-  Database extends PostgresDatabase
+  Database extends PostgresDatabase,
 >(): RelationalNodeBuilder<PostgresRelationalDataStore<Database>> {
   return new DefaultRelationalNodeBuilder<
     PostgresRelationalDataStore<Database>
@@ -72,7 +74,7 @@ export class PostgresRelationalQuery<RowType> implements Query<RowType> {
   constructor(
     name: string,
     queryText: string,
-    mode: ExecutionMode = ExecutionMode.Normal
+    mode: ExecutionMode = ExecutionMode.Normal,
   ) {
     this.name = name
     this.mode = mode
@@ -81,13 +83,13 @@ export class PostgresRelationalQuery<RowType> implements Query<RowType> {
 }
 
 export function isPostgresRelationalQuery<RowType>(
-  query: Query<RowType>
+  query: Query<RowType>,
 ): query is PostgresRelationalQuery<RowType> {
   return "queryText" in query && typeof query.queryText === "string"
 }
 
 export class PostgresQueryBuilder<
-  RowType extends RelationalDataTable
+  RowType extends RelationalDataTable,
 > extends RelationalQueryBuilder<RowType> {
   protected override buildQuery<T>(ast: QueryNode): Query<T> {
     if (isRelationalQueryNode(ast)) {
@@ -98,9 +100,7 @@ export class PostgresQueryBuilder<
   }
 }
 
-function translateJoinQuery(
-  node: JoinQueryNode<RelationalDataStore, RelationalDataTable>
-): string {
+function translateJoinQuery(node: JoinQueryNode): string {
   const manager = new JoinNodeManager(node)
 
   const tables = manager.tables
@@ -110,9 +110,9 @@ function translateJoinQuery(
     .map((tm) => {
       const alias = tm.columnAlias.reduce(
         (m, v) => m.set(v.column, v.alias),
-        new Map()
+        new Map(),
       )
-      const columns = tm.select!.columns
+      const columns = tm.select.columns
 
       if (columns === "*") {
         return `${tm.tableName}.*`
@@ -122,7 +122,7 @@ function translateJoinQuery(
           .map((c) =>
             alias.has(c)
               ? `${tm.tableName}.${c} AS ${alias.get(c)}`
-              : `${tm.tableName}.${c}`
+              : `${tm.tableName}.${c}`,
           )
           .join(", ")
       }
@@ -131,7 +131,7 @@ function translateJoinQuery(
 
   let from = ""
   const filters = manager.filters
-  let seen: string[] = []
+  const seen: string[] = []
   for (const filter of filters) {
     if (!seen.includes(filter.left)) {
       from += `${filter.left}`
@@ -158,7 +158,10 @@ function translateJoinQuery(
 }
 
 function translateTableQuery(
-  node: TableQueryNode<RelationalDataStore, keyof RelationalDataStore["tables"]>
+  node: TableQueryNode<
+    RelationalDataStore,
+    keyof RelationalDataStore["tables"]
+  >,
 ): string {
   const manager = new TableNodeManager(node)
 
@@ -166,10 +169,10 @@ function translateTableQuery(
 
   const aliasing: Map<string, string> = manager.columnAlias
     ? manager.columnAlias.reduce(
-        (temp, alias) => temp.set(alias.column as string, alias.alias),
-        new Map<string, string>()
+        (temp, alias) => temp.set(alias.column, alias.alias),
+        new Map<string, string>(),
       )
-    : new Map()
+    : new Map<string, string>()
 
   return `SELECT ${
     select
@@ -190,7 +193,7 @@ function translateNode(node: RelationalQueryNode<RelationalNodeType>): string {
   if (hasProjections(node)) {
     const info = extractProjections(node)
 
-    let CTE = `WITH ${info.projections
+    const CTE = `WITH ${info.projections
       .filter(isCteClause)
       .map(translateCte)
       .join(", ")}`
@@ -199,8 +202,8 @@ function translateNode(node: RelationalQueryNode<RelationalNodeType>): string {
       isTableQueryNode(info.queryNode)
         ? translateTableQuery(info.queryNode)
         : isJoinQueryNode(info.queryNode)
-        ? translateJoinQuery(info.queryNode)
-        : "error"
+          ? translateJoinQuery(info.queryNode)
+          : "error"
     }`
   } else {
     if (isTableQueryNode(node)) {
@@ -213,7 +216,7 @@ function translateNode(node: RelationalQueryNode<RelationalNodeType>): string {
   return ""
 }
 
-type ProjectionInfo = {
+interface ProjectionInfo {
   projections: RelationalQueryNode<RelationalNodeType>[]
   aliasing: Map<
     keyof RelationalDataStore["tables"],
@@ -223,7 +226,7 @@ type ProjectionInfo = {
 }
 
 function extractProjections(
-  root: RelationalQueryNode<RelationalNodeType>
+  root: RelationalQueryNode<RelationalNodeType>,
 ): ProjectionInfo {
   const info: ProjectionInfo = {
     projections: [],
@@ -249,24 +252,20 @@ function extractProjections(
 }
 
 function translateCte(
-  cte: CteClause<
-    RelationalDataStore,
-    keyof RelationalDataStore["tables"],
-    RelationalDataTable
-  >
+  cte: CteClause<RelationalDataStore, keyof RelationalDataStore["tables"]>,
 ): string {
   return `${cte.tableName} AS (${
     isTableQueryNode(cte.source)
       ? translateTableQuery(cte.source)
       : isJoinQueryNode(cte.source)
-      ? translateJoinQuery(cte.source)
-      : "error"
+        ? translateJoinQuery(cte.source)
+        : "error"
   })`
 }
 
 function translateFilterGroup(
   filter: FilterGroup<RelationalDataTable> | FilterTypes<RelationalDataTable>,
-  table?: string
+  table?: string,
 ): string {
   if (isFilterGroup(filter)) {
     return filter.filters
@@ -274,12 +273,12 @@ function translateFilterGroup(
       .join(` ${filter.op} `)
       .trimEnd()
   } else if (isColumnFilter(filter)) {
-    return `${table ? `${table}.` : ""}${filter.column as string} ${
+    return `${table ? `${table}.` : ""}${filter.column} ${
       filter.op
     } ${wrap(filter.value)}`
   } else if (IsArrayFilter(filter)) {
     return `${wrap(filter.value)}=ANY(${table ? `${table}.` : ""}${
-      filter.column as string
+      filter.column
     })`
   }
 
@@ -290,10 +289,10 @@ function wrap(value: unknown): string {
   return typeof value === "string"
     ? `'${value}'`
     : value === "object"
-    ? value === null
-      ? "null"
-      : Array.isArray(value)
-      ? `{${value.map((i) => wrap(i)).join(",")}}`
-      : `'${JSON.stringify(value)}'`
-    : (value as string)
+      ? value === null
+        ? "null"
+        : Array.isArray(value)
+          ? `{${value.map((i) => wrap(i)).join(",")}}`
+          : `'${JSON.stringify(value)}'`
+      : (value as string)
 }

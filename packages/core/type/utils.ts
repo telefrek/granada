@@ -13,14 +13,14 @@ export type RequiredProperties<T extends object> = keyof {
  * Type to retrieve the optional properties on the given type
  */
 export type OptionalProperties<T> = {
-  [K in keyof T]-?: {} extends { [P in K]: T[K] } ? K : never
+  [K in keyof T]-?: object extends { [P in K]: T[K] } ? K : never
 }[keyof T]
 
 /**
  * Type that extracts keys that are arrays
  */
 export type ArrayProperty<T> = {
-  [K in keyof T]: T[K] extends Array<any> ? K : never
+  [K in keyof T]: T[K] extends unknown[] ? K : never
 }[keyof T]
 
 /**

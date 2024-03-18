@@ -6,13 +6,14 @@
 /**
  * Represents a table schema which can have named columns and values
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type RelationalDataTable = Record<string, any>
 
 /**
  * Represents a relational data store that has a collection of tables and other
  * objects that can be useful for describing data sources and building valid queries
  */
-export type RelationalDataStore = {
+export interface RelationalDataStore {
   tables: Record<string, RelationalDataTable>
 }
 

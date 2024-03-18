@@ -6,7 +6,7 @@
 /**
  * Represents the basic information about a node in the query AST
  */
-export type QueryNode = {
+export interface QueryNode {
   parent?: QueryNode
   children?: QueryNode[]
 }
@@ -16,15 +16,8 @@ export type QueryNode = {
  */
 export type QueryOperation<
   In extends QueryNode,
-  Out extends QueryNode
+  Out extends QueryNode,
 > = QueryNode & {
   inputs: In[]
   outputs: Out[]
-}
-
-/**
- * Represents a source of values and their types as well as optional default values
- */
-export type QuerySource<T> = QueryNode & {
-  // defaults?: Partial<OptionalProperties<T>>
 }

@@ -102,18 +102,13 @@ abstract class RelationalASTNodeManager<NodeType extends RNode> {
  * Helper class for manipulating {@link TableQueryNode}
  */
 export class TableNodeManager extends RelationalASTNodeManager<
-  TableQueryNode<
-    RelationalDataStore,
-    keyof RelationalDataStore["tables"],
-    RelationalDataTable
-  >
+  TableQueryNode<RelationalDataStore, keyof RelationalDataStore["tables"]>
 > {
   constructor(
     node: TableQueryNode<
       RelationalDataStore,
-      keyof RelationalDataStore["tables"],
-      RelationalDataTable
-    >
+      keyof RelationalDataStore["tables"]
+    >,
   ) {
     super(node)
   }
@@ -140,8 +135,7 @@ export class TableNodeManager extends RelationalASTNodeManager<
   get select(): SelectClause<
     RelationalDataStore,
     keyof RelationalDataStore["tables"],
-    keyof RelationalDataStore["tables"][keyof RelationalDataStore["tables"]],
-    RelationalDataTable
+    keyof RelationalDataStore["tables"][keyof RelationalDataStore["tables"]]
   > {
     return this.node.children!.filter(isSelectClause).at(0)!
   }
@@ -155,11 +149,7 @@ export class TableNodeManager extends RelationalASTNodeManager<
 }
 
 export class CteNodeManager extends RelationalASTNodeManager<
-  CteClause<
-    RelationalDataStore,
-    keyof RelationalDataStore["tables"],
-    RelationalDataTable
-  >
+  CteClause<RelationalDataStore, keyof RelationalDataStore["tables"]>
 > {
   override get child(): RNode | undefined {
     return this.node.children
@@ -169,17 +159,14 @@ export class CteNodeManager extends RelationalASTNodeManager<
   }
 }
 
-export class JoinNodeManager extends RelationalASTNodeManager<
-  JoinQueryNode<RelationalDataStore, RelationalDataTable>
-> {
-  constructor(node: JoinQueryNode<RelationalDataStore, RelationalDataTable>) {
+export class JoinNodeManager extends RelationalASTNodeManager<JoinQueryNode> {
+  constructor(node: JoinQueryNode) {
     super(node)
   }
 
   get tables(): TableQueryNode<
     RelationalDataStore,
-    keyof RelationalDataStore["tables"],
-    RelationalDataTable
+    keyof RelationalDataStore["tables"]
   >[] {
     return (
       this.node.children
