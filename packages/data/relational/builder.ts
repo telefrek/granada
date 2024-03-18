@@ -481,11 +481,11 @@ class DefaultTableNodeBuilder<
 
     const aliasing = this.#alias
 
-    const node = {
+    const node: TableQueryNode = {
       nodeType: RelationalNodeType.TABLE,
-      tableName: this.tableName,
-      alias: this.tableAlias,
-    } as TableQueryNode<DataStoreType, TableName>
+      tableName: this.tableName as string,
+      alias: this.tableAlias as string,
+    }
 
     select.parent = node
     node.children = [select]

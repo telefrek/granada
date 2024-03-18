@@ -218,10 +218,7 @@ class MaterializerContext {
 }
 
 function materializeTable(
-  table: TableQueryNode<
-    RelationalDataStore,
-    keyof RelationalDataStore["tables"]
-  >,
+  table: TableQueryNode,
   context: MaterializerContext,
 ): RelationalDataTable[] {
   let ret: RelationalDataTable[] = []

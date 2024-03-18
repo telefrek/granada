@@ -157,12 +157,7 @@ function translateJoinQuery(node: JoinQueryNode): string {
   return `SELECT ${select} FROM ${from}${where ? ` WHERE ${where}` : ""}`
 }
 
-function translateTableQuery(
-  node: TableQueryNode<
-    RelationalDataStore,
-    keyof RelationalDataStore["tables"]
-  >,
-): string {
+function translateTableQuery(node: TableQueryNode): string {
   const manager = new TableNodeManager(node)
 
   const select = manager.select

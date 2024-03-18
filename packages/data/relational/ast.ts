@@ -188,13 +188,10 @@ export type CteClause = RelationalQueryNode<RelationalNodeType.CTE> &
 /**
  * Represents a query against a table
  */
-export type TableQueryNode<
-  DataStoreType extends RelationalDataStore,
-  TableName extends keyof DataStoreType["tables"],
-> = RelationalQueryNode<RelationalNodeType.TABLE> &
+export type TableQueryNode = RelationalQueryNode<RelationalNodeType.TABLE> &
   NamedRowGenerator & {
-    tableName: TableName
-    alias?: keyof DataStoreType["tables"]
+    tableName: string
+    alias?: string
   }
 
 /**
@@ -369,10 +366,7 @@ export function isColumnAlias(
  * @param node The {@link RelationalQueryNode} to inspect
  * @returns True if the node is a {@link TableQueryNode}
  */
-export function isTableQueryNode<
-  DataStoreType extends RelationalDataStore,
-  TargetTable extends keyof DataStoreType["tables"],
->(node: QueryNode): node is TableQueryNode<DataStoreType, TargetTable> {
+export function isTableQueryNode(node: QueryNode): node is TableQueryNode {
   return (
     isRelationalQueryNode(node) && node.nodeType === RelationalNodeType.TABLE
   )

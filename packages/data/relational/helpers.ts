@@ -101,18 +101,7 @@ abstract class RelationalASTNodeManager<NodeType extends RNode> {
 /**
  * Helper class for manipulating {@link TableQueryNode}
  */
-export class TableNodeManager extends RelationalASTNodeManager<
-  TableQueryNode<RelationalDataStore, keyof RelationalDataStore["tables"]>
-> {
-  constructor(
-    node: TableQueryNode<
-      RelationalDataStore,
-      keyof RelationalDataStore["tables"]
-    >,
-  ) {
-    super(node)
-  }
-
+export class TableNodeManager extends RelationalASTNodeManager<TableQueryNode> {
   get tableName(): keyof RelationalDataStore["tables"] {
     return this.node.tableName
   }
@@ -158,14 +147,7 @@ export class CteNodeManager extends RelationalASTNodeManager<CteClause> {
 }
 
 export class JoinNodeManager extends RelationalASTNodeManager<JoinQueryNode> {
-  constructor(node: JoinQueryNode) {
-    super(node)
-  }
-
-  get tables(): TableQueryNode<
-    RelationalDataStore,
-    keyof RelationalDataStore["tables"]
-  >[] {
+  get tables(): TableQueryNode[] {
     return (
       this.node.children
         ?.filter(isTableQueryNode)
