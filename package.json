@@ -5,7 +5,7 @@
   "scripts": {
     "test": "jest --coverage",
     "format": "npx prettier --write .",
-    "ci": "npm run upgrade-all && npm run compile --workspaces --if-present && npm run test",
+    "ci": "npm install && npm run compile --workspaces --if-present && npm run test",
     "upgrade-all": "npx npm-check-updates -u & npm install & npm run upgrade --workspaces --if-present",
     "tsc-diagnostics": "rm -rf ./dist & tsc --extendedDiagnostics --diagnostics",
     "lint": "npx eslint . --fix"
