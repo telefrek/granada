@@ -4,6 +4,8 @@
   ],
   "scripts": {
     "test": "jest --coverage",
+    "test:unit": "jest --coverage -c jest.config.js",
+    "test:integration": "jest --coverage -c jest.integration.config.js",
     "format": "npx prettier --write .",
     "ci": "npm install && npm run compile --workspaces --if-present && npm run test",
     "upgrade-all": "npx npm-check-updates -u && npm install && npm run upgrade --workspaces --if-present",
