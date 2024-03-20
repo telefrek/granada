@@ -15,7 +15,7 @@ export enum ExecutionMode {
 /**
  * Represents the most basic query
  */
-export interface Query<_T> {
+export interface Query<_T extends object> {
   readonly name: string
   readonly mode: ExecutionMode
 }
@@ -23,7 +23,7 @@ export interface Query<_T> {
 /**
  * Represents a query that requires specific inputs with a given shape
  */
-export interface ParameterizedQuery<T, U> extends Query<U> {
+export interface ParameterizedQuery<T, U extends object> extends Query<U> {
   /**
    * Binds the given parameters to generate a fully executable {@link Query} object
    *
@@ -42,13 +42,15 @@ export interface QueryExecutor {
    *
    * @returns Either a {@link QueryResult} or {@link StreamingQueryResult}
    */
-  run<T>(query: Query<T>): Promise<QueryResult<T> | StreamingQueryResult<T>>
+  run<T extends object>(
+    query: Query<T>,
+  ): Promise<QueryResult<T> | StreamingQueryResult<T>>
 }
 
 /**
  * Represents the result of executing a {@link Query}
  */
-export interface QueryResult<T> {
+export interface QueryResult<T extends object> {
   query: Query<T>
   rows: T[]
   duration: Duration
@@ -58,6 +60,7 @@ export interface QueryResult<T> {
  * Represents the result of executing a {@link Query} where values are provided
  * incrmentally
  */
-export interface StreamingQueryResult<T> extends Omit<QueryResult<T>, "rows"> {
+export interface StreamingQueryResult<T extends object>
+  extends Omit<QueryResult<T>, "rows"> {
   rows: AsyncIterable<T>
 }

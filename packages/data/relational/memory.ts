@@ -84,13 +84,13 @@ export class InMemoryQueryExecutor<DataStoreType extends RelationalDataStore>
     this.store = inMemoryStore ?? createInMemoryStore()
   }
 
-  run<RowType>(
+  run<RowType extends object>(
     query: Query<RowType>,
   ): Promise<QueryResult<RowType> | StreamingQueryResult<RowType>> {
     if (isInMemoryQuery(query)) {
       const res = query.source(this.store)
       return Promise.resolve({
-        rows: res as RowType[],
+        rows: res,
         duration: Duration.ZERO,
       } as QueryResult<RowType>)
     }

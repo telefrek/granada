@@ -8,7 +8,7 @@ import type { Query } from "."
  * Extension of {@link ErrorOptions} for query execution
  */
 interface QueryErrorOptions extends ErrorOptions {
-  query?: Query<unknown>
+  query?: Query<object>
 }
 
 /**

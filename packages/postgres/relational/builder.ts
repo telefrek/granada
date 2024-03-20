@@ -42,7 +42,7 @@ import type {
   PostgresColumnTypes,
   PostgresDatabase,
   PostgresTable,
-} from "."
+} from ".."
 
 export type PostgresTableRow<Table extends PostgresTable> = {
   [column in keyof Table["schema"]]: Table["schema"][column] extends PostgresColumnTypes
@@ -66,7 +66,9 @@ export function createRelationalQueryContext<
   >()
 }
 
-export class PostgresRelationalQuery<RowType> implements Query<RowType> {
+export class PostgresRelationalQuery<RowType extends object>
+  implements Query<RowType>
+{
   readonly name: string
   readonly mode: ExecutionMode
   readonly queryText: string
@@ -82,7 +84,7 @@ export class PostgresRelationalQuery<RowType> implements Query<RowType> {
   }
 }
 
-export function isPostgresRelationalQuery<RowType>(
+export function isPostgresRelationalQuery<RowType extends object>(
   query: Query<RowType>,
 ): query is PostgresRelationalQuery<RowType> {
   return "queryText" in query && typeof query.queryText === "string"
@@ -91,7 +93,7 @@ export function isPostgresRelationalQuery<RowType>(
 export class PostgresQueryBuilder<
   RowType extends RelationalDataTable,
 > extends RelationalQueryBuilder<RowType> {
-  protected override buildQuery<T>(ast: QueryNode): Query<T> {
+  protected override buildQuery(ast: QueryNode): Query<RowType> {
     if (isRelationalQueryNode(ast)) {
       return new PostgresRelationalQuery("foo", translateNode(getTreeRoot(ast)))
     }

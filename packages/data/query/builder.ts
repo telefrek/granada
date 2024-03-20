@@ -9,7 +9,7 @@ import type { QueryNode } from "./ast"
 /**
  * Defines the generatl structure for a {@link Query} builder
  */
-export interface QueryBuilder<T> {
+export interface QueryBuilder<T extends object> {
   /**
    * Build the {@link Query} with the information already provided
    *
@@ -21,7 +21,7 @@ export interface QueryBuilder<T> {
   build(name: string, mode?: ExecutionMode): Query<T>
 }
 
-export interface ParameterizedQueryBuilder<T, U> {
+export interface ParameterizedQueryBuilder<T, U extends object> {
   /**
    * Build the {@link ParameterizedQuery} with the given information
    *
@@ -39,7 +39,9 @@ export interface ParameterizedQueryBuilder<T, U> {
 /**
  * An abstract builder that uses the {@link QueryNode} AST
  */
-export abstract class QueryBuilderBase<T> implements QueryBuilder<T> {
+export abstract class QueryBuilderBase<T extends object>
+  implements QueryBuilder<T>
+{
   protected node: QueryNode = {}
 
   constructor(root: QueryNode = {}) {
@@ -67,7 +69,7 @@ export abstract class QueryBuilderBase<T> implements QueryBuilder<T> {
   }
 }
 
-export abstract class ParameterizedQueryBuilderBase<T, U>
+export abstract class ParameterizedQueryBuilderBase<T, U extends object>
   implements ParameterizedQueryBuilder<T, U>
 {
   protected node: QueryNode = {}

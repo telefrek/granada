@@ -1,52 +1,49 @@
-import { containsItems, gt } from "@telefrek/data/relational/builder"
+import { and, containsItems, gt } from "@telefrek/data/relational/builder"
+import {
+  PostgresArray,
+  PostgresColumnTypeName,
+  PostgresEnum,
+  type PostgresDatabase,
+} from "../index"
 import {
   PostgresQueryBuilder,
   createRelationalQueryContext,
   isPostgresRelationalQuery,
 } from "./builder"
-import { PostgresArray, PostgresColumnTypeName, PostgresEnum } from "./index"
-
-type NumericIdentiry = {
-  id: PostgresColumnTypeName.INTEGER
-}
-
-type TimeTrackedObject = {
-  createdAt: PostgresColumnTypeName.INTEGER
-  updatedAt: PostgresColumnTypeName.INTEGER
-  removedAt?: PostgresColumnTypeName.INTEGER
-}
 
 const Category = {
   TEST: "test",
   PURCHASE: "purchase",
 } as const
 
-type Order = NumericIdentiry &
-  TimeTrackedObject & {
-    name: PostgresColumnTypeName.TEXT
-    categories: PostgresArray<PostgresEnum<typeof Category>>
-    amount: PostgresColumnTypeName.REAL
-    customerId: PostgresColumnTypeName.INT
-  }
-
-type Customer = NumericIdentiry &
-  TimeTrackedObject & {
-    firstName: PostgresColumnTypeName.TEXT
-    lastName: PostgresColumnTypeName.TEXT
-  }
-
-type OrderTable = {
-  schema: Order
+type Order = {
+  id: PostgresColumnTypeName.SERIAL
+  createdAt: PostgresColumnTypeName.BIGINT
+  updatedAt: PostgresColumnTypeName.BIGINT
+  removedAt?: PostgresColumnTypeName.BIGINT
+  name: PostgresColumnTypeName.TEXT
+  categories: PostgresArray<PostgresEnum<typeof Category>>
+  amount: PostgresColumnTypeName.REAL
+  customerId: PostgresColumnTypeName.INTEGER
 }
 
-type CustomerTable = {
-  schema: Customer
+type Customer = {
+  id: PostgresColumnTypeName.SERIAL
+  createdAt: PostgresColumnTypeName.BIGINT
+  updatedAt: PostgresColumnTypeName.BIGINT
+  removedAt?: PostgresColumnTypeName.BIGINT
+  firstName: PostgresColumnTypeName.TEXT
+  lastName: PostgresColumnTypeName.TEXT
 }
 
-type TestDatabase = {
+interface TestDatabase extends PostgresDatabase {
   tables: {
-    orders: OrderTable
-    customers: CustomerTable
+    orders: {
+      schema: Order
+    }
+    customers: {
+      schema: Customer
+    }
   }
 }
 
@@ -95,14 +92,14 @@ describe("Postgres query syntax should be translated correctly", () => {
     }
   })
 
-  it("Should create a valid query for multiple cte and a join in the main query", () => {
+  it("Should create a valid query for multiple cte and a join in the main query", async () => {
     const query = createRelationalQueryContext<TestDatabase>()
       .withCte("customerOrders", (builder) =>
         builder
           .from("orders")
           .select("id", "customerId", "categories", "amount")
           .alias("id", "orderId")
-          .where(gt("amount", 0)),
+          .where(and(gt("amount", 0), containsItems("categories", "test"))),
       )
       .withCte("customerNames", (builder) =>
         builder.from("customers").select("id", "firstName", "lastName"),
@@ -119,7 +116,7 @@ describe("Postgres query syntax should be translated correctly", () => {
 
     if (isPostgresRelationalQuery(query)) {
       expect(query.queryText).toEqual(
-        "WITH customerOrders AS (SELECT id AS orderId, customerId, categories, amount FROM orders WHERE amount > 0), customerNames AS (SELECT id, firstName, lastName FROM customers) SELECT customerNames.firstName, customerNames.lastName, customerOrders.amount, customerOrders.categories, customerOrders.orderId FROM customerOrders JOIN customerNames ON customerOrders.customerId = customerNames.id",
+        "WITH customerOrders AS (SELECT id AS orderId, customerId, categories, amount FROM orders WHERE amount > 0 and 'test'=ANY(categories)), customerNames AS (SELECT id, firstName, lastName FROM customers) SELECT customerNames.firstName, customerNames.lastName, customerOrders.amount, customerOrders.categories, customerOrders.orderId FROM customerOrders JOIN customerNames ON customerOrders.customerId = customerNames.id",
       )
     }
   })

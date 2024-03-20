@@ -33,7 +33,7 @@
     "pg": "8.11.3"
   },
   "devDependencies": {
-    "@types/pg": "8.11.2"
+    "@types/pg": "8.11.3"
   },
   "gitHead": "730d8573af6f7e7edf7187ab6f1a082f52d224e0"
 }
