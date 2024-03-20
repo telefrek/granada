@@ -1,16 +1,16 @@
 {
   "extends": "../../tsconfig.build.json",
   "compilerOptions": {
+    "baseUrl": "./",
     "outDir": "./dist/",
-    "experimentalDecorators": true
+    "paths": {
+      "@telefrek/core": ["../data"],
+      "@telefrek/core/*": ["../core/*"],
+      "@telefrek/http": ["../http"],
+      "@telefrek/http/*": ["../http/*"]
+    }
   },
+  "references": [{ "path": "../core" }, { "path": "../http" }],
   "include": ["./**/*.ts"],
-  "exclude": ["./dist/**/*"],
-  "paths": {
-    "@telefrek/core": "../core",
-    "@telefrek/core/*": "../core/*",
-    "@telefrek/http": "../http",
-    "@telefrek/http/*": "../http/*"
-  },
-  "references": [{ "path": "../core" }, { "path": "../http" }]
+  "exclude": ["node_modules", "./dist/**/*"]
 }
