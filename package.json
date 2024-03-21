@@ -3,8 +3,8 @@
     "./packages/*"
   ],
   "scripts": {
-    "test": "npm run test:unit && npm run test:integration",
-    "test:unit": "jest --coverage -c jest.config.js",
+    "test": "jest --coverage -c jest.config.js",
+    "test:unit": "jest --coverage -c jest.unit.config.js",
     "test:integration": "jest --coverage -c jest.integration.config.js",
     "format": "npx prettier --write .",
     "ci": "npm install && npm run compile --workspaces --if-present && npm run test:unit",

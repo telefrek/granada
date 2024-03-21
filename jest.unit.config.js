@@ -2,7 +2,7 @@ module.exports = {
   preset: "ts-jest",
   testEnvironment: "node",
   coverageDirectory: "coverage",
-  testMatch: ["<rootDir>/**/*.{test,integration}.ts"],
+  testMatch: ["<rootDir>/**/*.test.ts"],
   collectCoverageFrom: ["packages/**/*.{ts,js,jsx}"],
   coveragePathIgnorePatterns: [
     "jest.*.config.js",
