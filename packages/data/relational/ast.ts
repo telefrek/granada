@@ -13,7 +13,7 @@ import {
   type ArrayItemType,
   type ArrayProperty,
   type JoinType,
-  type PropertiesOfType,
+  type PropertyOfType,
 } from "./types"
 
 /**
@@ -33,14 +33,20 @@ export interface ColumnFilter<
 > {
   column: Column
   op: ColumnFilteringOperation
-  value: TableType[Column]
+  value: TableType[Column] | ParameterNode
 }
 
+/**
+ * The type of containment object being examined (strings and arrays are different)
+ */
 export enum ContainmentObjectType {
   ARRAY,
   STRING,
 }
 
+/**
+ * Defines a simple containment filter with the type of object the containment references
+ */
 export interface ContainmentFilter<ContainmentObjectType> {
   type: ContainmentObjectType
 }
@@ -55,90 +61,16 @@ export type ArrayFilter<
 > = ContainmentFilter<ContainmentObjectType.ARRAY> & {
   column: Column
   op: ColumnValueContainsOperation.IN
-  value: ColumnItemType | ColumnItemType[]
+  value: ColumnItemType | ColumnItemType[] | ParameterNode
 }
 
 export type StringFilter<
   TableType extends RelationalDataTable,
-  Column extends PropertiesOfType<TableType, string>,
+  Column extends PropertyOfType<TableType, string>,
 > = ContainmentFilter<ContainmentObjectType.STRING> & {
   column: Column
   op: ColumnValueContainsOperation
-  value: string
-}
-
-/**
- * Type guard for column filtering via {@link ColumnFilteringOperation}
- *
- * @param filter The {@link FilterTypes} to check
- * @returns True if the filter is a {@link ColumnFilter}
- */
-export function isColumnFilter<TableType extends RelationalDataTable>(
-  filter: FilterTypes<TableType> | FilterGroup<TableType>,
-): filter is ColumnFilter<TableType, keyof TableType> {
-  return (
-    typeof filter === "object" &&
-    filter !== null &&
-    "column" in filter &&
-    "value" in filter &&
-    "op" in filter &&
-    typeof filter.op === "string" &&
-    Object.values(ColumnFilteringOperation).includes(
-      filter.op as ColumnFilteringOperation,
-    )
-  )
-}
-
-/**
- * Type guard for column filtering via {@link ColumnValueContainsOperation}
- *
- * @param filter The {@link FilterTypes} to check
- * @returns True if the filter is a {@link ArrayFilter}
- */
-export function IsArrayFilter<TableType extends RelationalDataTable>(
-  filter: FilterTypes<TableType> | FilterGroup<TableType>,
-): filter is ArrayFilter<
-  TableType,
-  ArrayProperty<TableType>,
-  ArrayItemType<TableType, ArrayProperty<TableType>>
-> {
-  return (
-    typeof filter === "object" &&
-      filter !== null &&
-      "column" in filter &&
-      "value" in filter &&
-      "type" in filter &&
-      filter.type === ContainmentObjectType.ARRAY,
-    "op" in filter &&
-      typeof filter.op === "string" &&
-      Object.values(ColumnValueContainsOperation).includes(
-        filter.op as ColumnValueContainsOperation,
-      )
-  )
-}
-
-/**
- * Type guard for column filtering via {@link ColumnValueContainsOperation}
- *
- * @param filter The {@link FilterTypes} to check
- * @returns True if the filter is a {@link StringFilter}
- */
-export function isStringFilter<TableType extends RelationalDataTable>(
-  filter: FilterTypes<TableType> | FilterGroup<TableType>,
-): filter is StringFilter<TableType, PropertiesOfType<TableType, string>> {
-  return (
-    typeof filter === "object" &&
-      filter !== null &&
-      "column" in filter &&
-      "value" in filter &&
-      "type" in filter &&
-      filter.type === ContainmentObjectType.STRING,
-    "op" in filter &&
-      typeof filter.op === "string" &&
-      Object.values(ColumnValueContainsOperation).includes(
-        filter.op as ColumnValueContainsOperation,
-      )
-  )
+  value: string | ParameterNode
 }
 
 /**
@@ -162,7 +94,7 @@ export type FilterTypes<TableType extends RelationalDataTable> =
       ArrayProperty<TableType>,
       ArrayItemType<TableType, ArrayProperty<TableType>>
     >
-  | StringFilter<TableType, PropertiesOfType<TableType, string>>
+  | StringFilter<TableType, PropertyOfType<TableType, string>>
 
 /**
  * Represents a group of filters that are bound by a {@link BooleanOperation}
@@ -248,7 +180,7 @@ export type ParameterNode =
  * @returns True if the node is a {@link RelationalQueryNode}
  */
 export function isRelationalQueryNode(
-  node: QueryNode,
+  node: unknown,
 ): node is RelationalQueryNode<RelationalNodeType> {
   return (
     typeof node === "object" &&
@@ -260,7 +192,13 @@ export function isRelationalQueryNode(
   )
 }
 
-export function isParameterNode(node: QueryNode): node is ParameterNode {
+/**
+ * Type guard for {@link ParameterNode} instances
+ *
+ * @param node The {@link Querynode} to check
+ * @returns True if the node is a {@link ParameterNode}
+ */
+export function isParameterNode(node: unknown): node is ParameterNode {
   return (
     isRelationalQueryNode(node) &&
     node.nodeType === RelationalNodeType.PARAMETER
@@ -282,7 +220,81 @@ export function isFilterGroup<TableType extends RelationalDataTable>(
     "filters" in filter &&
     Array.isArray(filter.filters) &&
     typeof filter.op === "string" &&
-    Object.values(BooleanOperation).includes(filter.op as BooleanOperation)
+    Object.values(BooleanOperation).includes(filter.op)
+  )
+}
+
+/**
+ * Type guard for column filtering via {@link ColumnFilteringOperation}
+ *
+ * @param filter The {@link FilterTypes} to check
+ * @returns True if the filter is a {@link ColumnFilter}
+ */
+export function isColumnFilter<TableType extends RelationalDataTable>(
+  filter: FilterTypes<TableType> | FilterGroup<TableType>,
+): filter is ColumnFilter<TableType, keyof TableType> {
+  return (
+    typeof filter === "object" &&
+    filter !== null &&
+    "column" in filter &&
+    "value" in filter &&
+    "op" in filter &&
+    typeof filter.op === "string" &&
+    Object.values(ColumnFilteringOperation).includes(
+      filter.op as ColumnFilteringOperation,
+    )
+  )
+}
+
+/**
+ * Type guard for column filtering via {@link ColumnValueContainsOperation}
+ *
+ * @param filter The {@link FilterTypes} to check
+ * @returns True if the filter is a {@link ArrayFilter}
+ */
+export function IsArrayFilter<TableType extends RelationalDataTable>(
+  filter: FilterTypes<TableType> | FilterGroup<TableType>,
+): filter is ArrayFilter<
+  TableType,
+  ArrayProperty<TableType>,
+  ArrayItemType<TableType, ArrayProperty<TableType>>
+> {
+  return (
+    typeof filter === "object" &&
+      filter !== null &&
+      "column" in filter &&
+      "value" in filter &&
+      "type" in filter &&
+      filter.type === ContainmentObjectType.ARRAY,
+    "op" in filter &&
+      typeof filter.op === "string" &&
+      Object.values(ColumnValueContainsOperation).includes(
+        filter.op as ColumnValueContainsOperation,
+      )
+  )
+}
+
+/**
+ * Type guard for column filtering via {@link ColumnValueContainsOperation}
+ *
+ * @param filter The {@link FilterTypes} to check
+ * @returns True if the filter is a {@link StringFilter}
+ */
+export function isStringFilter<TableType extends RelationalDataTable>(
+  filter: FilterTypes<TableType> | FilterGroup<TableType>,
+): filter is StringFilter<TableType, PropertyOfType<TableType, string>> {
+  return (
+    typeof filter === "object" &&
+      filter !== null &&
+      "column" in filter &&
+      "value" in filter &&
+      "type" in filter &&
+      filter.type === ContainmentObjectType.STRING,
+    "op" in filter &&
+      typeof filter.op === "string" &&
+      Object.values(ColumnValueContainsOperation).includes(
+        filter.op as ColumnValueContainsOperation,
+      )
   )
 }
 
@@ -298,6 +310,12 @@ export function isGenerator(
   )
 }
 
+/**
+ * Type guard for {@link NamedRowGenerator} objects
+ *
+ * @param node The {@link QueryNode} to check
+ * @returns True if the node is a {@link NamedRowGenerator}
+ */
 export function isNamedGenerator(node: QueryNode): node is NamedRowGenerator {
   return (
     isGenerator(node) &&
@@ -307,10 +325,10 @@ export function isNamedGenerator(node: QueryNode): node is NamedRowGenerator {
 }
 
 /**
- * Type guard for {@link WhereClause} identification
+ * Type guard for {@link CteClause} identification
  *
  * @param node The {@link QueryNode} to inspect
- * @returns True if the node is a {@link WhereClause}
+ * @returns True if the node is a {@link CteClause}
  */
 export function isCteClause(node: QueryNode): node is CteClause {
   return isRelationalQueryNode(node) && node.nodeType === RelationalNodeType.CTE
@@ -319,7 +337,7 @@ export function isCteClause(node: QueryNode): node is CteClause {
 /**
  * Type guard for {@link WhereClause} identification
  *
- * @param node The {@link RelationalQueryNode} to inspect
+ * @param node The {@link QueryNode} to inspect
  * @returns True if the node is a {@link WhereClause}
  */
 export function isWhereClause(
@@ -333,7 +351,7 @@ export function isWhereClause(
 /**
  * Type guard for {@link SelectClause} identification
  *
- * @param node The {@link RelationalQueryNode} to inspect
+ * @param node The {@link QueryNode} to inspect
  * @returns True if the node is a {@link SelectClause}
  */
 export function isSelectClause(node: QueryNode): node is SelectClause {
@@ -342,6 +360,12 @@ export function isSelectClause(node: QueryNode): node is SelectClause {
   )
 }
 
+/**
+ * Type guard for {@link ColumnAlias} identification
+ *
+ * @param node The {@link QueryNode} to inspect
+ * @returns True if the node is a {@link ColumnAlias}
+ */
 export function isColumnAlias(
   node: QueryNode,
 ): node is ColumnAlias<RelationalDataTable, keyof RelationalDataTable, string> {
@@ -353,7 +377,7 @@ export function isColumnAlias(
 /**
  * Type guard for {@link TableQueryNode} identification
  *
- * @param node The {@link RelationalQueryNode} to inspect
+ * @param node The {@link QueryNode} to inspect
  * @returns True if the node is a {@link TableQueryNode}
  */
 export function isTableQueryNode(node: QueryNode): node is TableQueryNode {
@@ -362,6 +386,12 @@ export function isTableQueryNode(node: QueryNode): node is TableQueryNode {
   )
 }
 
+/**
+ * Type guard for {@link JoinColumnFilter} identification
+ *
+ * @param filter The unknown object to check
+ * @returns True if the filter is a {@link JoinColumnFilter}
+ */
 export function isJoinColumnFilter(
   filter: unknown,
 ): filter is JoinColumnFilter {
@@ -378,12 +408,30 @@ export function isJoinColumnFilter(
   )
 }
 
+/**
+ * Type guard for {@link JoinQueryNode} identification
+ *
+ * @param node The {@link QueryNode} to inspect
+ * @returns True if the node is a {@link JoinQueryNode}
+ */
 export function isJoinQueryNode(node: QueryNode): node is JoinQueryNode {
   return (
     isRelationalQueryNode(node) && node.nodeType === RelationalNodeType.JOIN
   )
 }
 
+/**
+ * Type guard for {@link JoinClauseQueryNode} identification
+ *
+ * @param node The {@link QueryNode} to inspect
+ * @returns True if the node is a {@link JoinClauseQueryNode}
+ */
 export function isJoinClauseNode(node: QueryNode): node is JoinClauseQueryNode {
   return isRelationalQueryNode(node) && node.nodeType === RelationalNodeType.ON
+}
+
+export function isFilterable<T extends RelationalDataTable>(
+  filter?: FilterGroup<T> | FilterTypes<T>,
+): filter is FilterGroup<T> | FilterTypes<T> {
+  return filter !== undefined
 }

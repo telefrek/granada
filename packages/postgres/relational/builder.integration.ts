@@ -1,4 +1,3 @@
-import { and, containsItems, gt } from "@telefrek/data/relational/builder/index"
 import {
   PostgreSqlContainer,
   StartedPostgreSqlContainer,
@@ -35,23 +34,37 @@ describe("Postgres should be able to execute queries", () => {
     }
   }, 30_000)
 
+  beforeEach(async () => {
+    await postgresClient?.query("TRUNCATE TABLE customers")
+    await postgresClient?.query("TRUNCATE TABLE orders")
+    await postgresClient?.query(
+      "ALTER SEQUENCE customers_id_seq RESTART WITH 1",
+    )
+    await postgresClient?.query("ALTER SEQUENCE orders_id_seq RESTART WITH 1")
+  })
+
   it("Should be able to issue a simple query", async () => {
     const query = createRelationalQueryContext<TestDatabase>()
       .withCte("customerOrders", (builder) =>
         builder
-          .from("orders")
-          .select("id", "customerId", "categories", "amount")
-          .alias("id", "orderId")
-          .where(and(gt("amount", 0), containsItems("categories", "test"))),
+          .select("orders")
+          .columns("id", "customerId", "categories", "amount")
+          .withColumnAlias("id", "orderId")
+          .where((clause) =>
+            clause.and(
+              clause.gt("amount", 0),
+              clause.containsItems("categories", "test"),
+            ),
+          ),
       )
       .withCte("customerNames", (builder) =>
-        builder.from("customers").select("id", "firstName", "lastName"),
+        builder.select("customers").columns("id", "firstName", "lastName"),
       )
-      .from("customerOrders")
-      .select("orderId", "amount", "categories")
+      .select("customerOrders")
+      .columns("orderId", "amount", "categories")
       .join(
         "customerNames",
-        (customerNames) => customerNames.select("firstName", "lastName"),
+        (customerNames) => customerNames.columns("firstName", "lastName"),
         "customerId",
         "id",
       )

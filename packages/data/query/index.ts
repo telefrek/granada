@@ -23,13 +23,26 @@ export interface Query<_T extends object> {
 /**
  * Represents a query that requires specific inputs with a given shape
  */
-export interface ParameterizedQuery<T, U extends object> extends Query<U> {
+export interface ParameterizedQuery<T extends object, P extends object>
+  extends Query<T> {
   /**
    * Binds the given parameters to generate a fully executable {@link Query} object
    *
    * @param parameters The values to bind to the {@link ParameterizedQuery}
    */
-  bind(parameters: T): Query<U>
+  bind(parameters: P): Query<T>
+}
+
+/**
+ * Type guard for identifying {@link ParameterizedQuery} instances
+ *
+ * @param query The {@link Query} to inspect
+ * @returns True if the query is a {@link ParameterizedQuery}
+ */
+export function isParameterizedQuery<T extends object>(
+  query: Query<T>,
+): query is ParameterizedQuery<T, object> {
+  return "bind" in query && typeof query.bind === "function"
 }
 
 /**

@@ -21,7 +21,7 @@ export interface QueryBuilder<T extends object> {
   build(name: string, mode?: ExecutionMode): Query<T>
 }
 
-export interface ParameterizedQueryBuilder<T, U extends object> {
+export interface ParameterizedQueryBuilder<T extends object, P extends object> {
   /**
    * Build the {@link ParameterizedQuery} with the given information
    *
@@ -33,7 +33,7 @@ export interface ParameterizedQueryBuilder<T, U extends object> {
   buildParameterized(
     name: string,
     mode?: ExecutionMode,
-  ): ParameterizedQuery<T, U>
+  ): ParameterizedQuery<T, P>
 }
 
 /**
@@ -69,8 +69,13 @@ export abstract class QueryBuilderBase<T extends object>
   }
 }
 
-export abstract class ParameterizedQueryBuilderBase<T, U extends object>
-  implements ParameterizedQueryBuilder<T, U>
+/**
+ * An abstract builder that requires parameters to be passed in to function
+ */
+export abstract class ParameterizedQueryBuilderBase<
+  T extends object,
+  P extends object,
+> implements ParameterizedQueryBuilder<T, P>
 {
   protected node: QueryNode = {}
 
@@ -92,9 +97,12 @@ export abstract class ParameterizedQueryBuilderBase<T, U extends object>
     node: QueryNode,
     name: string,
     mode: ExecutionMode,
-  ): ParameterizedQuery<T, U>
+  ): ParameterizedQuery<T, P>
 
-  buildParameterized(): ParameterizedQuery<T, U> {
-    throw new Error("Method not implemented.")
+  buildParameterized(
+    name: string,
+    mode: ExecutionMode = ExecutionMode.Normal,
+  ): ParameterizedQuery<T, P> {
+    return this.buildQuery(this.node, name, mode)
   }
 }

@@ -1,4 +1,3 @@
-import { and, containsItems, gt } from "@telefrek/data/relational/builder"
 import {
   PostgresQueryBuilder,
   createRelationalQueryContext,
@@ -11,10 +10,10 @@ describe("Postgres query syntax should be translated correctly", () => {
   it("Should create a valid query from a builder", () => {
     const context = createRelationalQueryContext<TestDatabase>()
     const query = context
-      .from("orders")
-      .select("id", "categories")
-      .alias("id", "orderId")
-      .where(containsItems("categories", "purchase"))
+      .select("orders")
+      .columns("id", "categories")
+      .withColumnAlias("id", "orderId")
+      .where((clause) => clause.containsItems("categories", "purchase"))
       .build(PostgresQueryBuilder, "testQuery")
 
     if (isPostgresRelationalQuery(query)) {
@@ -29,20 +28,20 @@ describe("Postgres query syntax should be translated correctly", () => {
     const query = context
       .withCte("customerOrders", (builder) =>
         builder
-          .from("orders")
-          .select("id", "categories", "amount")
-          .alias("id", "orderId")
-          .where(gt("amount", 0))
+          .select("orders")
+          .columns("id", "categories", "amount")
+          .withColumnAlias("id", "orderId")
+          .where((clause) => clause.gt("amount", 0))
           .join(
             "customers",
             (customers) =>
-              customers.select("firstName", "lastName", "createdAt"),
+              customers.columns("firstName", "lastName", "createdAt"),
             "customerId",
             "id",
           ),
       )
-      .from("customerOrders")
-      .select("*")
+      .select("customerOrders")
+      .columns("*")
       .build(PostgresQueryBuilder, "testQuery")
 
     if (isPostgresRelationalQuery(query)) {
@@ -56,19 +55,24 @@ describe("Postgres query syntax should be translated correctly", () => {
     const query = createRelationalQueryContext<TestDatabase>()
       .withCte("customerOrders", (builder) =>
         builder
-          .from("orders")
-          .select("id", "customerId", "categories", "amount")
-          .alias("id", "orderId")
-          .where(and(gt("amount", 0), containsItems("categories", "test"))),
+          .select("orders")
+          .columns("id", "customerId", "categories", "amount")
+          .withColumnAlias("id", "orderId")
+          .where((clause) =>
+            clause.and(
+              clause.gt("amount", 0),
+              clause.containsItems("categories", "test"),
+            ),
+          ),
       )
       .withCte("customerNames", (builder) =>
-        builder.from("customers").select("id", "firstName", "lastName"),
+        builder.select("customers").columns("id", "firstName", "lastName"),
       )
-      .from("customerOrders")
-      .select("orderId", "amount", "categories")
+      .select("customerOrders")
+      .columns("orderId", "amount", "categories")
       .join(
         "customerNames",
-        (customerNames) => customerNames.select("firstName", "lastName"),
+        (customerNames) => customerNames.columns("firstName", "lastName"),
         "customerId",
         "id",
       )

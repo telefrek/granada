@@ -10,6 +10,12 @@
 export type RelationalDataTable = Record<string, any>
 
 /**
+ * Represents a set of parameters
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type QueryParameters = Record<string, any>
+
+/**
  * Represents a relational data store that has a collection of tables and other
  * objects that can be useful for describing data sources and building valid queries
  */

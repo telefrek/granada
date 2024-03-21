@@ -2,6 +2,7 @@
  * Type helpers for Relational Queries
  */
 
+import type { RelationalQueryNode } from "./ast"
 import type { RelationalDataStore, RelationalDataTable } from "./index"
 
 /**
@@ -70,20 +71,45 @@ export enum BooleanOperation {
 }
 
 /**
+ * Custom type to map records of RelationalDataStore keys
+ */
+export type TableAlias = Record<
+  keyof RelationalDataStore["tables"],
+  keyof RelationalDataStore["tables"]
+>
+
+/**
+ * A provider that returns relational query nodes
+ */
+export interface RelationalNodeProvider<
+  NodeType extends
+    RelationalQueryNode<RelationalNodeType> = RelationalQueryNode<RelationalNodeType>,
+> {
+  asNode(): NodeType
+}
+
+/**
  * The supported types a {@link RelationalQueryNode} can have
  */
 export enum RelationalNodeType {
   TABLE = "table",
   WHERE = "where",
-  SELECT = "select",
   CTE = "cte",
   JOIN = "join",
   ON = "on",
   ALIAS = "alias",
   PARAMETER = "parameter",
+  SELECT = "select",
+  INSERT = "insert",
+  UPDATE = "update",
+  MERGE = "merge",
+  DELETE = "delete",
 }
 
-export type PropertiesOfType<
+/**
+ * Helper to get properties of a given type
+ */
+export type PropertyOfType<
   TableType extends RelationalDataTable,
   TargetType,
 > = {
@@ -99,19 +125,19 @@ export type ArrayProperty<TableType extends RelationalDataTable> = {
 }[keyof TableType]
 
 /**
- * Helps to extract the type from the given {@link ArrayProperty}
+ * Helper to extract the type from the given {@link ArrayProperty}
  */
 export type ArrayItemType<
   TableType extends RelationalDataTable,
   Column extends ArrayProperty<TableType>,
 > = TableType[Column] extends (infer ItemType)[] ? ItemType : never
 
+/**
+ * Helper to find the set of properties on the {@link Right} object that match
+ * the type of the {@link LeftColumn} on the {@link Left} object
+ */
 export type MatchingProperty<
-  Left,
-  Right,
+  Left extends RelationalDataTable,
+  Right extends RelationalDataTable,
   LeftColumn extends keyof Left,
 > = PropertyOfType<Right, Left[LeftColumn]>
-
-export type PropertyOfType<T, K> = {
-  [key in keyof T]: T[key] extends K ? key : never
-}[keyof T]
