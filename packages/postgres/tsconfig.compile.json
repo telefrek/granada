@@ -16,6 +16,7 @@
     "node_modules",
     "./dist/**/*",
     "./**/*.test.ts",
-    "./**/*.integration.ts"
+    "./**/*.integration.ts",
+    "./**/testUtils.ts"
   ]
 }

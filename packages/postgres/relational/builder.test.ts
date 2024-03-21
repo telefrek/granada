@@ -1,51 +1,11 @@
 import { and, containsItems, gt } from "@telefrek/data/relational/builder"
 import {
-  PostgresArray,
-  PostgresColumnTypeName,
-  PostgresEnum,
-  type PostgresDatabase,
-} from "../index"
-import {
   PostgresQueryBuilder,
   createRelationalQueryContext,
   isPostgresRelationalQuery,
 } from "./builder"
 
-const Category = {
-  TEST: "test",
-  PURCHASE: "purchase",
-} as const
-
-type Order = {
-  id: PostgresColumnTypeName.SERIAL
-  createdAt: PostgresColumnTypeName.BIGINT
-  updatedAt: PostgresColumnTypeName.BIGINT
-  removedAt?: PostgresColumnTypeName.BIGINT
-  name: PostgresColumnTypeName.TEXT
-  categories: PostgresArray<PostgresEnum<typeof Category>>
-  amount: PostgresColumnTypeName.REAL
-  customerId: PostgresColumnTypeName.INTEGER
-}
-
-type Customer = {
-  id: PostgresColumnTypeName.SERIAL
-  createdAt: PostgresColumnTypeName.BIGINT
-  updatedAt: PostgresColumnTypeName.BIGINT
-  removedAt?: PostgresColumnTypeName.BIGINT
-  firstName: PostgresColumnTypeName.TEXT
-  lastName: PostgresColumnTypeName.TEXT
-}
-
-interface TestDatabase extends PostgresDatabase {
-  tables: {
-    orders: {
-      schema: Order
-    }
-    customers: {
-      schema: Customer
-    }
-  }
-}
+import type { TestDatabase } from "./testUtils"
 
 describe("Postgres query syntax should be translated correctly", () => {
   it("Should create a valid query from a builder", () => {

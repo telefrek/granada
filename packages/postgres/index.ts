@@ -70,7 +70,7 @@ export type PostgresColumnType<ColumnType extends PostgresColumnTypes> =
         : never
 
 export interface PostgresTable {
-  schema: Record<string, PostgresColumnTypes>
+  schema: Record<string, PostgresColumnTypes | undefined>
 }
 
 export interface PostgresDatabase {
