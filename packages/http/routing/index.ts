@@ -244,6 +244,8 @@ class RouterImpl implements Router {
         }
       }
     }
+
+    return
   }
 
   addHandler(

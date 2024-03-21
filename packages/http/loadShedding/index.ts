@@ -45,6 +45,8 @@ export function enableLoadShedding(
         status: HttpStatus.SERVICE_UNAVAILABLE,
         headers: emptyHeaders(),
       })
+
+      return
     }
   }
 }

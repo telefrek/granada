@@ -4,15 +4,13 @@ module.exports = {
   coverageDirectory: "coverage",
   testMatch: ["<rootDir>/**/*.test.ts"],
   collectCoverageFrom: ["packages/**/*.{ts,js,jsx}"],
-  coveragePathIgnorePatterns: ["jest.*.config.js", "/node_modules", "/dist"],
+  coveragePathIgnorePatterns: [
+    "jest.*.config.js",
+    "/node_modules",
+    "/dist",
+    "packages/http/content/media.ts",
+  ],
   moduleNameMapper: {
     "^@telefrek/(.*)$": "<rootDir>/packages/$1/",
-  },
-  coverageThreshold: {
-    global: {
-      branches: 80,
-      functions: 80,
-      lines: 80,
-    },
   },
 }

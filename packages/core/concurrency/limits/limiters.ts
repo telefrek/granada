@@ -147,6 +147,8 @@ class SimpleLimiter extends AbstractLimiter {
         this.createOperation(),
       )
     }
+
+    return
   }
 
   protected override onChange(newLimit: number): void {

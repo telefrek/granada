@@ -169,6 +169,8 @@ function routeTransform(router: Router): HttpPipelineTransform {
     } else {
       return request
     }
+
+    return
   }
 }
 

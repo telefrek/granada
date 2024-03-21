@@ -3,7 +3,7 @@
     "./packages/*"
   ],
   "scripts": {
-    "test": "npm run test:*",
+    "test": "npm run test:unit && npm run test:integration",
     "test:unit": "jest --coverage -c jest.config.js",
     "test:integration": "jest --coverage -c jest.integration.config.js",
     "format": "npx prettier --write .",
@@ -12,12 +12,8 @@
     "tsc-diagnostics": "tsc --extendedDiagnostics --diagnostics",
     "lint": "npx eslint . --fix"
   },
-  "jest": {
-    "projects": [
-      "<rootDir>/jest.node.config.js"
-    ]
-  },
   "devDependencies": {
+    "@babel/plugin-syntax-import-attributes": "^7.24.1",
     "@types/jest": "^29.5.12",
     "@types/node": "^20.11.29",
     "@typescript-eslint/eslint-plugin": "^7.3.1",

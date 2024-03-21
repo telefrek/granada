@@ -17,7 +17,7 @@ export const fileToMediaType = async (
 ): Promise<MediaType | undefined> => {
   // Load the map the first time through
   if (EXTENSION_MAP === undefined) {
-    const entry = await import("./mimeTypes.json", { assert: { type: "json" } })
+    const entry = await import("./mimeTypes.json", { with: { type: "json" } })
 
     EXTENSION_MAP = {}
     for (const [key, value] of Object.entries(entry.default)) {
