@@ -7,7 +7,7 @@ import type {
 } from "../../query/index"
 import {
   ContainmentObjectType,
-  isFilterable,
+  isFilter,
   type ColumnAlias,
   type CteClause,
   type FilterGroup,
@@ -343,8 +343,7 @@ class DefaultTableNodeBuilder<
   private whereClause?: WhereClause<DataStoreType["tables"][TableName]>
   private columnAlias?: ColumnAlias<
     DataStoreType["tables"][TableName],
-    keyof DataStoreType["tables"][TableName],
-    string
+    keyof DataStoreType["tables"][TableName]
   >[]
   private parent?: RelationalQueryNode<RelationalNodeType>
 
@@ -356,8 +355,7 @@ class DefaultTableNodeBuilder<
     whereClause?: WhereClause<DataStoreType["tables"][TableName]>,
     columnAlias?: ColumnAlias<
       DataStoreType["tables"][TableName],
-      keyof DataStoreType["tables"][TableName],
-      string
+      keyof DataStoreType["tables"][TableName]
     >[],
     parent?: RelationalQueryNode<RelationalNodeType>,
   ) {
@@ -603,8 +601,7 @@ class ParameterizedDefaultTableNodeBuilder<
   private whereClause?: WhereClause<DataStoreType["tables"][TableName]>
   private columnAlias?: ColumnAlias<
     DataStoreType["tables"][TableName],
-    keyof DataStoreType["tables"][TableName],
-    string
+    keyof DataStoreType["tables"][TableName]
   >[]
   private parent?: RelationalQueryNode<RelationalNodeType>
 
@@ -616,8 +613,7 @@ class ParameterizedDefaultTableNodeBuilder<
     whereClause?: WhereClause<DataStoreType["tables"][TableName]>,
     columnAlias?: ColumnAlias<
       DataStoreType["tables"][TableName],
-      keyof DataStoreType["tables"][TableName],
-      string
+      keyof DataStoreType["tables"][TableName]
     >[],
     parent?: RelationalQueryNode<RelationalNodeType>,
   ) {
@@ -933,21 +929,21 @@ class WhereClauseBuilder<Table extends RelationalDataTable>
 
   and(...clauses: WhereBuilder<Table>[]): WhereBuilder<Table> {
     return new WhereClauseBuilder({
-      filters: clauses.map((c) => c.current).filter(isFilterable),
+      filters: clauses.map((c) => c.current).filter(isFilter),
       op: BooleanOperation.AND,
     })
   }
 
   or(...clauses: WhereBuilder<Table>[]): WhereBuilder<Table> {
     return new WhereClauseBuilder({
-      filters: clauses.map((c) => c.current).filter(isFilterable),
+      filters: clauses.map((c) => c.current).filter(isFilter),
       op: BooleanOperation.OR,
     })
   }
 
   not(...clauses: WhereBuilder<Table>[]): WhereBuilder<Table> {
     return new WhereClauseBuilder({
-      filters: clauses.map((c) => c.current).filter(isFilterable),
+      filters: clauses.map((c) => c.current).filter(isFilter),
       op: BooleanOperation.NOT,
     })
   }
@@ -1077,7 +1073,7 @@ class ParameterizedWhereClauseBuilder<
     ...clauses: ParameterizedWhereBuilder<Table, ParameterType>[]
   ): ParameterizedWhereBuilder<Table, ParameterType> {
     return new ParameterizedWhereClauseBuilder({
-      filters: clauses.map((c) => c.current).filter(isFilterable),
+      filters: clauses.map((c) => c.current).filter(isFilter),
       op: BooleanOperation.AND,
     })
   }
@@ -1085,7 +1081,7 @@ class ParameterizedWhereClauseBuilder<
     ...clauses: ParameterizedWhereBuilder<Table, ParameterType>[]
   ): ParameterizedWhereBuilder<Table, ParameterType> {
     return new ParameterizedWhereClauseBuilder({
-      filters: clauses.map((c) => c.current).filter(isFilterable),
+      filters: clauses.map((c) => c.current).filter(isFilter),
       op: BooleanOperation.OR,
     })
   }
@@ -1093,7 +1089,7 @@ class ParameterizedWhereClauseBuilder<
     ...clauses: ParameterizedWhereBuilder<Table, ParameterType>[]
   ): ParameterizedWhereBuilder<Table, ParameterType> {
     return new ParameterizedWhereClauseBuilder({
-      filters: clauses.map((c) => c.current).filter(isFilterable),
+      filters: clauses.map((c) => c.current).filter(isFilter),
       op: BooleanOperation.NOT,
     })
   }

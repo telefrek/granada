@@ -112,8 +112,7 @@ export class TableNodeManager extends RelationalASTNodeManager<TableQueryNode> {
 
   get columnAlias(): ColumnAlias<
     RelationalDataTable,
-    keyof RelationalDataTable,
-    string
+    keyof RelationalDataTable
   >[] {
     return this.node.children?.filter(isColumnAlias) ?? []
   }

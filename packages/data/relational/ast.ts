@@ -52,7 +52,7 @@ export interface ContainmentFilter<ContainmentObjectType> {
 }
 
 /**
- * Special filter for containment operations
+ * A containment filter specific to array operations
  */
 export type ArrayFilter<
   TableType extends RelationalDataTable,
@@ -64,6 +64,9 @@ export type ArrayFilter<
   value: ColumnItemType | ColumnItemType[] | ParameterNode
 }
 
+/**
+ * A containment filter specific to string objects
+ */
 export type StringFilter<
   TableType extends RelationalDataTable,
   Column extends PropertyOfType<TableType, string>,
@@ -104,13 +107,16 @@ export interface FilterGroup<TableType extends RelationalDataTable> {
   op: BooleanOperation
 }
 
+/**
+ * A type of {@link RelationalQueryNode} that produces rows with a named table (either alias or existing)
+ */
 export interface NamedRowGenerator
   extends RelationalQueryNode<RelationalNodeType> {
   tableName: string
 }
 
 /**
- * Defines a CTE clause
+ * A {@link RelationalQueryNode} that represents a common table expression
  */
 export type CteClause = RelationalQueryNode<RelationalNodeType.CTE> &
   NamedRowGenerator & {
@@ -118,31 +124,29 @@ export type CteClause = RelationalQueryNode<RelationalNodeType.CTE> &
   }
 
 /**
- * Represents a query against a table
+ * A {@link RelationalQueryNode} that indicates a table query
  */
 export type TableQueryNode = RelationalQueryNode<RelationalNodeType.TABLE> &
   NamedRowGenerator & {
-    tableName: string
     alias?: string
   }
 
 /**
- * Rename to match nomenclature
+ * A {@link RelationalQueryNode} that indicates a select clause
  */
 export type SelectClause = RelationalQueryNode<RelationalNodeType.SELECT> & {
   columns: string[] | STAR
 }
 
 /**
- * Reipresents a column alias value
+ * An alias for a column in a {@link SelectClause}
  */
 export type ColumnAlias<
   TableType extends RelationalDataTable,
   Column extends keyof TableType,
-  Alias extends string,
 > = RelationalQueryNode<RelationalNodeType.ALIAS> & {
   column: Column
-  alias: Alias
+  alias: string
 }
 
 /**
@@ -153,14 +157,14 @@ export type WhereClause<TableType extends RelationalDataTable> =
     filter: FilterGroup<TableType> | FilterTypes<TableType>
   }
 
-export interface JoinColumnFilter {
-  leftColumn: string
-  rightColumn: string
-  op: ColumnFilteringOperation
-}
-
+/**
+ * A type of {@link RelationalQueryNode} that represents a join operation
+ */
 export type JoinQueryNode = RelationalQueryNode<RelationalNodeType.JOIN>
 
+/**
+ * A type of {@link RelationalQueryNode} that represents a join clause
+ */
 export type JoinClauseQueryNode = RelationalQueryNode<RelationalNodeType.ON> & {
   left: string
   right: string
@@ -168,6 +172,18 @@ export type JoinClauseQueryNode = RelationalQueryNode<RelationalNodeType.ON> & {
   type: JoinType
 }
 
+/**
+ * A filter on a {@link JoinClauseQueryNode}
+ */
+export interface JoinColumnFilter {
+  leftColumn: string
+  rightColumn: string
+  op: ColumnFilteringOperation
+}
+
+/**
+ * A type of {@link RelationalQueryNode} that indicates a parameter reference
+ */
 export type ParameterNode =
   RelationalQueryNode<RelationalNodeType.PARAMETER> & {
     name: string
@@ -298,6 +314,12 @@ export function isStringFilter<TableType extends RelationalDataTable>(
   )
 }
 
+/**
+ * Type guard for {@link RelationalQueryNode} that generate rows
+ *
+ * @param node The {@link QueryNode} to check
+ * @returns True if the object is a {@link RelationalQueryNode} that generated rows
+ */
 export function isGenerator(
   node: QueryNode,
 ): node is RelationalQueryNode<RelationalNodeType> {
@@ -368,7 +390,7 @@ export function isSelectClause(node: QueryNode): node is SelectClause {
  */
 export function isColumnAlias(
   node: QueryNode,
-): node is ColumnAlias<RelationalDataTable, keyof RelationalDataTable, string> {
+): node is ColumnAlias<RelationalDataTable, keyof RelationalDataTable> {
   return (
     isRelationalQueryNode(node) && node.nodeType === RelationalNodeType.ALIAS
   )
@@ -430,7 +452,13 @@ export function isJoinClauseNode(node: QueryNode): node is JoinClauseQueryNode {
   return isRelationalQueryNode(node) && node.nodeType === RelationalNodeType.ON
 }
 
-export function isFilterable<T extends RelationalDataTable>(
+/**
+ * Verify if the value is not undefined and one of the correct types
+ *
+ * @param filter The {@link FilterGroup} or {@link FilterTypes}
+ * @returns True if it is a valid {@link FilterGroup} or {@link FilterTypes}
+ */
+export function isFilter<T extends RelationalDataTable>(
   filter?: FilterGroup<T> | FilterTypes<T>,
 ): filter is FilterGroup<T> | FilterTypes<T> {
   return filter !== undefined
