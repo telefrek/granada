@@ -1,30 +1,14 @@
 /**
- * Set of utilities to treat in memory collections as a pseudo relational data store
+ * Contains the logic for parsing an {@link RelationalQueryNode} AST into a set of in memory operations
  */
 
-import { Duration } from "@telefrek/core/time/index"
-import type {
-  QueryParameters,
-  RelationalDataStore,
-  RelationalDataTable,
-} from "."
-import {
-  ExecutionMode,
-  Query,
-  isParameterizedQuery,
-  type ParameterizedQuery,
-  type QueryExecutor,
-  type QueryResult,
-  type StreamingQueryResult,
-} from "../query"
-import type { QueryNode } from "../query/ast"
-import { QueryError } from "../query/error"
+import type { ArrayItemType, ArrayProperty } from "@telefrek/core/type/utils"
+import { QueryError } from "../../query/error"
 import {
   IsArrayFilter,
   isColumnFilter,
   isCteClause,
   isFilterGroup,
-  isGenerator,
   isJoinQueryNode,
   isParameterNode,
   isRelationalQueryNode,
@@ -40,217 +24,49 @@ import {
   type RelationalQueryNode,
   type StringFilter,
   type TableQueryNode,
-} from "./ast"
-import {
-  ParameterizedRelationalQueryBuilder,
-  RelationalQueryBuilder,
-} from "./builder"
+} from "../../relational/ast"
 import {
   JoinNodeManager,
   TableNodeManager,
-  getTreeRoot,
   hasProjections,
-} from "./helpers"
+} from "../../relational/helpers"
+import type {
+  QueryParameters,
+  RelationalDataStore,
+  RelationalDataTable,
+} from "../../relational/index"
 import {
   BooleanOperation,
   ColumnFilteringOperation,
   ColumnValueContainsOperation,
-  RelationalNodeType,
-  type ArrayItemType,
-  type ArrayProperty,
   type PropertyOfType,
-} from "./types"
+  type RelationalNodeType,
+} from "../../relational/types"
+import type { InMemoryRelationalDataStore } from "./memory"
 
-/**
- * Define an in memory table as an array of the given {@link TableType}
- */
-export type InMemoryTable<TableType> = TableType[]
-
-/**
- * Define an in memory {@link RelationalDataStore} as a collection of table
- * name, {@link InMemoryTable} for the given type
- */
-export type InMemoryRelationalDataStore<
-  DataStoreType extends RelationalDataStore,
-> = {
-  [key in keyof DataStoreType["tables"]]: InMemoryTable<
-    DataStoreType["tables"][key]
-  >
-}
-export function createInMemoryStore<
-  DataStoreType extends RelationalDataStore,
->(): InMemoryRelationalDataStore<DataStoreType> {
-  return {
-    sources: {},
-  } as InMemoryRelationalDataStore<DataStoreType>
-}
-
-export class InMemoryQueryExecutor<DataStoreType extends RelationalDataStore>
-  implements QueryExecutor
-{
-  store: InMemoryRelationalDataStore<DataStoreType>
-
-  constructor(inMemoryStore?: InMemoryRelationalDataStore<DataStoreType>) {
-    this.store = inMemoryStore ?? createInMemoryStore()
-  }
-
-  run<RowType extends object>(
-    query: Query<RowType>,
-  ): Promise<QueryResult<RowType> | StreamingQueryResult<RowType>> {
-    if (isInMemoryQuery(query)) {
-      if (
-        isParameterizedQuery(query) &&
-        "parameters" in query &&
-        typeof query.parameters === "object" &&
-        query.parameters !== null
-      ) {
-        const res = query.source(this.store, query.parameters)
-        return Promise.resolve({
-          rows: res,
-          duration: Duration.ZERO,
-        } as QueryResult<RowType>)
-      } else if (isParameterizedQuery(query)) {
-        return Promise.reject(
-          new QueryError(
-            "Cannot execute Parameterized query that is not bound!",
-          ),
-        )
-      }
-      const res = query.source(this.store, query)
-      return Promise.resolve({
-        rows: res,
-        duration: Duration.ZERO,
-      } as QueryResult<RowType>)
-    }
-
-    throw new Error("Method not implemented.")
-  }
-}
-
-type InMemoryQuerySourceMaterializer<
-  DataStoreType extends RelationalDataStore,
-  RowType,
-> = (
-  store: InMemoryRelationalDataStore<DataStoreType>,
+export function materializeNode<RowType extends RelationalDataTable>(
+  root: RelationalQueryNode<RelationalNodeType>,
+  store: InMemoryRelationalDataStore<RelationalDataStore>,
   parameters?: QueryParameters,
-) => RowType[]
+): RowType[] {
+  const context = new MaterializerContext(store)
 
-class InMemoryQuery<
-  DataStoreType extends RelationalDataStore,
-  RowType extends RelationalDataTable,
-> implements Query<RowType>
-{
-  name: string
-  mode: ExecutionMode
-  source: InMemoryQuerySourceMaterializer<DataStoreType, RowType>
+  const current = hasProjections(root)
+    ? materializeProjections(root, context, parameters)
+    : root
 
-  constructor(
-    name: string,
-    source: InMemoryQuerySourceMaterializer<DataStoreType, RowType>,
-    mode: ExecutionMode = ExecutionMode.Normal,
-  ) {
-    this.name = name
-    this.mode = mode
-    this.source = source
+  if (isTableQueryNode(current)) {
+    return materializeTable(current, context, parameters) as RowType[]
+  } else if (isJoinQueryNode(current)) {
+    return materializeJoin(current, context, parameters) as RowType[]
+  } else {
+    throw new QueryError(`Unsupported generator type: ${current.nodeType}`)
   }
 }
 
-class ParameterizedInMemoryQuery<
-    DataStoreType extends RelationalDataStore,
-    RowType extends RelationalDataTable,
-    ParameterType extends QueryParameters,
-  >
-  extends InMemoryQuery<DataStoreType, RowType>
-  implements ParameterizedQuery<RowType, ParameterType>
-{
-  parameters?: ParameterType
-
-  constructor(
-    name: string,
-    source: InMemoryQuerySourceMaterializer<DataStoreType, RowType>,
-    mode: ExecutionMode = ExecutionMode.Normal,
-  ) {
-    super(name, source, mode)
-  }
-
-  bind(parameters: ParameterType): Query<RowType> {
-    this.parameters = parameters
-    return this
-  }
-}
-
-function isInMemoryQuery<
-  DataStoreType extends RelationalDataStore,
-  RowType extends RelationalDataTable,
->(query: Query<RowType>): query is InMemoryQuery<DataStoreType, RowType> {
-  return (
-    typeof query === "object" &&
-    query !== null &&
-    "source" in query &&
-    typeof query.source === "function"
-  )
-}
 /**
- * Translates queries into a set of functions on top of an in memory set of tables
- *
- * NOTE: Seriously, don't use this for anything but
- * testing...it's....sloooooowwwwww (and quite probably wrong)
+ * Simple type rename
  */
-export class InMemoryRelationalQueryBuilder<
-  RowType extends RelationalDataTable,
-> extends RelationalQueryBuilder<RowType> {
-  constructor(queryNode: RelationalQueryNode<RelationalNodeType>) {
-    super(queryNode)
-  }
-
-  protected override buildQuery(
-    node: QueryNode,
-    name: string,
-    mode: ExecutionMode,
-  ): Query<RowType> {
-    // Verify we have a relational node
-    if (isRelationalQueryNode(node) && isGenerator(node)) {
-      return new InMemoryQuery(
-        name,
-        (store) => {
-          return materializeNode<RowType>(getTreeRoot(node), store)
-        },
-        mode,
-      )
-    }
-
-    throw new QueryError("Node is not a RelationalQueryNode")
-  }
-}
-
-export class ParameterizedInMemoryRelationalQueryBuilder<
-  RowType extends RelationalDataTable,
-  ParameterType extends QueryParameters,
-> extends ParameterizedRelationalQueryBuilder<RowType, ParameterType> {
-  constructor(queryNode: RelationalQueryNode<RelationalNodeType>) {
-    super(queryNode)
-  }
-
-  protected override buildQuery(
-    node: QueryNode,
-    name: string,
-    mode: ExecutionMode,
-  ): ParameterizedQuery<RowType, ParameterType> {
-    // Verify we have a relational node
-    if (isRelationalQueryNode(node) && isGenerator(node)) {
-      return new ParameterizedInMemoryQuery(
-        name,
-        (store, parameters) => {
-          return materializeNode<RowType>(getTreeRoot(node), store, parameters)
-        },
-        mode,
-      )
-    }
-
-    throw new QueryError("Node is not a RelationalQueryNode")
-  }
-}
-
 type Projections = Map<
   keyof RelationalDataStore["tables"],
   RelationalDataTable[]
@@ -490,26 +306,6 @@ function materializeProjections(
   }
 
   return current
-}
-
-function materializeNode<RowType extends RelationalDataTable>(
-  root: RelationalQueryNode<RelationalNodeType>,
-  store: InMemoryRelationalDataStore<RelationalDataStore>,
-  parameters?: QueryParameters,
-): RowType[] {
-  const context = new MaterializerContext(store)
-
-  const current = hasProjections(root)
-    ? materializeProjections(root, context, parameters)
-    : root
-
-  if (isTableQueryNode(current)) {
-    return materializeTable(current, context, parameters) as RowType[]
-  } else if (isJoinQueryNode(current)) {
-    return materializeJoin(current, context, parameters) as RowType[]
-  } else {
-    throw new QueryError(`Unsupported generator type: ${current.nodeType}`)
-  }
 }
 
 function buildJoinFilter<

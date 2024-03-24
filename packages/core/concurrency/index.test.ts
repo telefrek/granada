@@ -83,7 +83,7 @@ describe("Testing Concurrency", () => {
     expect(semaphore.available()).toBe(4)
 
     await Promise.all(
-      [...Array(10).keys()].map(async (k) => {
+      [...Array(10).keys()].map(async (_) => {
         await semaphore.acquire()
         highWaterMark = Math.max(highWaterMark, ++running)
 

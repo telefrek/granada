@@ -4,7 +4,7 @@ import {
   InMemoryRelationalQueryBuilder,
   ParameterizedInMemoryRelationalQueryBuilder,
   type InMemoryRelationalDataStore,
-} from "../memory"
+} from "../memory/memory"
 
 enum Category {
   TEST,

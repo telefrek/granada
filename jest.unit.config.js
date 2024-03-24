@@ -5,6 +5,7 @@ module.exports = {
   testMatch: ["<rootDir>/**/*.test.ts"],
   collectCoverageFrom: ["packages/**/*.{ts,js,jsx}"],
   coveragePathIgnorePatterns: [
+    "eslint.config.js",
     "jest.*.config.js",
     "/node_modules",
     "/dist",

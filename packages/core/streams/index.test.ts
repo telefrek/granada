@@ -12,7 +12,7 @@ describe("Generic streams should work normally", () => {
 
   it("Should be able to transform between two types", async () => {
     const results = await Readable.from(generator())
-      .pipe(createTransform<Number, String>((d) => d.toString()))
+      .pipe(createTransform<number, string>((d) => d.toString()))
       .toArray()
     expect(results.length).toEqual(10)
     expect(typeof results[0]).toEqual("string")

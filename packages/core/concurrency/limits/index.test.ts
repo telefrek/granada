@@ -79,7 +79,7 @@ describe("Limits should function correctly per their design", () => {
     const limiter = createSimpleLimiter(algorithm)
 
     // Get an operation and verify it was provided, then mark it as successful
-    let operation = limiter.tryAcquire()
+    const operation = limiter.tryAcquire()
     expect(operation).not.toBeUndefined()
     operation?.success()
 

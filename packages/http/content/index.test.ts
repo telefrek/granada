@@ -37,7 +37,7 @@ describe("Verify parsing is appropriately delayed", () => {
     // We shouldn't have consumed the stream yet..
     expect(contentsRead).toBeFalsy()
 
-    const foo: any = await new Promise((resolve, reject) => {
+    const foo: unknown = await new Promise((resolve, reject) => {
       ;(outputRequest!.body?.contents as Readable)
         .on("data", (chunk: unknown) => {
           resolve(chunk)
@@ -53,7 +53,9 @@ describe("Verify parsing is appropriately delayed", () => {
 
     // Verify it has "foo" as a property
     expect(foo).toHaveProperty("foo")
-    expect(foo["foo"]).toEqual("bar")
+    expect(
+      typeof foo === "object" && foo !== null && "foo" in foo && foo["foo"],
+    ).toEqual("bar")
   })
 })
 
@@ -88,7 +90,7 @@ describe("Content handling should be correctly identified and processed", () => 
   })
 
   it("Should be able to handle more complex media types", () => {
-    let mediaType = parseMediaType(
+    const mediaType = parseMediaType(
       'message/external-body; access-type=URL;URL = "ftp://cs.utk.edu/pub/moore/bulk-mailer/bulk-mailer.tar"',
     )
     expect(mediaType).not.toBeUndefined()
