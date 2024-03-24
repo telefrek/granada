@@ -53,7 +53,7 @@ describe("Postgres should be able to execute queries", () => {
           .where((clause) =>
             clause.and(
               clause.gt("amount", 0),
-              clause.containsItems("categories", "test"),
+              clause.containsItems("categories", ["test"]),
             ),
           ),
       )

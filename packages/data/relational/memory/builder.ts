@@ -3,27 +3,17 @@
  */
 
 import { Duration } from "@telefrek/core/time/index"
-import type {
-  QueryParameters,
-  RelationalDataStore,
-  RelationalDataTable,
-} from ".."
+import type { RelationalDataStore, RelationalDataTable } from ".."
 import {
   ExecutionMode,
-  Query,
+  QueryParameters,
+  type Query,
   type QueryExecutor,
   type QueryResult,
+  type QueryType,
   type StreamingQueryResult,
 } from "../../query"
-import type { QueryNode } from "../../query/ast"
-import { QueryError } from "../../query/error"
-import {
-  isGenerator,
-  isRelationalQueryNode,
-  type RelationalNodeType,
-  type RelationalQueryNode,
-} from "../ast"
-import { RelationalQueryBuilder } from "../builder"
+import { type RelationalNodeType, type RelationalQueryNode } from "../ast"
 import { getTreeRoot } from "../helpers"
 import { materializeNode } from "./astParser"
 
@@ -62,9 +52,9 @@ export class InMemoryQueryExecutor<DataStoreType extends RelationalDataStore>
   }
 
   run<RowType extends object>(
-    query: Query<RowType>,
+    query: Query<QueryType, RowType, never>,
   ): Promise<QueryResult<RowType> | StreamingQueryResult<RowType>> {
-    if (isInMemoryQuery(query)) {
+    if ("source" in query && typeof query.source === "function") {
       const res = query.source(this.store, query)
       return Promise.resolve({
         rows: res,
@@ -84,66 +74,43 @@ type InMemoryQuerySourceMaterializer<
   parameters?: QueryParameters,
 ) => RowType[]
 
-class InMemoryQuery<
-  DataStoreType extends RelationalDataStore,
-  RowType extends RelationalDataTable,
-> implements Query<RowType>
-{
-  name: string
-  mode: ExecutionMode
-  source: InMemoryQuerySourceMaterializer<DataStoreType, RowType>
-
-  constructor(
-    name: string,
-    source: InMemoryQuerySourceMaterializer<DataStoreType, RowType>,
-    mode: ExecutionMode = ExecutionMode.Normal,
-  ) {
-    this.name = name
-    this.mode = mode
-    this.source = source
-  }
-}
-
-function isInMemoryQuery<
-  DataStoreType extends RelationalDataStore,
-  RowType extends RelationalDataTable,
->(query: Query<RowType>): query is InMemoryQuery<DataStoreType, RowType> {
-  return (
-    typeof query === "object" &&
-    query !== null &&
-    "source" in query &&
-    typeof query.source === "function"
-  )
-}
-/**
- * Translates queries into a set of functions on top of an in memory set of tables
- *
- * NOTE: Seriously, don't use this for anything but
- * testing...it's....sloooooowwwwww (and quite probably wrong)
- */
-export class InMemoryRelationalQueryBuilder<
-  RowType extends RelationalDataTable,
-> extends RelationalQueryBuilder<RowType> {
-  constructor(queryNode: RelationalQueryNode<RelationalNodeType>) {
-    super(queryNode)
-  }
-
-  protected override buildQuery(
-    node: QueryNode,
-    name: string,
-    mode: ExecutionMode,
-  ): Query<RowType> {
-    // Verify we have a relational node
-    if (isRelationalQueryNode(node) && isGenerator(node)) {
-      return new InMemoryQuery(
-        name,
-        (store) => {
-          return materializeNode<RowType>(getTreeRoot(node), store)
-        },
-        mode,
-      )
+type InMemQ<
+  D extends RelationalDataStore,
+  Q extends QueryType,
+  R extends RelationalDataTable,
+> = Q extends QueryType.RAW
+  ? {
+      queryType: Q
+      name: string
+      mode: ExecutionMode
+      source: InMemoryQuerySourceMaterializer<D, R>
     }
+  : Q extends QueryType.PARAMETERIZED
+    ? {
+        queryType: Q
+        name: string
+        mode: ExecutionMode
+        source: InMemoryQuerySourceMaterializer<D, R>
+      }
+    : never
 
-    throw new QueryError("Node is not a RelationalQueryNode")
-  }
+export const InMemoryRelationalQueryBuilder1 = <
+  D extends RelationalDataStore,
+  Q extends QueryType,
+  R extends RelationalDataTable,
+  P extends QueryParameters = never,
+>(
+  node: RelationalQueryNode<RelationalNodeType>,
+  q: Q,
+  name: string,
+  mode: ExecutionMode = ExecutionMode.Normal,
+): Query<Q, R, P> => {
+  return {
+    queryType: q,
+    source: (store) => {
+      return materializeNode<R>(getTreeRoot(node), store)
+    },
+    name,
+    mode,
+  } as InMemQ<D, Q, R>
 }

@@ -13,36 +13,45 @@ export enum ExecutionMode {
 }
 
 /**
- * Represents the most basic query
+ * Types of queries
  */
-export interface Query<_T extends object> {
-  readonly name: string
-  readonly mode: ExecutionMode
+export enum QueryType {
+  RAW = "raw",
+  PARAMETERIZED = "parameterized",
+  BOUND = "bound",
 }
 
 /**
- * Represents a query that requires specific inputs with a given shape
+ * Represents a set of parameters
  */
-export interface ParameterizedQuery<T extends object, P extends object>
-  extends Query<T> {
-  /**
-   * Binds the given parameters to generate a fully executable {@link Query} object
-   *
-   * @param parameters The values to bind to the {@link ParameterizedQuery}
-   */
-  bind(parameters: P): Query<T>
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type QueryParameters = Record<string, any>
+
+export type Query<
+  Q extends QueryType,
+  _T extends object,
+  _P extends QueryParameters,
+> = {
+  queryType: Q
+  name: string
+  mode: ExecutionMode
 }
 
-/**
- * Type guard for identifying {@link ParameterizedQuery} instances
- *
- * @param query The {@link Query} to inspect
- * @returns True if the query is a {@link ParameterizedQuery}
- */
-export function isParameterizedQuery<T extends object>(
-  query: Query<T>,
-): query is ParameterizedQuery<T, object> {
-  return "bind" in query && typeof query.bind === "function"
+export type RawQuery<T extends object> = Query<QueryType.RAW, T, never>
+
+export type ParameterizedQuery<
+  T extends object,
+  P extends QueryParameters,
+> = Query<QueryType.PARAMETERIZED, T, P> & {
+  bind(parameters: P): BoundQuery<T, P>
+}
+
+export type BoundQuery<T extends object, P extends QueryParameters> = Query<
+  QueryType.BOUND,
+  T,
+  P
+> & {
+  parameters: Readonly<P>
 }
 
 /**
@@ -56,7 +65,7 @@ export interface QueryExecutor {
    * @returns Either a {@link QueryResult} or {@link StreamingQueryResult}
    */
   run<T extends object>(
-    query: Query<T>,
+    query: Query<QueryType, T, never>,
   ): Promise<QueryResult<T> | StreamingQueryResult<T>>
 }
 
@@ -64,7 +73,7 @@ export interface QueryExecutor {
  * Represents the result of executing a {@link Query}
  */
 export interface QueryResult<T extends object> {
-  query: Query<T>
+  query: Query<QueryType, T, never>
   rows: T[]
   duration: Duration
 }

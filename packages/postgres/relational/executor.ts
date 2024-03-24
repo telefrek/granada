@@ -9,6 +9,7 @@ import type {
   Query,
   QueryExecutor,
   QueryResult,
+  QueryType,
   StreamingQueryResult,
 } from "@telefrek/data/query/index"
 import pg from "pg"
@@ -22,7 +23,7 @@ export class PostgresQueryExecutor implements QueryExecutor {
   }
 
   async run<T extends object>(
-    query: Query<T>,
+    query: Query<QueryType, T, never>,
   ): Promise<QueryResult<T> | StreamingQueryResult<T>> {
     if (isPostgresRelationalQuery(query)) {
       const timer = new Timer()

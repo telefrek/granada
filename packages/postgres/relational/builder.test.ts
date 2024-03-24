@@ -13,7 +13,7 @@ describe("Postgres query syntax should be translated correctly", () => {
       .select("orders")
       .columns("id", "categories")
       .withColumnAlias("id", "orderId")
-      .where((clause) => clause.containsItems("categories", "purchase"))
+      .where((clause) => clause.containsItems("categories", ["purchase"]))
       .build(PostgresQueryBuilder, "testQuery")
 
     if (isPostgresRelationalQuery(query)) {
@@ -61,7 +61,7 @@ describe("Postgres query syntax should be translated correctly", () => {
           .where((clause) =>
             clause.and(
               clause.gt("amount", 0),
-              clause.containsItems("categories", "test"),
+              clause.containsItems("categories", ["test"]),
             ),
           ),
       )

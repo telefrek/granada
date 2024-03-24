@@ -14,6 +14,15 @@
       "script": "lint",
       "problemMatcher": ["$eslint-stylish"],
       "group": "build"
+    },
+    {
+      "type": "typescript",
+      "tsconfig": "tsconfig.json",
+      "option": "watch",
+      "problemMatcher": ["$tsc-watch"],
+      "group": "build",
+      "label": "tsc: advanced watch",
+      ""
     }
   ]
 }

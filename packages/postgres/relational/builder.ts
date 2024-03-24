@@ -2,9 +2,14 @@
  * Implementation of the @telefrek/data packages
  */
 
-import type { QueryNode } from "@telefrek/data/query/ast"
+import { getDebugInfo } from "@telefrek/core"
 import { QueryError } from "@telefrek/data/query/error"
-import { ExecutionMode, Query } from "@telefrek/data/query/index"
+import {
+  ExecutionMode,
+  QueryType,
+  type Query,
+  type QueryParameters,
+} from "@telefrek/data/query/index"
 import type { RelationalNodeType } from "@telefrek/data/relational/ast"
 import {
   IsArrayFilter,
@@ -21,10 +26,7 @@ import {
   type RelationalQueryNode,
   type TableQueryNode,
 } from "@telefrek/data/relational/ast"
-import {
-  RelationalQueryBuilder,
-  type RelationalNodeBuilder,
-} from "@telefrek/data/relational/builder"
+import type { RelationalNodeBuilder } from "@telefrek/data/relational/builder/index.js"
 import { DefaultRelationalNodeBuilder } from "@telefrek/data/relational/builder/internal"
 import {
   CteNodeManager,
@@ -60,46 +62,61 @@ export interface PostgresRelationalDataStore<
 
 export function createRelationalQueryContext<
   Database extends PostgresDatabase,
->(): RelationalNodeBuilder<PostgresRelationalDataStore<Database>> {
+>(): RelationalNodeBuilder<
+  PostgresRelationalDataStore<Database>,
+  QueryType.RAW
+> {
   return new DefaultRelationalNodeBuilder<
-    PostgresRelationalDataStore<Database>
-  >()
+    PostgresRelationalDataStore<Database>,
+    QueryType.RAW
+  >(QueryType.RAW)
 }
 
-export class PostgresRelationalQuery<RowType extends object>
-  implements Query<RowType>
+export class PostgresRelationalQuery<
+  RowType extends object,
+  Q extends QueryType,
+> implements Query<Q, RowType, never>
 {
   readonly name: string
   readonly mode: ExecutionMode
+  queryType: Q
   readonly queryText: string
 
-  constructor(
-    name: string,
-    queryText: string,
-    mode: ExecutionMode = ExecutionMode.Normal,
-  ) {
+  constructor(name: string, queryText: string, mode: ExecutionMode, type: Q) {
     this.name = name
     this.mode = mode
     this.queryText = queryText
+    this.queryType = type
   }
 }
 
 export function isPostgresRelationalQuery<RowType extends object>(
-  query: Query<RowType>,
-): query is PostgresRelationalQuery<RowType> {
+  query: Query<QueryType, RowType, never>,
+): query is PostgresRelationalQuery<RowType, QueryType> {
   return "queryText" in query && typeof query.queryText === "string"
 }
 
-export class PostgresQueryBuilder<
-  RowType extends RelationalDataTable,
-> extends RelationalQueryBuilder<RowType> {
-  protected override buildQuery(ast: QueryNode): Query<RowType> {
-    if (isRelationalQueryNode(ast)) {
-      return new PostgresRelationalQuery("foo", translateNode(getTreeRoot(ast)))
-    }
-
-    throw new QueryError("Invalid QueryNode, expected RelationalQueryNode.")
+export const PostgresQueryBuilder = <
+  _D extends RelationalDataStore,
+  Q extends QueryType,
+  R extends RelationalDataTable,
+  P extends QueryParameters = never,
+>(
+  ast: RelationalQueryNode<RelationalNodeType>,
+  q: Q,
+  name: string,
+  mode: ExecutionMode = ExecutionMode.Normal,
+): Query<Q, R, P> => {
+  if (isRelationalQueryNode(ast)) {
+    return new PostgresRelationalQuery<R, Q>(
+      name,
+      translateNode(getTreeRoot(ast)),
+      mode,
+      q,
+    )
   }
+
+  throw new QueryError("Invalid node type")
 }
 
 function translateJoinQuery(node: JoinQueryNode): string {
@@ -272,6 +289,7 @@ function translateFilterGroup(
       filter.op
     } ${wrap(filter.value)}`
   } else if (IsArrayFilter(filter)) {
+    console.log(getDebugInfo(filter))
     return `${wrap(filter.value)}=ANY(${table ? `${table}.` : ""}${
       filter.column
     })`

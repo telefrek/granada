@@ -1,7 +1,7 @@
-import { useDataStore } from "."
+import { useDataStore } from "../builder"
 import {
   InMemoryQueryExecutor,
-  InMemoryRelationalQueryBuilder,
+  InMemoryRelationalQueryBuilder1,
   type InMemoryRelationalDataStore,
 } from "../memory/builder"
 
@@ -104,7 +104,7 @@ describe("Relational query builder should support basic functionality", () => {
       useDataStore<TestDataStore>()
         .select("orders")
         .columns("*")
-        .build(InMemoryRelationalQueryBuilder, "testQuery"),
+        .build(InMemoryRelationalQueryBuilder1, "testQuery"),
     )
     expect(result).not.toBeUndefined()
     if (Array.isArray(result.rows)) {
@@ -118,7 +118,7 @@ describe("Relational query builder should support basic functionality", () => {
         .select("orders")
         .columns("*")
         .where((clause) => clause.gt("id", 2))
-        .build(InMemoryRelationalQueryBuilder, "testQuery"),
+        .build(InMemoryRelationalQueryBuilder1, "testQuery"),
     )
 
     if (Array.isArray(result.rows)) {
@@ -130,7 +130,7 @@ describe("Relational query builder should support basic functionality", () => {
         .select("orders")
         .columns("*")
         .where((clause) => clause.gte("id", 2))
-        .build(InMemoryRelationalQueryBuilder, "testQuery"),
+        .build(InMemoryRelationalQueryBuilder1, "testQuery"),
     )
 
     if (Array.isArray(result.rows)) {
@@ -145,7 +145,7 @@ describe("Relational query builder should support basic functionality", () => {
         .select("orders")
         .columns("*")
         .where((clause) => clause.contains("name", "ord3"))
-        .build(InMemoryRelationalQueryBuilder, "testQuery"),
+        .build(InMemoryRelationalQueryBuilder1, "testQuery"),
     )
 
     if (Array.isArray(result.rows)) {
@@ -155,9 +155,9 @@ describe("Relational query builder should support basic functionality", () => {
     result = await executor.run(
       useDataStore<TestDataStore>()
         .select("orders")
-        .where((clause) => clause.containsItems("categories", Category.TEST))
+        .where((clause) => clause.containsItems("categories", [Category.TEST]))
         .columns("*")
-        .build(InMemoryRelationalQueryBuilder, "testQuery"),
+        .build(InMemoryRelationalQueryBuilder1, "testQuery"),
     )
 
     if (Array.isArray(result.rows)) {
@@ -169,9 +169,9 @@ describe("Relational query builder should support basic functionality", () => {
         .select("orders")
         .columns("*")
         .where((clause) =>
-          clause.containsItems("categories", Category.PURCHASE),
+          clause.containsItems("categories", [Category.PURCHASE]),
         )
-        .build(InMemoryRelationalQueryBuilder, "testQuery"),
+        .build(InMemoryRelationalQueryBuilder1, "testQuery"),
     )
 
     if (Array.isArray(result.rows)) {
@@ -185,7 +185,7 @@ describe("Relational query builder should support basic functionality", () => {
       useDataStore<TestDataStore>()
         .select("orders")
         .columns("name", "createdAt")
-        .build(InMemoryRelationalQueryBuilder, "testQuery"),
+        .build(InMemoryRelationalQueryBuilder1, "testQuery"),
     )
     expect(result).not.toBeUndefined()
     if (Array.isArray(result.rows)) {
@@ -199,13 +199,13 @@ describe("Relational query builder should support basic functionality", () => {
       .select("orders")
       .columns("name", "createdAt")
       .where((clause) => clause.contains("name", "ord3"))
-      .build(InMemoryRelationalQueryBuilder, "testQuery")
+      .build(InMemoryRelationalQueryBuilder1, "testQuery")
 
     const query2 = useDataStore<TestDataStore>()
       .select("orders")
       .where((clause) => clause.contains("name", "ord3"))
       .columns("name", "createdAt")
-      .build(InMemoryRelationalQueryBuilder, "testQuery")
+      .build(InMemoryRelationalQueryBuilder1, "testQuery")
 
     // This should get the projected row with only 2 columns back
     for (const query of [query1, query2]) {
@@ -225,11 +225,11 @@ describe("Relational query builder should support basic functionality", () => {
         .columns("name")
         .where((clause) =>
           clause.and(
-            clause.containsItems("categories", Category.PURCHASE),
+            clause.containsItems("categories", [Category.PURCHASE]),
             clause.not(clause.eq("id", 1)),
           ),
         )
-        .build(InMemoryRelationalQueryBuilder, "testQuery"),
+        .build(InMemoryRelationalQueryBuilder1, "testQuery"),
     )
     expect(result).not.toBeUndefined()
     if (Array.isArray(result.rows)) {
@@ -246,7 +246,7 @@ describe("Relational query builder should support basic functionality", () => {
         .columns("name", "createdAt")
         .withColumnAlias("name", "foo")
         .withColumnAlias("createdAt", "date")
-        .build(InMemoryRelationalQueryBuilder, "testQuery"),
+        .build(InMemoryRelationalQueryBuilder1, "testQuery"),
     )
 
     if (Array.isArray(result.rows)) {
@@ -266,7 +266,7 @@ describe("Relational query builder should support basic functionality", () => {
         .withTableAlias("orders", "newOrders")
         .select("newOrders")
         .columns("name", "createdAt")
-        .build(InMemoryRelationalQueryBuilder, "testQuery"),
+        .build(InMemoryRelationalQueryBuilder1, "testQuery"),
     )
 
     // This should get the projected row with only 2 columns back
@@ -291,7 +291,7 @@ describe("Relational query builder should support basic functionality", () => {
         .where((clause) =>
           clause.containsItems("categories", Category.PURCHASE),
         )
-        .build(InMemoryRelationalQueryBuilder, "testQuery"),
+        .build(InMemoryRelationalQueryBuilder1, "testQuery"),
     )
 
     if (Array.isArray(result.rows)) {
@@ -319,7 +319,7 @@ describe("Relational query builder should support basic functionality", () => {
         )
         .select("bar")
         .columns("*")
-        .build(InMemoryRelationalQueryBuilder, "testQuery"),
+        .build(InMemoryRelationalQueryBuilder1, "testQuery"),
     )
 
     if (Array.isArray(result.rows)) {
@@ -345,7 +345,7 @@ describe("Relational query builder should support basic functionality", () => {
           "customerId",
           "id",
         )
-        .build(InMemoryRelationalQueryBuilder, "testQuery"),
+        .build(InMemoryRelationalQueryBuilder1, "testQuery"),
     )
 
     if (Array.isArray(result.rows)) {
@@ -369,7 +369,7 @@ describe("Relational query builder should support basic functionality", () => {
           "customerId",
           "id",
         )
-        .build(InMemoryRelationalQueryBuilder, "testQuery"),
+        .build(InMemoryRelationalQueryBuilder1, "testQuery"),
     )
 
     // Should only get orders from customer id 2
@@ -399,7 +399,7 @@ describe("Relational query builder should support basic functionality", () => {
           "customerId",
           "id",
         )
-        .build(InMemoryRelationalQueryBuilder, "testQuery"),
+        .build(InMemoryRelationalQueryBuilder1, "testQuery"),
     )
 
     if (Array.isArray(result.rows)) {
@@ -436,7 +436,7 @@ describe("Relational query builder should support basic functionality", () => {
           "lastName",
         )
 
-        .build(InMemoryRelationalQueryBuilder, "testQuery"),
+        .build(InMemoryRelationalQueryBuilder1, "testQuery"),
     )
 
     if (Array.isArray(result.rows)) {
@@ -466,7 +466,7 @@ describe("Relational query builder should support basic functionality", () => {
           "customerId",
           "id",
         )
-        .build(InMemoryRelationalQueryBuilder, "testQuery"),
+        .build(InMemoryRelationalQueryBuilder1, "testQuery"),
     )
 
     expect(Array.isArray(result.rows)).toBeTruthy()

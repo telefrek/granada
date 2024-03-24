@@ -4,6 +4,7 @@
 
 import type { ArrayItemType, ArrayProperty } from "@telefrek/core/type/utils"
 import { QueryError } from "../../query/error"
+import type { QueryParameters } from "../../query/index"
 import {
   BooleanOperation,
   ColumnFilteringOperation,
@@ -35,7 +36,6 @@ import {
   hasProjections,
 } from "../../relational/helpers"
 import type {
-  QueryParameters,
   RelationalDataStore,
   RelationalDataTable,
 } from "../../relational/index"

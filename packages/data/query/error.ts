@@ -2,13 +2,13 @@
  * Defines error handling for queries
  */
 
-import type { Query } from "."
+import type { Query, QueryType } from "."
 
 /**
  * Extension of {@link ErrorOptions} for query execution
  */
 interface QueryErrorOptions extends ErrorOptions {
-  query?: Query<object>
+  query?: Query<QueryType, object, never>
 }
 
 /**
