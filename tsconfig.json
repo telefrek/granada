@@ -4,6 +4,12 @@
     "baseUrl": "./",
     "outDir": "./dist/"
   },
-  "include": ["./**/*.ts"],
-  "exclude": ["node_modules", "./dist/**/*"]
+  "include": ["./**/*.ts", "./packages/http/content/mimeTypes.json"],
+  "exclude": ["node_modules", "./dist/**/*"],
+  "watchOptions": {
+    "excludeDirectories": ["**/dist", "**/node_modules"]
+  },
+  "buildOptions": {
+    "incremental": true
+  }
 }

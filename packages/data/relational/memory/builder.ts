@@ -11,8 +11,6 @@ import type {
 import {
   ExecutionMode,
   Query,
-  isParameterizedQuery,
-  type ParameterizedQuery,
   type QueryExecutor,
   type QueryResult,
   type StreamingQueryResult,
@@ -22,14 +20,11 @@ import { QueryError } from "../../query/error"
 import {
   isGenerator,
   isRelationalQueryNode,
+  type RelationalNodeType,
   type RelationalQueryNode,
 } from "../ast"
-import {
-  ParameterizedRelationalQueryBuilder,
-  RelationalQueryBuilder,
-} from "../builder"
+import { RelationalQueryBuilder } from "../builder"
 import { getTreeRoot } from "../helpers"
-import { RelationalNodeType } from "../types"
 import { materializeNode } from "./astParser"
 
 /**
@@ -70,24 +65,6 @@ export class InMemoryQueryExecutor<DataStoreType extends RelationalDataStore>
     query: Query<RowType>,
   ): Promise<QueryResult<RowType> | StreamingQueryResult<RowType>> {
     if (isInMemoryQuery(query)) {
-      if (
-        isParameterizedQuery(query) &&
-        "parameters" in query &&
-        typeof query.parameters === "object" &&
-        query.parameters !== null
-      ) {
-        const res = query.source(this.store, query.parameters)
-        return Promise.resolve({
-          rows: res,
-          duration: Duration.ZERO,
-        } as QueryResult<RowType>)
-      } else if (isParameterizedQuery(query)) {
-        return Promise.reject(
-          new QueryError(
-            "Cannot execute Parameterized query that is not bound!",
-          ),
-        )
-      }
       const res = query.source(this.store, query)
       return Promise.resolve({
         rows: res,
@@ -127,30 +104,6 @@ class InMemoryQuery<
   }
 }
 
-class ParameterizedInMemoryQuery<
-    DataStoreType extends RelationalDataStore,
-    RowType extends RelationalDataTable,
-    ParameterType extends QueryParameters,
-  >
-  extends InMemoryQuery<DataStoreType, RowType>
-  implements ParameterizedQuery<RowType, ParameterType>
-{
-  parameters?: ParameterType
-
-  constructor(
-    name: string,
-    source: InMemoryQuerySourceMaterializer<DataStoreType, RowType>,
-    mode: ExecutionMode = ExecutionMode.Normal,
-  ) {
-    super(name, source, mode)
-  }
-
-  bind(parameters: ParameterType): Query<RowType> {
-    this.parameters = parameters
-    return this
-  }
-}
-
 function isInMemoryQuery<
   DataStoreType extends RelationalDataStore,
   RowType extends RelationalDataTable,
@@ -186,34 +139,6 @@ export class InMemoryRelationalQueryBuilder<
         name,
         (store) => {
           return materializeNode<RowType>(getTreeRoot(node), store)
-        },
-        mode,
-      )
-    }
-
-    throw new QueryError("Node is not a RelationalQueryNode")
-  }
-}
-
-export class ParameterizedInMemoryRelationalQueryBuilder<
-  RowType extends RelationalDataTable,
-  ParameterType extends QueryParameters,
-> extends ParameterizedRelationalQueryBuilder<RowType, ParameterType> {
-  constructor(queryNode: RelationalQueryNode<RelationalNodeType>) {
-    super(queryNode)
-  }
-
-  protected override buildQuery(
-    node: QueryNode,
-    name: string,
-    mode: ExecutionMode,
-  ): ParameterizedQuery<RowType, ParameterType> {
-    // Verify we have a relational node
-    if (isRelationalQueryNode(node) && isGenerator(node)) {
-      return new ParameterizedInMemoryQuery(
-        name,
-        (store, parameters) => {
-          return materializeNode<RowType>(getTreeRoot(node), store, parameters)
         },
         mode,
       )

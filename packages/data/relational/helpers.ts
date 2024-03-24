@@ -19,9 +19,9 @@ import {
   type SelectClause,
   type TableQueryNode,
   type WhereClause,
+  RelationalNodeType,
 } from "./ast"
 import type { RelationalDataStore, RelationalDataTable } from "./index"
-import { RelationalNodeType } from "./types"
 
 type RNode = RelationalQueryNode<RelationalNodeType>
 

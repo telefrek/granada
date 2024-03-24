@@ -5,6 +5,9 @@
 import type { ArrayItemType, ArrayProperty } from "@telefrek/core/type/utils"
 import { QueryError } from "../../query/error"
 import {
+  BooleanOperation,
+  ColumnFilteringOperation,
+  ColumnValueContainsOperation,
   IsArrayFilter,
   isColumnFilter,
   isCteClause,
@@ -21,6 +24,7 @@ import {
   type FilterTypes,
   type JoinColumnFilter,
   type JoinQueryNode,
+  type RelationalNodeType,
   type RelationalQueryNode,
   type StringFilter,
   type TableQueryNode,
@@ -35,14 +39,8 @@ import type {
   RelationalDataStore,
   RelationalDataTable,
 } from "../../relational/index"
-import {
-  BooleanOperation,
-  ColumnFilteringOperation,
-  ColumnValueContainsOperation,
-  type PropertyOfType,
-  type RelationalNodeType,
-} from "../../relational/types"
-import type { InMemoryRelationalDataStore } from "./memory"
+import { type PropertyOfType } from "../../relational/types"
+import type { InMemoryRelationalDataStore } from "./builder"
 
 export function materializeNode<RowType extends RelationalDataTable>(
   root: RelationalQueryNode<RelationalNodeType>,

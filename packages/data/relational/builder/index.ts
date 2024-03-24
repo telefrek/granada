@@ -19,23 +19,23 @@ import type {
   Query,
 } from "../../query/index"
 import {
+  RelationalNodeType,
   type FilterGroup,
   type FilterTypes,
+  type JoinType,
   type NamedRowGenerator,
   type ParameterNode,
+  type RelationalNodeProvider,
   type RelationalQueryNode,
+  type TableAlias,
 } from "../ast"
 import {
-  RelationalNodeType,
   type ArrayItemType,
   type ArrayProperty,
-  type JoinType,
   type MatchingProperty,
   type MergedNonOverlappingType,
   type ModifiedStore,
   type PropertyOfType,
-  type RelationalNodeProvider,
-  type TableAlias,
 } from "../types"
 import {
   DefaultParameterizedRelationalNodeBuilder,

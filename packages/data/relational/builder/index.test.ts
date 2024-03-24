@@ -1,10 +1,9 @@
-import { useDataStore, useParameterizedStore } from "."
+import { useDataStore } from "."
 import {
   InMemoryQueryExecutor,
   InMemoryRelationalQueryBuilder,
-  ParameterizedInMemoryRelationalQueryBuilder,
   type InMemoryRelationalDataStore,
-} from "../memory/memory"
+} from "../memory/builder"
 
 enum Category {
   TEST,
@@ -479,25 +478,6 @@ describe("Relational query builder should support basic functionality", () => {
 
       expect(result.rows[2].orderId).toBe(3)
       expect(result.rows[2].lastName).toBe("two")
-    }
-  })
-})
-
-describe("Parameterized builders should have the same capablities but additional type information", () => {
-  it("should allow a basic where clause using the parameters", async () => {
-    const result = await executor.run(
-      useParameterizedStore<TestDataStore, { n: string }>()
-        .select("orders")
-        .columns("*")
-        .where((clause) => clause.eq("name", "n"))
-        .build(ParameterizedInMemoryRelationalQueryBuilder, "testQuery")
-        .bind({ n: "record1" }),
-    )
-
-    expect(Array.isArray(result.rows)).toBeTruthy()
-    if (Array.isArray(result.rows)) {
-      expect(result.rows.length).toBe(1)
-      expect(result.rows[0].id).toBe(1)
     }
   })
 })

@@ -2,7 +2,6 @@
  * Type helpers for Relational Queries
  */
 
-import type { RelationalQueryNode } from "./ast"
 import type { RelationalDataStore, RelationalDataTable } from "./index"
 
 /**
@@ -31,79 +30,6 @@ export interface ModifiedStore<
       ? Left["tables"][key]
       : RowType
   }
-}
-
-/**
- * The valid set of join types supported
- */
-export enum JoinType {
-  INNER = "inner",
-  LEFT = "left",
-  RIGHT = "right",
-  FULL = "full",
-}
-
-/**
- * Represents different types of column ifltring operations
- */
-export enum ColumnFilteringOperation {
-  EQ = "=",
-  LT = "<",
-  GT = ">",
-  LTE = "<=",
-  GTE = ">=",
-}
-
-/**
- * Represents differernt type of column containment operations
- */
-export enum ColumnValueContainsOperation {
-  IN = "in",
-}
-
-/**
- * Represents different boolean operations available
- */
-export enum BooleanOperation {
-  AND = "and",
-  OR = "or",
-  NOT = "not",
-}
-
-/**
- * Custom type to map records of RelationalDataStore keys
- */
-export type TableAlias = Record<
-  keyof RelationalDataStore["tables"],
-  keyof RelationalDataStore["tables"]
->
-
-/**
- * A provider that returns relational query nodes
- */
-export interface RelationalNodeProvider<
-  NodeType extends
-    RelationalQueryNode<RelationalNodeType> = RelationalQueryNode<RelationalNodeType>,
-> {
-  asNode(): NodeType
-}
-
-/**
- * The supported types a {@link RelationalQueryNode} can have
- */
-export enum RelationalNodeType {
-  TABLE = "table",
-  WHERE = "where",
-  CTE = "cte",
-  JOIN = "join",
-  ON = "on",
-  ALIAS = "alias",
-  PARAMETER = "parameter",
-  SELECT = "select",
-  INSERT = "insert",
-  UPDATE = "update",
-  MERGE = "merge",
-  DELETE = "delete",
 }
 
 /**

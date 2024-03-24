@@ -5,6 +5,7 @@
 import type { QueryNode } from "@telefrek/data/query/ast"
 import { QueryError } from "@telefrek/data/query/error"
 import { ExecutionMode, Query } from "@telefrek/data/query/index"
+import type { RelationalNodeType } from "@telefrek/data/relational/ast"
 import {
   IsArrayFilter,
   isColumnFilter,
@@ -36,7 +37,6 @@ import type {
   RelationalDataStore,
   RelationalDataTable,
 } from "@telefrek/data/relational/index"
-import type { RelationalNodeType } from "@telefrek/data/relational/types"
 import type {
   PostgresColumnType,
   PostgresColumnTypes,

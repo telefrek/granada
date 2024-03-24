@@ -6,7 +6,12 @@ import type {
   Query,
 } from "../../query/index"
 import {
+  BooleanOperation,
+  ColumnFilteringOperation,
+  ColumnValueContainsOperation,
   ContainmentObjectType,
+  JoinType,
+  RelationalNodeType,
   isFilter,
   type ColumnAlias,
   type CteClause,
@@ -17,6 +22,7 @@ import {
   type NamedRowGenerator,
   type RelationalQueryNode,
   type SelectClause,
+  type TableAlias,
   type TableQueryNode,
   type WhereClause,
 } from "../ast"
@@ -27,18 +33,12 @@ import type {
   STAR,
 } from "../index"
 import {
-  BooleanOperation,
-  ColumnFilteringOperation,
-  ColumnValueContainsOperation,
-  JoinType,
-  RelationalNodeType,
   type ArrayItemType,
   type ArrayProperty,
   type MatchingProperty,
   type MergedNonOverlappingType,
   type ModifiedStore,
   type PropertyOfType,
-  type TableAlias,
 } from "../types"
 import {
   RelationalNodeBuilder,
