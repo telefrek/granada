@@ -314,11 +314,8 @@ class InternalTableBuilder<
   private queryType: Q
 
   private selectClause?: SelectClause
-  private whereClause?: WhereClause<D["tables"][T]>
-  private columnAlias?: ColumnAlias<
-    D["tables"][T],
-    keyof D["tables"][T] & string
-  >[]
+  private whereClause?: WhereClause
+  private columnAlias?: ColumnAlias[]
   private parent?: RelationalQueryNode<RelationalNodeType>
 
   constructor(
@@ -333,8 +330,8 @@ class InternalTableBuilder<
     queryType: Q,
     tableAlias?: keyof D["tables"],
     selectClause?: SelectClause,
-    whereClause?: WhereClause<D["tables"][T]>,
-    columnAlias?: ColumnAlias<D["tables"][T], keyof D["tables"][T] & string>[],
+    whereClause?: WhereClause,
+    columnAlias?: ColumnAlias[],
     parent?: RelationalQueryNode<RelationalNodeType>,
   ) {
     this.tableName = tableName
@@ -537,7 +534,7 @@ class InternalWhereClauseBuilder<
     value: [P] extends [never] ? T[C] : PropertyOfType<P, T[C]>,
   ): WhereClauseBuilder<T, Q, P> {
     return new InternalWhereClauseBuilder(this.queryType, {
-      column,
+      column: column as string,
       op: ColumnFilteringOperation.EQ,
       value:
         this.queryType === QueryType.PARAMETERIZED
@@ -550,7 +547,7 @@ class InternalWhereClauseBuilder<
     value: [P] extends [never] ? T[C] : PropertyOfType<P, T[C]>,
   ): WhereClauseBuilder<T, Q, P> {
     return new InternalWhereClauseBuilder(this.queryType, {
-      column,
+      column: column as string,
       op: ColumnFilteringOperation.GT,
       value:
         this.queryType === QueryType.PARAMETERIZED
@@ -563,7 +560,7 @@ class InternalWhereClauseBuilder<
     value: [P] extends [never] ? T[C] : PropertyOfType<P, T[C]>,
   ): WhereClauseBuilder<T, Q, P> {
     return new InternalWhereClauseBuilder(this.queryType, {
-      column,
+      column: column as string,
       op: ColumnFilteringOperation.GTE,
       value:
         this.queryType === QueryType.PARAMETERIZED
@@ -576,7 +573,7 @@ class InternalWhereClauseBuilder<
     value: [P] extends [never] ? T[C] : PropertyOfType<P, T[C]>,
   ): WhereClauseBuilder<T, Q, P> {
     return new InternalWhereClauseBuilder(this.queryType, {
-      column,
+      column: column as string,
       op: ColumnFilteringOperation.LT,
       value:
         this.queryType === QueryType.PARAMETERIZED
@@ -589,7 +586,7 @@ class InternalWhereClauseBuilder<
     value: [P] extends [never] ? T[C] : PropertyOfType<P, T[C]>,
   ): WhereClauseBuilder<T, Q, P> {
     return new InternalWhereClauseBuilder(this.queryType, {
-      column,
+      column: column as string,
       op: ColumnFilteringOperation.LTE,
       value:
         this.queryType === QueryType.PARAMETERIZED
@@ -620,7 +617,7 @@ class InternalWhereClauseBuilder<
     value: [P] extends [never] ? T[C] : PropertyOfType<P, T[C]>,
   ): WhereClauseBuilder<T, Q, P> {
     return new InternalWhereClauseBuilder(this.queryType, {
-      column,
+      column: column as string,
       type: ContainmentObjectType.STRING,
       op: ColumnValueContainsOperation.IN,
       value:
@@ -639,7 +636,7 @@ class InternalWhereClauseBuilder<
     return new InternalWhereClauseBuilder(this.queryType, {
       op: ColumnValueContainsOperation.IN,
       type: ContainmentObjectType.ARRAY,
-      column,
+      column: column as string,
       value:
         this.queryType === QueryType.PARAMETERIZED
           ? { nodeType: RelationalNodeType.PARAMETER, name: value as string }
@@ -651,10 +648,10 @@ class InternalWhereClauseBuilder<
     })
   }
 
-  current?: FilterGroup<T> | FilterTypes<T>
+  current?: FilterGroup | FilterTypes
   queryType: Q
 
-  constructor(queryType: Q, current?: FilterGroup<T> | FilterTypes<T>) {
+  constructor(queryType: Q, current?: FilterGroup | FilterTypes) {
     this.queryType = queryType
     this.current = current
   }

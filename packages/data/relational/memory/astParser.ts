@@ -2,7 +2,6 @@
  * Contains the logic for parsing an {@link RelationalQueryNode} AST into a set of in memory operations
  */
 
-import type { ArrayItemType, ArrayProperty } from "@telefrek/core/type/utils"
 import { QueryError } from "../../query/error"
 import type { QueryParameters } from "../../query/index"
 import {
@@ -39,7 +38,6 @@ import type {
   RelationalDataStore,
   RelationalDataTable,
 } from "../../relational/index"
-import { type PropertyOfType } from "../../relational/types"
 import type { InMemoryRelationalDataStore } from "./builder"
 
 export function materializeNode<RowType extends RelationalDataTable>(
@@ -318,7 +316,7 @@ function buildJoinFilter<
 }
 
 function buildFilter<ParameterType extends QueryParameters = never>(
-  clause: FilterGroup<RelationalDataTable> | FilterTypes<RelationalDataTable>,
+  clause: FilterGroup | FilterTypes,
   parameters?: ParameterType,
 ): (input: RelationalDataTable) => boolean {
   if (isFilterGroup(clause)) {
@@ -348,11 +346,7 @@ function buildFilter<ParameterType extends QueryParameters = never>(
 }
 
 function buildArrayFilter<ParameterType extends QueryParameters = never>(
-  columnFilter: ArrayFilter<
-    RelationalDataTable,
-    ArrayProperty<RelationalDataTable>,
-    ArrayItemType<RelationalDataTable, ArrayProperty<RelationalDataTable>>
-  >,
+  columnFilter: ArrayFilter,
   parameters?: ParameterType,
 ): (input: RelationalDataTable) => boolean {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
@@ -375,10 +369,7 @@ function buildArrayFilter<ParameterType extends QueryParameters = never>(
 }
 
 function buildStringFilter<ParameterType extends QueryParameters = never>(
-  columnFilter: StringFilter<
-    RelationalDataTable,
-    PropertyOfType<RelationalDataTable, string>
-  >,
+  columnFilter: StringFilter,
   parameters?: ParameterType,
 ): (input: RelationalDataTable) => boolean {
   const value = isParameterNode(columnFilter.value)
@@ -395,7 +386,7 @@ function buildStringFilter<ParameterType extends QueryParameters = never>(
 }
 
 function buildColumnFilter<ParameterType extends QueryParameters = never>(
-  columnFilter: ColumnFilter<RelationalDataTable, keyof RelationalDataTable>,
+  columnFilter: ColumnFilter,
   parameters?: ParameterType,
 ): (input: RelationalDataTable) => boolean {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any

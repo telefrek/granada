@@ -21,7 +21,6 @@ import {
   type TableQueryNode,
   type WhereClause,
 } from "./ast"
-import type { RelationalDataStore, RelationalDataTable } from "./index"
 
 type RNode = RelationalQueryNode<RelationalNodeType>
 
@@ -102,18 +101,15 @@ abstract class RelationalASTNodeManager<NodeType extends RNode> {
  * Helper class for manipulating {@link TableQueryNode}
  */
 export class TableNodeManager extends RelationalASTNodeManager<TableQueryNode> {
-  get tableName(): keyof RelationalDataStore["tables"] {
+  get tableName(): string {
     return this.node.tableName
   }
 
-  get tableAlias(): keyof RelationalDataStore["tables"] | undefined {
+  get tableAlias(): string | undefined {
     return this.node.alias
   }
 
-  get columnAlias(): ColumnAlias<
-    RelationalDataTable,
-    keyof RelationalDataTable
-  >[] {
+  get columnAlias(): ColumnAlias[] {
     return this.node.children?.filter(isColumnAlias) ?? []
   }
 
@@ -127,7 +123,7 @@ export class TableNodeManager extends RelationalASTNodeManager<TableQueryNode> {
   /**
    * Get the {@link WhereClause} if present
    */
-  get where(): WhereClause<RelationalDataTable> | undefined {
+  get where(): WhereClause | undefined {
     return this.node.children?.filter(isWhereClause).at(0)
   }
 }

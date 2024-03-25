@@ -236,6 +236,6 @@ export interface WhereClauseBuilder<
       : PropertyOfType<P, T[C]>,
   ): WhereClauseBuilder<T, Q, P>
 
-  current?: FilterGroup<T> | FilterTypes<T>
+  current?: FilterGroup | FilterTypes
   queryType: Q
 }
