@@ -4,6 +4,9 @@
 
 import { Duration } from "@telefrek/core/time"
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type RowType = Record<string, any>
+
 /**
  * The set of supported execution modes
  */
@@ -16,7 +19,7 @@ export enum ExecutionMode {
  * Types of queries
  */
 export enum QueryType {
-  RAW = "raw",
+  SIMPLE = "simple",
   PARAMETERIZED = "parameterized",
   BOUND = "bound",
 }
@@ -27,32 +30,50 @@ export enum QueryType {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type QueryParameters = Record<string, any>
 
-export type Query<
+/**
+ * Base type for all queries
+ */
+export type QueryBase<
   Q extends QueryType,
-  _T extends object,
-  _P extends QueryParameters,
+  R extends RowType,
+  P extends QueryParameters = never,
 > = {
   queryType: Q
   name: string
   mode: ExecutionMode
-}
-
-export type RawQuery<T extends object> = Query<QueryType.RAW, T, never>
-
-export type ParameterizedQuery<
-  T extends object,
-  P extends QueryParameters,
-> = Query<QueryType.PARAMETERIZED, T, P> & {
-  bind(parameters: P): BoundQuery<T, P>
-}
-
-export type BoundQuery<T extends object, P extends QueryParameters> = Query<
-  QueryType.BOUND,
-  T,
-  P
-> & {
   parameters: Readonly<P>
+  defaults?: Readonly<Partial<R>>
 }
+
+/**
+ * Represents a query that has no parameters or modifiers beyond the name, mode
+ * and potential defaults
+ */
+export type SimpleQuery<R extends RowType> = QueryBase<QueryType.SIMPLE, R>
+
+/**
+ * Represents a query that requires some additional parameters before it can
+ * function.  These types of queries should not be directly executable.
+ */
+export type ParameterizedQuery<
+  R extends RowType,
+  P extends QueryParameters,
+> = QueryBase<QueryType.PARAMETERIZED, R, P> & {
+  /**
+   *
+   * @param parameters The parameters to bind to the query
+   */
+  bind(parameters: P): BoundQuery<RowType, P>
+}
+
+/**
+ * Represents a query that has been bound to some parameters and is now ready
+ * for execution.
+ */
+export type BoundQuery<
+  R extends RowType,
+  P extends QueryParameters,
+> = QueryBase<QueryType.BOUND, R, P>
 
 /**
  * Represents an object that is capable of executing a query
@@ -60,26 +81,27 @@ export type BoundQuery<T extends object, P extends QueryParameters> = Query<
 export interface QueryExecutor {
   /**
    * Runs the given query and produces a result
-   * @param query The {@link Query} to run
+   *
+   * @param query The {@link SimpleQuery} or {@link BoundQuery} to run
    *
    * @returns Either a {@link QueryResult} or {@link StreamingQueryResult}
    */
-  run<T extends object>(
-    query: Query<QueryType, T, never>,
+  run<T extends object, P extends QueryParameters>(
+    query: SimpleQuery<T> | BoundQuery<T, P>,
   ): Promise<QueryResult<T> | StreamingQueryResult<T>>
 }
 
 /**
- * Represents the result of executing a {@link Query}
+ * Represents the result of executing a {@link QueryBase}
  */
 export interface QueryResult<T extends object> {
-  query: Query<QueryType, T, never>
+  query: QueryBase<QueryType, T, never>
   rows: T[]
   duration: Duration
 }
 
 /**
- * Represents the result of executing a {@link Query} where values are provided
+ * Represents the result of executing a {@link QueryBase} where values are provided
  * incrmentally
  */
 export interface StreamingQueryResult<T extends object>

@@ -3,18 +3,20 @@
  */
 
 import { Duration } from "@telefrek/core/time/index"
+import type { QueryBuilder } from "../../relational/builder/index"
 import type { RelationalDataStore, RelationalDataTable } from ".."
 import {
   ExecutionMode,
   QueryParameters,
-  type Query,
+  type BoundQuery,
   type QueryExecutor,
   type QueryResult,
   type QueryType,
+  type SimpleQuery,
   type StreamingQueryResult,
 } from "../../query"
+import { getTreeRoot } from "../../relational/helpers"
 import { type RelationalNodeType, type RelationalQueryNode } from "../ast"
-import { getTreeRoot } from "../helpers"
 import { materializeNode } from "./astParser"
 
 /**
@@ -51,8 +53,8 @@ export class InMemoryQueryExecutor<DataStoreType extends RelationalDataStore>
     this.store = inMemoryStore ?? createInMemoryStore()
   }
 
-  run<RowType extends object>(
-    query: Query<QueryType, RowType, never>,
+  run<RowType extends object, P extends QueryParameters>(
+    query: SimpleQuery<RowType> | BoundQuery<RowType, P>,
   ): Promise<QueryResult<RowType> | StreamingQueryResult<RowType>> {
     if ("source" in query && typeof query.source === "function") {
       const res = query.source(this.store, query)
@@ -78,12 +80,14 @@ type InMemQ<
   D extends RelationalDataStore,
   Q extends QueryType,
   R extends RelationalDataTable,
-> = Q extends QueryType.RAW
+  P extends QueryParameters,
+> = Q extends QueryType.SIMPLE
   ? {
       queryType: Q
       name: string
       mode: ExecutionMode
       source: InMemoryQuerySourceMaterializer<D, R>
+      parameters: P
     }
   : Q extends QueryType.PARAMETERIZED
     ? {
@@ -91,26 +95,31 @@ type InMemQ<
         name: string
         mode: ExecutionMode
         source: InMemoryQuerySourceMaterializer<D, R>
+        parameters: P
       }
     : never
 
-export const InMemoryRelationalQueryBuilder1 = <
+export function createMemoryBuilder<
   D extends RelationalDataStore,
   Q extends QueryType,
   R extends RelationalDataTable,
-  P extends QueryParameters = never,
->(
-  node: RelationalQueryNode<RelationalNodeType>,
-  q: Q,
-  name: string,
-  mode: ExecutionMode = ExecutionMode.Normal,
-): Query<Q, R, P> => {
-  return {
-    queryType: q,
-    source: (store) => {
-      return materializeNode<R>(getTreeRoot(node), store)
-    },
-    name,
-    mode,
-  } as InMemQ<D, Q, R>
+  P extends QueryParameters,
+>(): QueryBuilder<Q, R, P> {
+  return (
+    node: RelationalQueryNode<RelationalNodeType>,
+    queryType: Q,
+    name: string,
+    mode: ExecutionMode,
+    parameters?: P,
+  ) => {
+    return {
+      queryType,
+      source: (store) => {
+        return materializeNode<R>(getTreeRoot(node), store)
+      },
+      name,
+      mode,
+      parameters,
+    } as InMemQ<D, Q, R, P>
+  }
 }

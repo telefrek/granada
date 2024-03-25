@@ -3,7 +3,7 @@ import {
   ExecutionMode,
   QueryParameters,
   QueryType,
-  type Query,
+  type QueryBase,
 } from "../../query/index"
 import {
   BooleanOperation,
@@ -111,7 +111,7 @@ export class DefaultRelationalNodeBuilder<
 
   withCte<Alias extends string, TT extends RelationalDataTable>(
     alias: Alias,
-    source: RelationalProcessorBuilder<D, Q, TT, P, A>,
+    source: RelationalProcessorBuilder<D, Q, R, P, A, TT>,
   ): RelationalNodeBuilder<ModifiedStore<D, Alias, TT>, Q, R, P, A | Alias> {
     // Get the row generator
     const generator = source(this).asNode()
@@ -171,7 +171,7 @@ export class DefaultRelationalNodeBuilder<
     _builder: QueryBuilder<Q, R, P>,
     _name: string,
     _mode: ExecutionMode = ExecutionMode.Normal,
-  ): Query<Q, R, P> {
+  ): QueryBase<Q, R, P> {
     throw new Error(
       "Relation Node Builders cannot themselves provide an AST to build",
     )
@@ -286,9 +286,10 @@ class InternalJoinBuilder<
   build(
     builder: QueryBuilder<Q, R, P>,
     name: string,
-    mode?: ExecutionMode | undefined,
-  ): Query<Q, R, P> {
-    return builder(this.asNode(), this.queryType, name, mode)
+    mode: ExecutionMode = ExecutionMode.Normal,
+    parameters?: P,
+  ): QueryBase<Q, R, P> {
+    return builder(this.asNode(), this.queryType, name, mode, parameters)
   }
 }
 
@@ -313,7 +314,10 @@ class InternalTableBuilder<
 
   private selectClause?: SelectClause
   private whereClause?: WhereClause<D["tables"][T]>
-  private columnAlias?: ColumnAlias<D["tables"][T], keyof D["tables"][T]>[]
+  private columnAlias?: ColumnAlias<
+    D["tables"][T],
+    keyof D["tables"][T] & string
+  >[]
   private parent?: RelationalQueryNode<RelationalNodeType>
 
   constructor(
@@ -329,7 +333,7 @@ class InternalTableBuilder<
     tableAlias?: keyof D["tables"],
     selectClause?: SelectClause,
     whereClause?: WhereClause<D["tables"][T]>,
-    columnAlias?: ColumnAlias<D["tables"][T], keyof D["tables"][T]>[],
+    columnAlias?: ColumnAlias<D["tables"][T], keyof D["tables"][T] & string>[],
     parent?: RelationalQueryNode<RelationalNodeType>,
   ) {
     this.tableName = tableName
@@ -381,10 +385,7 @@ class InternalTableBuilder<
     )
   }
 
-  join<
-    JT extends Extract<keyof D["tables"], string>,
-    JR extends RelationalDataTable,
-  >(
+  join<JT extends keyof D["tables"], JR extends RelationalDataTable>(
     joinTable: JT,
     tableGenerator: TableGenerator<D, JT, JR, P, Q>,
     leftColumn: keyof D["tables"][T],
@@ -420,7 +421,7 @@ class InternalTableBuilder<
   }
 
   withColumnAlias<
-    C extends keyof R & keyof D["tables"][T],
+    C extends keyof R & keyof D["tables"][T] & string,
     Alias extends string,
   >(
     column: C,
@@ -445,7 +446,9 @@ class InternalTableBuilder<
       builder: WhereClauseBuilder<D["tables"][T], Q, P>,
     ) => WhereClauseBuilder<D["tables"][T], Q, P>,
   ): Omit<TableNodeBuilder<D, T, R, P, Q>, "where"> {
-    const filter = clause(new InternalWhereNodeBuilder(this.queryType)).current
+    const filter = clause(
+      new InternalWhereClauseBuilder(this.queryType),
+    ).current
 
     return new InternalTableBuilder(
       this.tableName,
@@ -516,13 +519,14 @@ class InternalTableBuilder<
   build(
     builder: QueryBuilder<Q, R, P>,
     name: string,
-    mode?: ExecutionMode | undefined,
-  ): Query<Q, R, P> {
-    return builder(this.asNode(), this.queryType, name, mode)
+    mode: ExecutionMode,
+    parameters: P,
+  ): QueryBase<Q, R, P> {
+    return builder(this.asNode(), this.queryType, name, mode, parameters)
   }
 }
 
-class InternalWhereNodeBuilder<
+class InternalWhereClauseBuilder<
   T extends RelationalDataTable,
   Q extends QueryType,
   P extends QueryParameters,
@@ -532,7 +536,7 @@ class InternalWhereNodeBuilder<
     column: C,
     value: [P] extends [never] ? T[C] : PropertyOfType<P, T[C]>,
   ): WhereClauseBuilder<T, Q, P> {
-    return new InternalWhereNodeBuilder(this.queryType, {
+    return new InternalWhereClauseBuilder(this.queryType, {
       column,
       op: ColumnFilteringOperation.EQ,
       value:
@@ -545,7 +549,7 @@ class InternalWhereNodeBuilder<
     column: C,
     value: [P] extends [never] ? T[C] : PropertyOfType<P, T[C]>,
   ): WhereClauseBuilder<T, Q, P> {
-    return new InternalWhereNodeBuilder(this.queryType, {
+    return new InternalWhereClauseBuilder(this.queryType, {
       column,
       op: ColumnFilteringOperation.GT,
       value:
@@ -558,7 +562,7 @@ class InternalWhereNodeBuilder<
     column: C,
     value: [P] extends [never] ? T[C] : PropertyOfType<P, T[C]>,
   ): WhereClauseBuilder<T, Q, P> {
-    return new InternalWhereNodeBuilder(this.queryType, {
+    return new InternalWhereClauseBuilder(this.queryType, {
       column,
       op: ColumnFilteringOperation.GTE,
       value:
@@ -571,7 +575,7 @@ class InternalWhereNodeBuilder<
     column: C,
     value: [P] extends [never] ? T[C] : PropertyOfType<P, T[C]>,
   ): WhereClauseBuilder<T, Q, P> {
-    return new InternalWhereNodeBuilder(this.queryType, {
+    return new InternalWhereClauseBuilder(this.queryType, {
       column,
       op: ColumnFilteringOperation.LT,
       value:
@@ -584,7 +588,7 @@ class InternalWhereNodeBuilder<
     column: C,
     value: [P] extends [never] ? T[C] : PropertyOfType<P, T[C]>,
   ): WhereClauseBuilder<T, Q, P> {
-    return new InternalWhereNodeBuilder(this.queryType, {
+    return new InternalWhereClauseBuilder(this.queryType, {
       column,
       op: ColumnFilteringOperation.LTE,
       value:
@@ -594,19 +598,19 @@ class InternalWhereNodeBuilder<
     })
   }
   and(...clauses: WhereClauseBuilder<T, Q, P>[]): WhereClauseBuilder<T, Q, P> {
-    return new InternalWhereNodeBuilder(this.queryType, {
+    return new InternalWhereClauseBuilder(this.queryType, {
       filters: clauses.map((c) => c.current).filter(isFilter),
       op: BooleanOperation.AND,
     })
   }
   or(...clauses: WhereClauseBuilder<T, Q, P>[]): WhereClauseBuilder<T, Q, P> {
-    return new InternalWhereNodeBuilder(this.queryType, {
+    return new InternalWhereClauseBuilder(this.queryType, {
       filters: clauses.map((c) => c.current).filter(isFilter),
       op: BooleanOperation.OR,
     })
   }
   not(...clauses: WhereClauseBuilder<T, Q, P>[]): WhereClauseBuilder<T, Q, P> {
-    return new InternalWhereNodeBuilder(this.queryType, {
+    return new InternalWhereClauseBuilder(this.queryType, {
       filters: clauses.map((c) => c.current).filter(isFilter),
       op: BooleanOperation.NOT,
     })
@@ -615,7 +619,7 @@ class InternalWhereNodeBuilder<
     column: C,
     value: [P] extends [never] ? T[C] : PropertyOfType<P, T[C]>,
   ): WhereClauseBuilder<T, Q, P> {
-    return new InternalWhereNodeBuilder(this.queryType, {
+    return new InternalWhereClauseBuilder(this.queryType, {
       column,
       type: ContainmentObjectType.STRING,
       op: ColumnValueContainsOperation.IN,
@@ -625,22 +629,43 @@ class InternalWhereNodeBuilder<
           : (value as T[C]),
     })
   }
+
   containsItems<C extends ArrayProperty<T>, CV extends ArrayItemType<T, C>>(
     column: C,
-    values: CV[] | ([P] extends [never] ? T[C] : PropertyOfType<P, T[C]>),
+    value: CV | ([P] extends [never] ? T[C] : PropertyOfType<P, T[C]>),
+  ): WhereClauseBuilder<T, Q, P>
+  containsItems<C extends ArrayProperty<T>, CV extends ArrayItemType<T, C>>(
+    column: C,
+    ...values: ([P] extends [never] ? CV : never)[]
+  ): WhereClauseBuilder<T, Q, P>
+  containsItems<C extends ArrayProperty<T>, CV extends ArrayItemType<T, C>>(
+    column: C,
+    value?: CV | ([P] extends [never] ? T[C] : PropertyOfType<P, T[C]>),
+    ...rest: ([P] extends [never] ? CV : never)[]
   ): WhereClauseBuilder<T, Q, P> {
-    return new InternalWhereNodeBuilder(this.queryType, {
+    if (rest && rest.length > 0) {
+      return new InternalWhereClauseBuilder(this.queryType, {
+        column,
+        type: ContainmentObjectType.ARRAY,
+        op: ColumnValueContainsOperation.IN,
+        value: [value as CV].concat(rest),
+      })
+    } else if (this.queryType === QueryType.PARAMETERIZED) {
+      return new InternalWhereClauseBuilder(this.queryType, {
+        column,
+        type: ContainmentObjectType.ARRAY,
+        op: ColumnValueContainsOperation.IN,
+        value: {
+          nodeType: RelationalNodeType.PARAMETER,
+          name: value as string,
+        },
+      })
+    }
+    return new InternalWhereClauseBuilder(this.queryType, {
       column,
       type: ContainmentObjectType.ARRAY,
       op: ColumnValueContainsOperation.IN,
-      value:
-        this.queryType === QueryType.PARAMETERIZED
-          ? { nodeType: RelationalNodeType.PARAMETER, name: values as string }
-          : Array.isArray(values)
-            ? values.length === 1
-              ? values[0]
-              : values
-            : (values as T[C]),
+      value: value as CV,
     })
   }
 

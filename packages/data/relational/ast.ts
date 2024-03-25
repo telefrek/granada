@@ -211,7 +211,7 @@ export type SelectClause = RelationalQueryNode<RelationalNodeType.SELECT> & {
  */
 export type ColumnAlias<
   TableType extends RelationalDataTable,
-  Column extends keyof TableType,
+  Column extends keyof TableType & string,
 > = RelationalQueryNode<RelationalNodeType.ALIAS> & {
   column: Column
   alias: string

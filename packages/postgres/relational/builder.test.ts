@@ -1,5 +1,5 @@
 import {
-  PostgresQueryBuilder,
+  createPostgresQueryBuilder,
   createRelationalQueryContext,
   isPostgresRelationalQuery,
 } from "./builder"
@@ -13,8 +13,8 @@ describe("Postgres query syntax should be translated correctly", () => {
       .select("orders")
       .columns("id", "categories")
       .withColumnAlias("id", "orderId")
-      .where((clause) => clause.containsItems("categories", ["purchase"]))
-      .build(PostgresQueryBuilder, "testQuery")
+      .where((clause) => clause.containsItems("categories", "purchase"))
+      .build(createPostgresQueryBuilder(), "testQuery")
 
     if (isPostgresRelationalQuery(query)) {
       expect(query.queryText).toEqual(
@@ -42,7 +42,7 @@ describe("Postgres query syntax should be translated correctly", () => {
       )
       .select("customerOrders")
       .columns("*")
-      .build(PostgresQueryBuilder, "testQuery")
+      .build(createPostgresQueryBuilder(), "testQuery")
 
     if (isPostgresRelationalQuery(query)) {
       expect(query.queryText).toEqual(
@@ -61,7 +61,7 @@ describe("Postgres query syntax should be translated correctly", () => {
           .where((clause) =>
             clause.and(
               clause.gt("amount", 0),
-              clause.containsItems("categories", ["test"]),
+              clause.containsItems("categories", "test"),
             ),
           ),
       )
@@ -76,7 +76,7 @@ describe("Postgres query syntax should be translated correctly", () => {
         "customerId",
         "id",
       )
-      .build(PostgresQueryBuilder, "testQuery")
+      .build(createPostgresQueryBuilder(), "testQuery")
 
     if (isPostgresRelationalQuery(query)) {
       expect(query.queryText).toEqual(

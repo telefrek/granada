@@ -82,7 +82,7 @@ function isRowPointer<T>(row: T): row is RowPointer<T> {
   return typeof row === "object" && row !== null && ORIGINAL in row
 }
 
-function makePointer<T>(row: T): RowPointer<T> {
+function makePointer<T extends object>(row: T): RowPointer<T> {
   return isRowPointer(row)
     ? row
     : {

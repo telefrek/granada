@@ -6,10 +6,11 @@ import { Timer } from "@telefrek/core/time/index"
 import { makeCaseInsensitive } from "@telefrek/core/type/utils"
 import { QueryError } from "@telefrek/data/query/error"
 import type {
-  Query,
+  BoundQuery,
   QueryExecutor,
+  QueryParameters,
   QueryResult,
-  QueryType,
+  SimpleQuery,
   StreamingQueryResult,
 } from "@telefrek/data/query/index"
 import pg from "pg"
@@ -22,8 +23,8 @@ export class PostgresQueryExecutor implements QueryExecutor {
     this.#client = client
   }
 
-  async run<T extends object>(
-    query: Query<QueryType, T, never>,
+  async run<T extends object, P extends QueryParameters>(
+    query: SimpleQuery<T> | BoundQuery<T, P>,
   ): Promise<QueryResult<T> | StreamingQueryResult<T>> {
     if (isPostgresRelationalQuery(query)) {
       const timer = new Timer()

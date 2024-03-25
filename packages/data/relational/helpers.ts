@@ -4,6 +4,7 @@
 
 import { getDebugInfo } from "@telefrek/core"
 import {
+  RelationalNodeType,
   isColumnAlias,
   isGenerator,
   isJoinClauseNode,
@@ -19,7 +20,6 @@ import {
   type SelectClause,
   type TableQueryNode,
   type WhereClause,
-  RelationalNodeType,
 } from "./ast"
 import type { RelationalDataStore, RelationalDataTable } from "./index"
 

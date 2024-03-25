@@ -2,17 +2,17 @@
  * Defines error handling for queries
  */
 
-import type { Query, QueryType } from "."
+import type { QueryBase, QueryType } from "."
 
 /**
  * Extension of {@link ErrorOptions} for query execution
  */
 interface QueryErrorOptions extends ErrorOptions {
-  query?: Query<QueryType, object, never>
+  query?: QueryBase<QueryType, object, never>
 }
 
 /**
- * Represents an error that occured during {@link Query} operations
+ * Represents an error that occured during {@link QueryBase} operations
  */
 export class QueryError extends Error {
   options?: QueryErrorOptions

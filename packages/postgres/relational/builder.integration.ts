@@ -3,7 +3,10 @@ import {
   StartedPostgreSqlContainer,
 } from "@testcontainers/postgresql"
 import pg from "pg"
-import { PostgresQueryBuilder, createRelationalQueryContext } from "./builder"
+import {
+  createPostgresQueryBuilder,
+  createRelationalQueryContext,
+} from "./builder"
 import { PostgresQueryExecutor } from "./executor"
 import { createTestDatabase, type TestDatabase } from "./testUtils"
 
@@ -53,7 +56,7 @@ describe("Postgres should be able to execute queries", () => {
           .where((clause) =>
             clause.and(
               clause.gt("amount", 0),
-              clause.containsItems("categories", ["test"]),
+              clause.containsItems("categories", "test"),
             ),
           ),
       )
@@ -68,7 +71,7 @@ describe("Postgres should be able to execute queries", () => {
         "customerId",
         "id",
       )
-      .build(PostgresQueryBuilder, "testQuery")
+      .build(createPostgresQueryBuilder(), "testQuery")
 
     const result = await executor?.run(query)
     expect(result).not.toBeUndefined()
