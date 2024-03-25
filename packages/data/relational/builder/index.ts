@@ -6,9 +6,10 @@ import type { AliasedType } from "@telefrek/core/type/utils.js"
 import type { RelationalDataStore, RelationalDataTable, STAR } from ".."
 import {
   ExecutionMode,
-  QueryBase,
   QueryParameters,
   QueryType,
+  type ParameterizedQuery,
+  type SimpleQuery,
 } from "../../query/index"
 import {
   RelationalNodeType,
@@ -32,8 +33,10 @@ export function useDataStore<
   return new DefaultRelationalNodeBuilder(QueryType.SIMPLE)
 }
 
+export type SupportedQueryTypes = QueryType.SIMPLE | QueryType.PARAMETERIZED
+
 export type QueryBuilder<
-  Q extends QueryType,
+  Q extends SupportedQueryTypes,
   T extends RelationalDataTable,
   P extends QueryParameters,
 > = (
@@ -41,12 +44,11 @@ export type QueryBuilder<
   queryType: Q,
   name: string,
   mode: ExecutionMode,
-  parameters?: P,
-) => QueryBase<Q, T, P>
+) => [P] extends [never] ? SimpleQuery<T> : ParameterizedQuery<T, P>
 
 interface RelationalNodeProcessor<
   D extends RelationalDataStore,
-  Q extends QueryType,
+  Q extends SupportedQueryTypes,
   T extends RelationalDataTable,
   P extends QueryParameters,
 > {
@@ -59,12 +61,12 @@ interface RelationalNodeProcessor<
     name: string,
     mode?: ExecutionMode,
     parameters?: P,
-  ): QueryBase<Q, T, P>
+  ): [P] extends [never] ? SimpleQuery<T> : ParameterizedQuery<T, P>
 }
 
 export interface RelationalNodeBuilder<
   D extends RelationalDataStore,
-  Q extends QueryType = QueryType.SIMPLE,
+  Q extends SupportedQueryTypes = QueryType.SIMPLE,
   R extends RelationalDataTable = never,
   P extends QueryParameters = never,
   A extends keyof D["tables"] = never,
@@ -96,7 +98,7 @@ export interface RelationalNodeBuilder<
 
 export type RelationalProcessorBuilder<
   D extends RelationalDataStore,
-  Q extends QueryType,
+  Q extends SupportedQueryTypes,
   T extends RelationalDataTable,
   P extends QueryParameters,
   A extends keyof D["tables"],
@@ -116,7 +118,7 @@ export type TableGenerator<
   T extends keyof D["tables"],
   R extends RelationalDataTable,
   P extends QueryParameters,
-  Q extends QueryType,
+  Q extends SupportedQueryTypes,
   TR extends RelationalDataTable = D["tables"][T],
 > = (
   from: TableNodeBuilder<D, T, TR, P, Q>,
@@ -127,7 +129,7 @@ export interface JoinNodeBuilder<
   T extends keyof D["tables"],
   R extends RelationalDataTable,
   P extends QueryParameters,
-  Q extends QueryType,
+  Q extends SupportedQueryTypes,
 > extends RelationalNodeProcessor<D, Q, R, P> {
   join<
     JT extends T & string,
@@ -147,7 +149,7 @@ export interface TableNodeBuilder<
   T extends keyof D["tables"],
   R extends RelationalDataTable,
   P extends QueryParameters,
-  Q extends QueryType,
+  Q extends SupportedQueryTypes,
 > extends RelationalNodeProcessor<D, Q, R, P> {
   tableName: T
   builder: RelationalNodeBuilder<
@@ -188,7 +190,7 @@ export interface TableNodeBuilder<
 
 export interface WhereClauseBuilder<
   T extends RelationalDataTable,
-  Q extends QueryType,
+  Q extends SupportedQueryTypes,
   P extends QueryParameters = never,
 > {
   eq<C extends keyof T>(
@@ -227,14 +229,11 @@ export interface WhereClauseBuilder<
     value: ParameterOrValue<T, C, P>,
   ): WhereClauseBuilder<T, Q, P>
 
-  containsItems<C extends ArrayProperty<T>, CV extends ArrayItemType<T, C>>(
+  containsItems<C extends ArrayProperty<T>>(
     column: C,
-    value: CV | ParameterOrValue<T, C, P>,
-  ): WhereClauseBuilder<T, Q, P>
-
-  containsItems<C extends ArrayProperty<T>, CV extends ArrayItemType<T, C>>(
-    column: C,
-    ...values: ([P] extends [never] ? CV : never)[]
+    value: [P] extends [never]
+      ? T[C] | ArrayItemType<T, C>
+      : PropertyOfType<P, T[C]>,
   ): WhereClauseBuilder<T, Q, P>
 
   current?: FilterGroup<T> | FilterTypes<T>

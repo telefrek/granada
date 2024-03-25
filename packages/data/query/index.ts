@@ -63,7 +63,7 @@ export type ParameterizedQuery<
    *
    * @param parameters The parameters to bind to the query
    */
-  bind(parameters: P): BoundQuery<RowType, P>
+  bind: (parameters: P) => BoundQuery<RowType, P>
 }
 
 /**
@@ -86,16 +86,16 @@ export interface QueryExecutor {
    *
    * @returns Either a {@link QueryResult} or {@link StreamingQueryResult}
    */
-  run<T extends object, P extends QueryParameters>(
+  run<T extends RowType, P extends QueryParameters>(
     query: SimpleQuery<T> | BoundQuery<T, P>,
-  ): Promise<QueryResult<T> | StreamingQueryResult<T>>
+  ): Promise<QueryResult<T, P> | StreamingQueryResult<T, P>>
 }
 
 /**
  * Represents the result of executing a {@link QueryBase}
  */
-export interface QueryResult<T extends object> {
-  query: QueryBase<QueryType, T, never>
+export interface QueryResult<T extends RowType, P extends QueryParameters> {
+  query: SimpleQuery<T> | BoundQuery<T, P>
   rows: T[]
   duration: Duration
 }
@@ -104,7 +104,9 @@ export interface QueryResult<T extends object> {
  * Represents the result of executing a {@link QueryBase} where values are provided
  * incrmentally
  */
-export interface StreamingQueryResult<T extends object>
-  extends Omit<QueryResult<T>, "rows"> {
+export interface StreamingQueryResult<
+  T extends RowType,
+  P extends QueryParameters,
+> extends Omit<QueryResult<T, P>, "rows"> {
   rows: AsyncIterable<T>
 }

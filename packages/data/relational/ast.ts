@@ -2,7 +2,7 @@
  * Extensions to the base query AST specific for relational data sources
  */
 
-import type { OptionalProperties } from "@telefrek/core/type/utils"
+import type { OptionalLiteralKeys } from "@telefrek/core/type/utils"
 import type { RelationalDataStore, RelationalDataTable, STAR } from "."
 import type { QueryNode } from "../query/ast"
 import {
@@ -149,7 +149,7 @@ export type StringFilter<
  */
 export interface NullColumnFilter<
   TableType extends RelationalDataTable,
-  Column extends keyof OptionalProperties<TableType>,
+  Column extends keyof OptionalLiteralKeys<TableType>,
 > {
   column: Column
 }
@@ -159,7 +159,7 @@ export interface NullColumnFilter<
  */
 export type FilterTypes<TableType extends RelationalDataTable> =
   | ColumnFilter<TableType, keyof TableType>
-  | NullColumnFilter<TableType, keyof OptionalProperties<TableType>>
+  | NullColumnFilter<TableType, keyof OptionalLiteralKeys<TableType>>
   | ArrayFilter<
       TableType,
       ArrayProperty<TableType>,

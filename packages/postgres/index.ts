@@ -34,43 +34,44 @@ export enum PostgresColumnTypeName {
   UUID = "uuid",
 }
 
+type EnumType = Record<string, string>
+
 /**
  * Represents an enum value
  */
-export type PostgresEnum<EnumType extends Record<string, string>> =
-  EnumType[keyof EnumType]
+export type PostgresEnum<E extends EnumType> = E[keyof E]
 
 /**
  * Represents an array of {@link PostgresColumnTypes}
  */
-export interface PostgresArray<
-  ItemType extends
-    | PostgresColumnTypeName
-    | PostgresEnum<Record<string, string>>,
-> {
-  itemType: ItemType
-}
+export type PostgresArray<
+  ItemType extends PostgresColumnTypeName | PostgresEnum<EnumType>,
+> = ItemType[]
 
 export type PostgresColumnTypes =
   | PostgresColumnTypeName
-  | PostgresArray<PostgresColumnTypeName | PostgresEnum<Record<string, string>>>
-  | PostgresEnum<Record<string, string>>
+  | PostgresArray<PostgresColumnTypeName | PostgresEnum<EnumType>>
+  | PostgresEnum<EnumType>
+
+export type GetPostgresArrayType<
+  T extends PostgresArray<PostgresColumnTypeName | PostgresEnum<EnumType>>,
+> = T extends (infer U)[] ? (U extends PostgresEnum<EnumType> ? U : U) : never
 
 export type PostgresColumnType<ColumnType extends PostgresColumnTypes> =
   ColumnType extends keyof PostgresColumnTypeMapping
     ? PostgresColumnTypeMapping[ColumnType]
-    : ColumnType extends PostgresArray<PostgresColumnTypeName>
-      ? ColumnType["itemType"] extends keyof PostgresColumnTypeMapping
-        ? PostgresColumnTypeMapping[ColumnType["itemType"]]
-        : ColumnType["itemType"] extends PostgresEnum<Record<string, string>>
-          ? ColumnType["itemType"][]
-          : never
-      : ColumnType extends PostgresEnum<Record<string, string>>
+    : ColumnType extends PostgresArray<
+          PostgresColumnTypeName | PostgresEnum<EnumType>
+        >
+      ? GetPostgresArrayType<ColumnType>[]
+      : ColumnType extends PostgresEnum<EnumType>
         ? ColumnType
         : never
 
+export type PostgresSchema = { [key: string]: PostgresColumnTypes | undefined }
+
 export interface PostgresTable {
-  schema: Record<string, PostgresColumnTypes | undefined>
+  schema: PostgresSchema
 }
 
 export interface PostgresDatabase {

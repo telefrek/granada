@@ -3,12 +3,18 @@ import {
   StartedPostgreSqlContainer,
 } from "@testcontainers/postgresql"
 import pg from "pg"
+import type { PostgresEnum } from "../"
 import {
+  createParameterizedContext,
   createPostgresQueryBuilder,
   createRelationalQueryContext,
 } from "./builder"
 import { PostgresQueryExecutor } from "./executor"
-import { createTestDatabase, type TestDatabase } from "./testUtils"
+import {
+  createTestDatabase,
+  type Category,
+  type TestDatabase,
+} from "./testUtils"
 
 describe("Postgres should be able to execute queries", () => {
   let postgresContainer: StartedPostgreSqlContainer | undefined
@@ -47,7 +53,10 @@ describe("Postgres should be able to execute queries", () => {
   })
 
   it("Should be able to issue a simple query", async () => {
-    const query = createRelationalQueryContext<TestDatabase>()
+    const query = createParameterizedContext<
+      TestDatabase,
+      { amount: number; categories: PostgresEnum<typeof Category>[] }
+    >()
       .withCte("customerOrders", (builder) =>
         builder
           .select("orders")
@@ -55,8 +64,8 @@ describe("Postgres should be able to execute queries", () => {
           .withColumnAlias("id", "orderId")
           .where((clause) =>
             clause.and(
-              clause.gt("amount", 0),
-              clause.containsItems("categories", "test"),
+              clause.gt("amount", "amount"),
+              clause.containsItems("categories", "categories"),
             ),
           ),
       )
@@ -73,11 +82,48 @@ describe("Postgres should be able to execute queries", () => {
       )
       .build(createPostgresQueryBuilder(), "testQuery")
 
-    const result = await executor?.run(query)
+    let result = await executor?.run(
+      query.bind({ amount: 0, categories: ["test"] }),
+    )
     expect(result).not.toBeUndefined()
 
     expect(Array.isArray(result?.rows))
-    const rows = Array.isArray(result?.rows) ? result.rows : []
+    let rows = Array.isArray(result?.rows) ? result.rows : []
+
+    expect(rows.length).toBe(0)
+
+    result = await executor?.run(
+      createRelationalQueryContext<TestDatabase>()
+        .withCte("customerOrders", (builder) =>
+          builder
+            .select("orders")
+            .columns("id", "customerId", "categories", "amount")
+            .withColumnAlias("id", "orderId")
+            .where((clause) =>
+              clause.and(
+                clause.gt("amount", 0),
+                clause.containsItems("categories", "test"),
+              ),
+            ),
+        )
+        .withCte("customerNames", (builder) =>
+          builder.select("customers").columns("id", "firstName", "lastName"),
+        )
+        .select("customerOrders")
+        .columns("orderId", "amount", "categories")
+        .join(
+          "customerNames",
+          (customerNames) => customerNames.columns("firstName", "lastName"),
+          "customerId",
+          "id",
+        )
+        .build(createPostgresQueryBuilder(), "testQuery"),
+    )
+
+    expect(result).not.toBeUndefined()
+
+    expect(Array.isArray(result?.rows))
+    rows = Array.isArray(result?.rows) ? result.rows : []
 
     expect(rows.length).toBe(0)
   })

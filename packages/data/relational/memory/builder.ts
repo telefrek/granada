@@ -3,18 +3,22 @@
  */
 
 import { Duration } from "@telefrek/core/time/index"
-import type { QueryBuilder } from "../../relational/builder/index"
 import type { RelationalDataStore, RelationalDataTable } from ".."
 import {
   ExecutionMode,
   QueryParameters,
   type BoundQuery,
+  type ParameterizedQuery,
   type QueryExecutor,
   type QueryResult,
-  type QueryType,
+  type RowType,
   type SimpleQuery,
   type StreamingQueryResult,
 } from "../../query"
+import type {
+  QueryBuilder,
+  SupportedQueryTypes,
+} from "../../relational/builder/index"
 import { getTreeRoot } from "../../relational/helpers"
 import { type RelationalNodeType, type RelationalQueryNode } from "../ast"
 import { materializeNode } from "./astParser"
@@ -53,15 +57,15 @@ export class InMemoryQueryExecutor<DataStoreType extends RelationalDataStore>
     this.store = inMemoryStore ?? createInMemoryStore()
   }
 
-  run<RowType extends object, P extends QueryParameters>(
-    query: SimpleQuery<RowType> | BoundQuery<RowType, P>,
-  ): Promise<QueryResult<RowType> | StreamingQueryResult<RowType>> {
+  run<R extends RowType, P extends QueryParameters>(
+    query: SimpleQuery<R> | BoundQuery<R, P>,
+  ): Promise<QueryResult<R, P> | StreamingQueryResult<R, P>> {
     if ("source" in query && typeof query.source === "function") {
       const res = query.source(this.store, query)
       return Promise.resolve({
         rows: res,
         duration: Duration.ZERO,
-      } as QueryResult<RowType>)
+      } as QueryResult<R, P>)
     }
 
     throw new Error("Method not implemented.")
@@ -78,30 +82,19 @@ type InMemoryQuerySourceMaterializer<
 
 type InMemQ<
   D extends RelationalDataStore,
-  Q extends QueryType,
   R extends RelationalDataTable,
   P extends QueryParameters,
-> = Q extends QueryType.SIMPLE
-  ? {
-      queryType: Q
-      name: string
-      mode: ExecutionMode
+> = [P] extends [never]
+  ? SimpleQuery<R> & {
       source: InMemoryQuerySourceMaterializer<D, R>
-      parameters: P
     }
-  : Q extends QueryType.PARAMETERIZED
-    ? {
-        queryType: Q
-        name: string
-        mode: ExecutionMode
-        source: InMemoryQuerySourceMaterializer<D, R>
-        parameters: P
-      }
-    : never
+  : ParameterizedQuery<R, P> & {
+      source: InMemoryQuerySourceMaterializer<D, R>
+    }
 
 export function createMemoryBuilder<
   D extends RelationalDataStore,
-  Q extends QueryType,
+  Q extends SupportedQueryTypes,
   R extends RelationalDataTable,
   P extends QueryParameters,
 >(): QueryBuilder<Q, R, P> {
@@ -111,7 +104,7 @@ export function createMemoryBuilder<
     name: string,
     mode: ExecutionMode,
     parameters?: P,
-  ) => {
+  ): [P] extends [never] ? SimpleQuery<R> : ParameterizedQuery<R, P> => {
     return {
       queryType,
       source: (store) => {
@@ -120,6 +113,6 @@ export function createMemoryBuilder<
       name,
       mode,
       parameters,
-    } as InMemQ<D, Q, R, P>
+    } as InMemQ<D, R, P>
   }
 }

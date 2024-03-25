@@ -2,12 +2,19 @@
  * Implementation of the @telefrek/data packages
  */
 
+import type {
+  OptionalLiteralKeys,
+  RequiredLiteralKeys,
+} from "@telefrek/core/type/utils"
 import { QueryError } from "@telefrek/data/query/error"
 import {
   ExecutionMode,
   QueryType,
-  type QueryBase,
+  type BoundQuery,
+  type ParameterizedQuery,
   type QueryParameters,
+  type RowType,
+  type SimpleQuery,
 } from "@telefrek/data/query/index"
 import type { RelationalNodeType } from "@telefrek/data/relational/ast"
 import {
@@ -16,6 +23,7 @@ import {
   isCteClause,
   isFilterGroup,
   isJoinQueryNode,
+  isParameterNode,
   isTableQueryNode,
   type CteClause,
   type FilterGroup,
@@ -27,6 +35,7 @@ import {
 import type {
   QueryBuilder,
   RelationalNodeBuilder,
+  SupportedQueryTypes,
 } from "@telefrek/data/relational/builder/index"
 import { DefaultRelationalNodeBuilder } from "@telefrek/data/relational/builder/internal"
 import {
@@ -44,20 +53,30 @@ import type {
   PostgresColumnType,
   PostgresColumnTypes,
   PostgresDatabase,
-  PostgresTable,
+  PostgresSchema,
 } from ".."
 
-export type PostgresTableRow<Table extends PostgresTable> = {
-  [column in keyof Table["schema"]]: Table["schema"][column] extends PostgresColumnTypes
-    ? PostgresColumnType<Table["schema"][column]>
-    : never
-}
+export type PostgresTableRow<
+  Schema extends PostgresSchema,
+  L = RequiredLiteralKeys<Schema>,
+  R = Required<Pick<Schema, keyof OptionalLiteralKeys<Schema>>>,
+> = {
+  [c in keyof L]: L[c] extends PostgresColumnTypes
+    ? PostgresColumnType<L[c]>
+    : c
+} & Partial<{
+  [c in keyof R]: R[c] extends PostgresColumnTypes
+    ? PostgresColumnType<R[c]>
+    : c
+}>
 
 export interface PostgresRelationalDataStore<
   Database extends PostgresDatabase,
 > {
   tables: {
-    [key in keyof Database["tables"]]: PostgresTableRow<Database["tables"][key]>
+    [key in keyof Database["tables"]]: PostgresTableRow<
+      Database["tables"][key]["schema"]
+    >
   }
 }
 
@@ -73,39 +92,63 @@ export function createRelationalQueryContext<
   >(QueryType.SIMPLE)
 }
 
+export function createParameterizedContext<
+  Database extends PostgresDatabase,
+  P extends QueryParameters,
+>(): RelationalNodeBuilder<
+  PostgresRelationalDataStore<Database>,
+  QueryType.PARAMETERIZED,
+  never,
+  P
+> {
+  return new DefaultRelationalNodeBuilder<
+    PostgresRelationalDataStore<Database>,
+    QueryType.PARAMETERIZED,
+    never,
+    P
+  >(QueryType.PARAMETERIZED)
+}
+
+type PostgresQuery = {
+  queryText: string
+  context: PostgresContext
+}
+
+type SimplePostgresQuery<R extends RowType> = PostgresQuery & SimpleQuery<R>
+
+type ParametizedPostgresQuery<
+  R extends RowType,
+  P extends QueryParameters,
+> = PostgresQuery & ParameterizedQuery<R, P>
+
+type BoundPostgresQuery<
+  R extends RowType,
+  P extends QueryParameters,
+> = PostgresQuery & BoundQuery<R, P>
+
 type PostgresRelationalQuery<
   Q extends QueryType,
-  _R extends RelationalDataTable,
+  R extends RowType,
   P extends QueryParameters,
-> = Q extends QueryType.SIMPLE
-  ? {
-      queryType: Q
-      name: string
-      mode: ExecutionMode
-      queryText: string
-      parameters: P
-    }
+> = [P] extends [never]
+  ? SimplePostgresQuery<R>
   : Q extends QueryType.PARAMETERIZED
-    ? {
-        queryType: Q
-        name: string
-        mode: ExecutionMode
-        queryText: string
-        parameters: P
-      }
-    : never
+    ? ParametizedPostgresQuery<R, P>
+    : Q extends QueryType.BOUND
+      ? BoundPostgresQuery<R, P>
+      : never
 
-export function isPostgresRelationalQuery<
-  RowType extends object,
-  P extends QueryParameters = never,
->(
-  query: QueryBase<QueryType, RowType, P>,
-): query is PostgresRelationalQuery<QueryType, RowType, P> {
-  return "queryText" in query && typeof query.queryText === "string"
+export function isPostgresQuery(query: unknown): query is PostgresQuery {
+  return (
+    typeof query === "object" &&
+    query !== null &&
+    "queryText" in query &&
+    typeof query.queryText === "string"
+  )
 }
 
 export function createPostgresQueryBuilder<
-  Q extends QueryType,
+  Q extends SupportedQueryTypes,
   R extends RelationalDataTable,
   P extends QueryParameters,
 >(): QueryBuilder<Q, R, P> {
@@ -114,19 +157,44 @@ export function createPostgresQueryBuilder<
     queryType: Q,
     name: string,
     mode: ExecutionMode,
-    parameters?: P,
-  ) => {
+  ): [P] extends [never] ? SimpleQuery<R> : ParameterizedQuery<R, P> => {
+    const context: PostgresContext = {
+      parameterMapping: new Map(),
+    }
+
+    const queryText = translateNode(getTreeRoot(node), context)
+
     return {
       name,
       queryType,
       mode,
-      queryText: translateNode(getTreeRoot(node)),
-      parameters,
+      queryText,
+      context,
+      bind:
+        queryType === QueryType.PARAMETERIZED
+          ? (p: P): BoundQuery<R, P> => {
+              return {
+                name,
+                queryType: QueryType.BOUND,
+                mode,
+                queryText,
+                parameters: p,
+                context,
+              } as BoundPostgresQuery<R, P>
+            }
+          : undefined,
     } as PostgresRelationalQuery<Q, R, P>
   }
 }
 
-function translateJoinQuery(node: JoinQueryNode): string {
+type PostgresContext = {
+  parameterMapping: Map<string, number>
+}
+
+function translateJoinQuery(
+  node: JoinQueryNode,
+  context: PostgresContext,
+): string {
   const manager = new JoinNodeManager(node)
 
   const tables = manager.tables
@@ -172,7 +240,7 @@ function translateJoinQuery(node: JoinQueryNode): string {
     .map((tm) => {
       const where = tm.where
       if (where) {
-        return translateFilterGroup(where.filter, tm.tableName)
+        return translateFilterGroup(where.filter, context, tm.tableName)
       }
 
       return ""
@@ -183,7 +251,10 @@ function translateJoinQuery(node: JoinQueryNode): string {
   return `SELECT ${select} FROM ${from}${where ? ` WHERE ${where}` : ""}`
 }
 
-function translateTableQuery(node: TableQueryNode): string {
+function translateTableQuery(
+  node: TableQueryNode,
+  context: PostgresContext,
+): string {
   const manager = new TableNodeManager(node)
 
   const select = manager.select
@@ -206,31 +277,36 @@ function translateTableQuery(node: TableQueryNode): string {
   } FROM ${node.tableName}${
     manager.tableAlias ? `AS ${manager.tableAlias}` : ""
   }${
-    manager.where ? ` WHERE ${translateFilterGroup(manager.where.filter)}` : ""
+    manager.where
+      ? ` WHERE ${translateFilterGroup(manager.where.filter, context)}`
+      : ""
   }`
 }
 
-function translateNode(node: RelationalQueryNode<RelationalNodeType>): string {
+function translateNode(
+  node: RelationalQueryNode<RelationalNodeType>,
+  context: PostgresContext,
+): string {
   if (hasProjections(node)) {
     const info = extractProjections(node)
 
     const CTE = `WITH ${info.projections
       .filter(isCteClause)
-      .map(translateCte)
+      .map((c) => translateCte(c, context))
       .join(", ")}`
 
     return `${CTE} ${
       isTableQueryNode(info.queryNode)
-        ? translateTableQuery(info.queryNode)
+        ? translateTableQuery(info.queryNode, context)
         : isJoinQueryNode(info.queryNode)
-          ? translateJoinQuery(info.queryNode)
+          ? translateJoinQuery(info.queryNode, context)
           : "error"
     }`
   } else {
     if (isTableQueryNode(node)) {
-      return translateTableQuery(node)
+      return translateTableQuery(node, context)
     } else if (isJoinQueryNode(node)) {
-      return translateJoinQuery(node)
+      return translateJoinQuery(node, context)
     }
   }
 
@@ -272,33 +348,59 @@ function extractProjections(
   return info
 }
 
-function translateCte(cte: CteClause): string {
+function translateCte(cte: CteClause, context: PostgresContext): string {
   return `${cte.tableName} AS (${
     isTableQueryNode(cte.source)
-      ? translateTableQuery(cte.source)
+      ? translateTableQuery(cte.source, context)
       : isJoinQueryNode(cte.source)
-        ? translateJoinQuery(cte.source)
+        ? translateJoinQuery(cte.source, context)
         : "error"
   })`
 }
 
 function translateFilterGroup(
   filter: FilterGroup<RelationalDataTable> | FilterTypes<RelationalDataTable>,
+  context: PostgresContext,
   table?: string,
 ): string {
   if (isFilterGroup(filter)) {
     return filter.filters
-      .map((f) => translateFilterGroup(f, table))
+      .map((f) => translateFilterGroup(f, context, table))
       .join(` ${filter.op} `)
       .trimEnd()
   } else if (isColumnFilter(filter)) {
+    if (isParameterNode(filter.value)) {
+      if (!context.parameterMapping.has(filter.value.name)) {
+        context.parameterMapping.set(
+          filter.value.name,
+          context.parameterMapping.size + 1,
+        )
+      }
+
+      return `${table ? `${table}.` : ""}${filter.column} ${
+        filter.op
+      } $${context.parameterMapping.get(filter.value.name)!.toString()}`
+    }
+
     return `${table ? `${table}.` : ""}${filter.column} ${
       filter.op
     } ${wrap(filter.value)}`
   } else if (IsArrayFilter(filter)) {
-    return `${wrap(filter.value)}=ANY(${table ? `${table}.` : ""}${
+    if (isParameterNode(filter.value)) {
+      if (!context.parameterMapping.has(filter.value.name)) {
+        context.parameterMapping.set(
+          filter.value.name,
+          context.parameterMapping.size + 1,
+        )
+      }
+      return `$${context.parameterMapping.get(filter.value.name)!.toString()} && ${table ? `${table}.` : ""}${
+        filter.column
+      }`
+    }
+
+    return `${wrap(Array.isArray(filter.value) ? filter.value : [filter.value])} && ${table ? `${table}.` : ""}${
       filter.column
-    })`
+    }`
   }
 
   throw new QueryError("Unsupported query filter type")
@@ -306,12 +408,12 @@ function translateFilterGroup(
 
 function wrap(value: unknown): string {
   return typeof value === "string"
-    ? `'${value}'`
-    : value === "object"
+    ? `'${value}$'`
+    : typeof value === "object"
       ? value === null
         ? "null"
         : Array.isArray(value)
-          ? `{${value.map((i) => wrap(i)).join(",")}}`
+          ? `'{${value.map((i) => JSON.stringify(i)).join(",")}}'`
           : `'${JSON.stringify(value)}'`
       : (value as string)
 }

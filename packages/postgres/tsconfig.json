@@ -4,7 +4,7 @@
     "baseUrl": "./",
     "outDir": "./dist/",
     "paths": {
-      "@telefrek/core": ["../data"],
+      "@telefrek/core": ["../core"],
       "@telefrek/core/*": ["../core/*"],
       "@telefrek/data": ["../data"],
       "@telefrek/data/*": ["../data/*"]
