@@ -525,5 +525,16 @@ describe("Relational query builder should support basic select functionality", (
 
     expect(STORE.orders.length).toBe(1)
     expect(STORE.orders[0].id).toBe(1)
+
+    const selectRes = await executor.run(
+      useDataStore<TestDataStore>()
+        .select("orders")
+        .columns("*")
+        .build(createMemoryBuilder(), "select"),
+    )
+    expect(Array.isArray(selectRes.rows)).toBeTruthy()
+    const rows = Array.isArray(selectRes.rows) ? selectRes.rows : []
+    expect(rows.length).toBe(1)
+    expect(rows[0].id).toEqual(1)
   })
 })
