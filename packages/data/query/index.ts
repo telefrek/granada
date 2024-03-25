@@ -63,7 +63,7 @@ export type ParameterizedQuery<
    *
    * @param parameters The parameters to bind to the query
    */
-  bind: (parameters: P) => BoundQuery<RowType, P>
+  bind: (parameters: P) => BoundQuery<R, P>
 }
 
 /**

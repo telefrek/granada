@@ -5,9 +5,8 @@ import {
 import pg from "pg"
 import type { PostgresEnum } from "../"
 import {
-  createParameterizedContext,
   createPostgresQueryBuilder,
-  createRelationalQueryContext,
+  createPostgresQueryContext,
 } from "./builder"
 import { PostgresQueryExecutor } from "./executor"
 import {
@@ -53,10 +52,11 @@ describe("Postgres should be able to execute queries", () => {
   })
 
   it("Should be able to issue a simple query", async () => {
-    const query = createParameterizedContext<
-      TestDatabase,
-      { amount: number; categories: PostgresEnum<typeof Category>[] }
-    >()
+    const query = createPostgresQueryContext<TestDatabase>()
+      .withParameters<{
+        amount: number
+        categories: PostgresEnum<typeof Category>[]
+      }>()
       .withCte("customerOrders", (builder) =>
         builder
           .select("orders")
@@ -93,7 +93,7 @@ describe("Postgres should be able to execute queries", () => {
     expect(rows.length).toBe(0)
 
     result = await executor?.run(
-      createRelationalQueryContext<TestDatabase>()
+      createPostgresQueryContext<TestDatabase>()
         .withCte("customerOrders", (builder) =>
           builder
             .select("orders")

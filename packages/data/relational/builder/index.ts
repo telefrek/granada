@@ -2,7 +2,10 @@
  * Extensions for creating relational queries
  */
 
-import type { AliasedType } from "@telefrek/core/type/utils.js"
+import type {
+  AliasedType,
+  RequiredLiteralKeys,
+} from "@telefrek/core/type/utils.js"
 import type { RelationalDataStore, RelationalDataTable, STAR } from ".."
 import {
   ExecutionMode,
@@ -60,7 +63,6 @@ interface RelationalNodeProcessor<
     builder: QueryBuilder<Q, T, P>,
     name: string,
     mode?: ExecutionMode,
-    parameters?: P,
   ): [P] extends [never] ? SimpleQuery<T> : ParameterizedQuery<T, P>
 }
 
@@ -74,6 +76,14 @@ export interface RelationalNodeBuilder<
   queryType: Q
   context: RelationalQueryNode<RelationalNodeType> | undefined
   tableAlias: TableAlias
+
+  withParameters<QP extends QueryParameters>(): RelationalNodeBuilder<
+    D,
+    QueryType.PARAMETERIZED,
+    R,
+    QP,
+    A
+  >
 
   withTableAlias<TN extends keyof Omit<D["tables"], A>, Alias extends string>(
     table: TN,
@@ -94,6 +104,21 @@ export interface RelationalNodeBuilder<
   select<T extends keyof D["tables"]>(
     tableName: T,
   ): TableNodeBuilder<D, T, D["tables"][T], P, Q>
+
+  insert<T extends keyof D["tables"]>(
+    tableName: T,
+  ): InsertBuilder<D, T, never, D["tables"][T]>
+}
+
+export interface InsertBuilder<
+  D extends RelationalDataStore,
+  T extends keyof D["tables"],
+  R extends RelationalDataTable,
+  P extends RequiredLiteralKeys<D["tables"][T]>,
+> extends RelationalNodeProcessor<D, QueryType.PARAMETERIZED, R, P> {
+  returning<C extends keyof D["tables"][T]>(
+    ...columns: C[]
+  ): InsertBuilder<D, T, Pick<D["tables"][T], C>, P>
 }
 
 export type RelationalProcessorBuilder<

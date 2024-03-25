@@ -7,6 +7,7 @@ import type { RelationalDataStore, RelationalDataTable } from ".."
 import {
   ExecutionMode,
   QueryParameters,
+  QueryType,
   type BoundQuery,
   type ParameterizedQuery,
   type QueryExecutor,
@@ -78,19 +79,44 @@ type InMemoryQuerySourceMaterializer<
 > = (
   store: InMemoryRelationalDataStore<DataStoreType>,
   parameters?: QueryParameters,
-) => RowType[]
+) => RowType[] | undefined
+
+type InMemoryQuery<
+  D extends RelationalDataStore,
+  R extends RelationalDataTable,
+> = {
+  source: InMemoryQuerySourceMaterializer<D, R>
+}
+
+type SimpleInMemoryQuery<
+  D extends RelationalDataStore,
+  R extends RelationalDataTable,
+> = SimpleQuery<R> & InMemoryQuery<D, R>
+
+type ParameterizedInMemoryQuery<
+  D extends RelationalDataStore,
+  R extends RelationalDataTable,
+  P extends QueryParameters,
+> = ParameterizedQuery<R, P> & InMemoryQuery<D, R>
+
+type BoundInMemoryQuery<
+  D extends RelationalDataStore,
+  R extends RelationalDataTable,
+  P extends QueryParameters,
+> = BoundQuery<R, P> & InMemoryQuery<D, R>
 
 type InMemQ<
+  Q extends QueryType,
   D extends RelationalDataStore,
   R extends RelationalDataTable,
   P extends QueryParameters,
 > = [P] extends [never]
-  ? SimpleQuery<R> & {
-      source: InMemoryQuerySourceMaterializer<D, R>
-    }
-  : ParameterizedQuery<R, P> & {
-      source: InMemoryQuerySourceMaterializer<D, R>
-    }
+  ? SimpleInMemoryQuery<D, R>
+  : Q extends QueryType.PARAMETERIZED
+    ? ParameterizedInMemoryQuery<D, R, P>
+    : Q extends QueryType.BOUND
+      ? BoundInMemoryQuery<D, R, P>
+      : never
 
 export function createMemoryBuilder<
   D extends RelationalDataStore,
@@ -103,7 +129,6 @@ export function createMemoryBuilder<
     queryType: Q,
     name: string,
     mode: ExecutionMode,
-    parameters?: P,
   ): [P] extends [never] ? SimpleQuery<R> : ParameterizedQuery<R, P> => {
     return {
       queryType,
@@ -112,7 +137,20 @@ export function createMemoryBuilder<
       },
       name,
       mode,
-      parameters,
-    } as InMemQ<D, R, P>
+      bind:
+        queryType === QueryType.PARAMETERIZED
+          ? (p: P): BoundQuery<R, P> => {
+              return {
+                parameters: p,
+                source: (store) => {
+                  return materializeNode<R>(getTreeRoot(node), store, p)
+                },
+                name,
+                mode,
+                queryType: QueryType.BOUND,
+              } as BoundInMemoryQuery<D, R, P>
+            }
+          : undefined,
+    } as InMemQ<Q, D, R, P>
   }
 }

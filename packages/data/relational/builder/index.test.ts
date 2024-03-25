@@ -1,3 +1,4 @@
+import { QueryType } from "../../query/index"
 import {
   InMemoryQueryExecutor,
   createMemoryBuilder,
@@ -38,19 +39,19 @@ interface TestDataStore {
   }
 }
 
-const STORE: InMemoryRelationalDataStore<TestDataStore> = {
-  orders: [],
-  customers: [],
-}
-
-const executor = new InMemoryQueryExecutor<TestDataStore>(STORE)
-
 // Take a type T
 // Get alias type A as { [subset of keyof T]: string }
 // Get return type R as { [key: A[K]] : T[K]} where K is a key in T and I want
 // the alias value of that as the name of the type R
 
-describe("Relational query builder should support basic functionality", () => {
+describe("Relational query builder should support basic select functionality", () => {
+  const STORE: InMemoryRelationalDataStore<TestDataStore> = {
+    orders: [],
+    customers: [],
+  }
+
+  const executor = new InMemoryQueryExecutor<TestDataStore>(STORE)
+
   // Ensure that we reset the local store to the same state for all tests
   beforeEach(() => {
     STORE.orders = [
@@ -479,5 +480,50 @@ describe("Relational query builder should support basic functionality", () => {
       expect(result.rows[2].orderId).toBe(3)
       expect(result.rows[2].lastName).toBe("two")
     }
+  })
+})
+
+describe("Relational query builder should support basic select functionality", () => {
+  const STORE: InMemoryRelationalDataStore<TestDataStore> = {
+    orders: [],
+    customers: [],
+  }
+
+  const executor = new InMemoryQueryExecutor<TestDataStore>(STORE)
+
+  beforeEach(() => {
+    STORE.orders = []
+    STORE.customers = []
+  })
+
+  it("Should support a simple insert", async () => {
+    const query = useDataStore<TestDataStore>()
+      .insert("orders")
+      .build(createMemoryBuilder(), "insertOrder")
+
+    expect(query).not.toBeUndefined()
+    expect(query.queryType).toBe(QueryType.PARAMETERIZED)
+    expect(query.bind).not.toBeUndefined()
+
+    const bound = query.bind({
+      id: 1,
+      customerId: 1,
+      name: "order1",
+      categories: [Category.TEST],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+
+    expect(bound).not.toBeUndefined()
+    expect(bound.queryType).toBe(QueryType.BOUND)
+    expect(bound.parameters).not.toBeUndefined()
+    expect(bound.parameters.id).toEqual(1)
+
+    const results = await executor.run(bound)
+    expect(results).not.toBeUndefined()
+    expect(results.rows).toBeUndefined()
+
+    expect(STORE.orders.length).toBe(1)
+    expect(STORE.orders[0].id).toBe(1)
   })
 })

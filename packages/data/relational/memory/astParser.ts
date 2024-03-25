@@ -12,6 +12,7 @@ import {
   isColumnFilter,
   isCteClause,
   isFilterGroup,
+  isInsertClause,
   isJoinQueryNode,
   isParameterNode,
   isRelationalQueryNode,
@@ -22,6 +23,7 @@ import {
   type CteClause,
   type FilterGroup,
   type FilterTypes,
+  type InsertClause,
   type JoinColumnFilter,
   type JoinQueryNode,
   type RelationalNodeType,
@@ -44,7 +46,7 @@ export function materializeNode<RowType extends RelationalDataTable>(
   root: RelationalQueryNode<RelationalNodeType>,
   store: InMemoryRelationalDataStore<RelationalDataStore>,
   parameters?: QueryParameters,
-): RowType[] {
+): RowType[] | undefined {
   const context = new MaterializerContext(store)
 
   const current = hasProjections(root)
@@ -55,6 +57,9 @@ export function materializeNode<RowType extends RelationalDataTable>(
     return materializeTable(current, context, parameters) as RowType[]
   } else if (isJoinQueryNode(current)) {
     return materializeJoin(current, context, parameters) as RowType[]
+  } else if (isInsertClause(current)) {
+    materializeInsert(current, context, parameters!)
+    return
   } else {
     throw new QueryError(`Unsupported generator type: ${current.nodeType}`)
   }
@@ -110,6 +115,15 @@ class MaterializerContext {
   ): void {
     this.projections.set(table, rows)
   }
+}
+
+function materializeInsert(
+  insert: InsertClause,
+  context: MaterializerContext,
+  parameters: QueryParameters,
+): void {
+  context.store[insert.tableName].push(parameters)
+  return
 }
 
 function materializeTable(

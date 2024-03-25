@@ -1,4 +1,8 @@
-import type { AliasedType } from "@telefrek/core/type/utils"
+import type {
+  AliasedType,
+  RequiredLiteralKeys,
+} from "@telefrek/core/type/utils"
+import { QueryError } from "../../query/error"
 import {
   ExecutionMode,
   QueryParameters,
@@ -18,8 +22,8 @@ import {
   type CteClause,
   type FilterGroup,
   type FilterTypes,
+  type InsertClause,
   type JoinClauseQueryNode,
-  type NamedRowGenerator,
   type RelationalQueryNode,
   type SelectClause,
   type TableAlias,
@@ -35,6 +39,7 @@ import {
   type PropertyOfType,
 } from "../types"
 import {
+  type InsertBuilder,
   type JoinNodeBuilder,
   type QueryBuilder,
   type RelationalNodeBuilder,
@@ -83,6 +88,29 @@ export class DefaultRelationalNodeBuilder<
     this.queryType = queryType
     this.#context = context
     this.#tableAlias = tableAlias
+  }
+  insert<T extends keyof D["tables"]>(
+    tableName: T,
+  ): InsertBuilder<D, T, never, D["tables"][T]> {
+    return new InternalInsertBuilder(tableName)
+  }
+
+  withParameters<QP extends QueryParameters>(): RelationalNodeBuilder<
+    D,
+    QueryType.PARAMETERIZED,
+    R,
+    QP,
+    A
+  > {
+    if (this.queryType !== QueryType.SIMPLE) {
+      throw new QueryError("Query Parameters are already defined")
+    }
+
+    return new DefaultRelationalNodeBuilder(
+      QueryType.PARAMETERIZED,
+      this.#context,
+      this.tableAlias,
+    )
   }
 
   withTableAlias<
@@ -180,6 +208,47 @@ export class DefaultRelationalNodeBuilder<
   }
 }
 
+class InternalInsertBuilder<
+  D extends RelationalDataStore,
+  T extends keyof D["tables"],
+  R extends RelationalDataTable = never,
+  P extends RequiredLiteralKeys<D["tables"][T]> = D["tables"][T],
+> implements InsertBuilder<D, T, R, P>
+{
+  tableName: T
+  returningColumns?: string[]
+
+  constructor(tableName: T, returningColumns?: string[]) {
+    this.tableName = tableName
+    this.returningColumns = returningColumns
+  }
+
+  returning<C extends keyof D["tables"][T]>(
+    ...columns: C[]
+  ): InsertBuilder<D, T, Pick<D["tables"][T], C>, P> {
+    return new InternalInsertBuilder(
+      this.tableName,
+      columns.map((c) => c as string),
+    )
+  }
+
+  asNode(): RelationalQueryNode<RelationalNodeType> {
+    return {
+      nodeType: RelationalNodeType.INSERT,
+      tableName: this.tableName,
+      returning: this.returningColumns,
+    } as InsertClause
+  }
+
+  build(
+    builder: QueryBuilder<QueryType.PARAMETERIZED, R, P>,
+    name: string,
+    mode: ExecutionMode = ExecutionMode.Normal,
+  ): [P] extends [never] ? SimpleQuery<R> : ParameterizedQuery<R, P> {
+    return builder(this.asNode(), QueryType.PARAMETERIZED, name, mode)
+  }
+}
+
 class InternalJoinBuilder<
   D extends RelationalDataStore,
   T extends keyof D["tables"],
@@ -197,7 +266,7 @@ class InternalJoinBuilder<
     P,
     keyof D["tables"]
   >
-  tables: NamedRowGenerator[]
+  tables: TableQueryNode[]
   filters: JoinClauseQueryNode[]
   queryType: Q
   parent?: RelationalQueryNode<RelationalNodeType>
@@ -210,7 +279,7 @@ class InternalJoinBuilder<
       P,
       keyof D["tables"]
     >,
-    tables: NamedRowGenerator[],
+    tables: TableQueryNode[],
     filters: JoinClauseQueryNode[],
     queryType: Q,
     parent?: RelationalQueryNode<RelationalNodeType>,
@@ -248,9 +317,7 @@ class InternalJoinBuilder<
 
     const tables = this.tables
     tables.push(
-      tableGenerator(
-        this.builder.select(joinTable),
-      ).asNode() as NamedRowGenerator,
+      tableGenerator(this.builder.select(joinTable)).asNode() as TableQueryNode,
     )
 
     return new InternalJoinBuilder(
@@ -395,10 +462,10 @@ class InternalTableBuilder<
     return new InternalJoinBuilder(
       this.builder,
       [
-        this.asNode() as NamedRowGenerator,
+        this.asNode() as TableQueryNode,
         tableGenerator(
           this.builder.select(joinTable),
-        ).asNode() as NamedRowGenerator,
+        ).asNode() as TableQueryNode,
       ],
       [
         {

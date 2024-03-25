@@ -1,7 +1,6 @@
 import {
-  createParameterizedContext,
   createPostgresQueryBuilder,
-  createRelationalQueryContext,
+  createPostgresQueryContext,
   isPostgresQuery,
 } from "./builder"
 
@@ -10,7 +9,7 @@ import { Category, TestDatabase } from "./testUtils"
 
 describe("Postgres query syntax should be translated correctly", () => {
   it("Should create a valid query from a builder", () => {
-    const context = createRelationalQueryContext<TestDatabase>()
+    const context = createPostgresQueryContext<TestDatabase>()
     const query = context
       .select("orders")
       .columns("id", "categories")
@@ -26,7 +25,7 @@ describe("Postgres query syntax should be translated correctly", () => {
   })
 
   it("Should create a valid query from a builder with a cte and join", () => {
-    const context = createRelationalQueryContext<TestDatabase>()
+    const context = createPostgresQueryContext<TestDatabase>()
     const query = context
       .withCte("customerOrders", (builder) =>
         builder
@@ -54,7 +53,7 @@ describe("Postgres query syntax should be translated correctly", () => {
   })
 
   it("Should create a valid query for multiple cte and a join in the main query", () => {
-    const query = createRelationalQueryContext<TestDatabase>()
+    const query = createPostgresQueryContext<TestDatabase>()
       .withCte("customerOrders", (builder) =>
         builder
           .select("orders")
@@ -88,13 +87,11 @@ describe("Postgres query syntax should be translated correctly", () => {
   })
 
   it("Should allow creation of queries with parameters", () => {
-    const query = createParameterizedContext<
-      TestDatabase,
-      {
+    const query = createPostgresQueryContext<TestDatabase>()
+      .withParameters<{
         amount: number
         categories: PostgresEnum<typeof Category>[]
-      }
-    >()
+      }>()
       .withCte("customerOrders", (builder) =>
         builder
           .select("orders")

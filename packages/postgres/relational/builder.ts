@@ -80,7 +80,7 @@ export interface PostgresRelationalDataStore<
   }
 }
 
-export function createRelationalQueryContext<
+export function createPostgresQueryContext<
   Database extends PostgresDatabase,
 >(): RelationalNodeBuilder<
   PostgresRelationalDataStore<Database>,
@@ -90,23 +90,6 @@ export function createRelationalQueryContext<
     PostgresRelationalDataStore<Database>,
     QueryType.SIMPLE
   >(QueryType.SIMPLE)
-}
-
-export function createParameterizedContext<
-  Database extends PostgresDatabase,
-  P extends QueryParameters,
->(): RelationalNodeBuilder<
-  PostgresRelationalDataStore<Database>,
-  QueryType.PARAMETERIZED,
-  never,
-  P
-> {
-  return new DefaultRelationalNodeBuilder<
-    PostgresRelationalDataStore<Database>,
-    QueryType.PARAMETERIZED,
-    never,
-    P
-  >(QueryType.PARAMETERIZED)
 }
 
 type PostgresQuery = {
@@ -359,7 +342,7 @@ function translateCte(cte: CteClause, context: PostgresContext): string {
 }
 
 function translateFilterGroup(
-  filter: FilterGroup<RelationalDataTable> | FilterTypes<RelationalDataTable>,
+  filter: FilterGroup | FilterTypes,
   context: PostgresContext,
   table?: string,
 ): string {

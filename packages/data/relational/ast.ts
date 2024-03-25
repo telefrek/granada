@@ -155,7 +155,7 @@ export interface FilterGroup {
 /**
  * A type of {@link RelationalQueryNode} that produces rows with a named table (either alias or existing)
  */
-export interface NamedRowGenerator
+export interface NamedRelationalQueryNode
   extends RelationalQueryNode<RelationalNodeType> {
   tableName: string
 }
@@ -169,11 +169,21 @@ type FilteredClause = {
 }
 
 export type InsertClause = RelationalQueryNode<RelationalNodeType.INSERT> &
-  NamedRowGenerator &
+  NamedRelationalQueryNode &
   ReturningClause
 
 export type UpdateClause = RelationalQueryNode<RelationalNodeType.UPDATE> &
-  NamedRowGenerator &
+  NamedRelationalQueryNode &
+  ReturningClause &
+  FilteredClause
+
+export type MergeClause = RelationalQueryNode<RelationalNodeType.MERGE> &
+  NamedRelationalQueryNode &
+  ReturningClause &
+  FilteredClause
+
+export type DeleteClause = RelationalQueryNode<RelationalNodeType.DELETE> &
+  NamedRelationalQueryNode &
   ReturningClause &
   FilteredClause
 
@@ -181,7 +191,7 @@ export type UpdateClause = RelationalQueryNode<RelationalNodeType.UPDATE> &
  * A {@link RelationalQueryNode} that represents a common table expression
  */
 export type CteClause = RelationalQueryNode<RelationalNodeType.CTE> &
-  NamedRowGenerator & {
+  NamedRelationalQueryNode & {
     source: RelationalQueryNode<RelationalNodeType>
   }
 
@@ -189,7 +199,7 @@ export type CteClause = RelationalQueryNode<RelationalNodeType.CTE> &
  * A {@link RelationalQueryNode} that indicates a table query
  */
 export type TableQueryNode = RelationalQueryNode<RelationalNodeType.TABLE> &
-  NamedRowGenerator & {
+  NamedRelationalQueryNode & {
     alias?: string
   }
 
@@ -386,17 +396,15 @@ export function isGenerator(
 }
 
 /**
- * Type guard for {@link NamedRowGenerator} objects
+ * Type guard for {@link NamedRelationalQueryNode} objects
  *
  * @param node The {@link QueryNode} to check
- * @returns True if the node is a {@link NamedRowGenerator}
+ * @returns True if the node is a {@link NamedRelationalQueryNode}
  */
-export function isNamedGenerator(node: QueryNode): node is NamedRowGenerator {
-  return (
-    isGenerator(node) &&
-    "tableName" in node &&
-    typeof node.tableName === "string"
-  )
+export function isNamedRelationalQueryNode(
+  node: QueryNode,
+): node is NamedRelationalQueryNode {
+  return "tableName" in node && typeof node.tableName === "string"
 }
 
 /**
@@ -406,7 +414,67 @@ export function isNamedGenerator(node: QueryNode): node is NamedRowGenerator {
  * @returns True if the node is a {@link CteClause}
  */
 export function isCteClause(node: QueryNode): node is CteClause {
-  return isRelationalQueryNode(node) && node.nodeType === RelationalNodeType.CTE
+  return (
+    isRelationalQueryNode(node) &&
+    node.nodeType === RelationalNodeType.CTE &&
+    isNamedRelationalQueryNode(node)
+  )
+}
+
+/**
+ * Type guard for {@link InsertClause} identification
+ *
+ * @param node The {@link QueryNode} to inspect
+ * @returns True if the node is a {@link InsertClause}
+ */
+export function isInsertClause(node: QueryNode): node is InsertClause {
+  return (
+    isRelationalQueryNode(node) &&
+    node.nodeType === RelationalNodeType.INSERT &&
+    isNamedRelationalQueryNode(node)
+  )
+}
+
+/**
+ * Type guard for {@link UpdateClause} identification
+ *
+ * @param node The {@link QueryNode} to inspect
+ * @returns True if the node is a {@link UpdateClause}
+ */
+export function isUpdateClause(node: QueryNode): node is UpdateClause {
+  return (
+    isRelationalQueryNode(node) &&
+    node.nodeType === RelationalNodeType.UPDATE &&
+    isNamedRelationalQueryNode(node)
+  )
+}
+
+/**
+ * Type guard for {@link MergeClause} identification
+ *
+ * @param node The {@link QueryNode} to inspect
+ * @returns True if the node is a {@link MergeClause}
+ */
+export function isMergeClause(node: QueryNode): node is MergeClause {
+  return (
+    isRelationalQueryNode(node) &&
+    node.nodeType === RelationalNodeType.MERGE &&
+    isNamedRelationalQueryNode(node)
+  )
+}
+
+/**
+ * Type guard for {@link DeleteClause} identification
+ *
+ * @param node The {@link QueryNode} to inspect
+ * @returns True if the node is a {@link DeleteClause}
+ */
+export function isDeleteClause(node: QueryNode): node is DeleteClause {
+  return (
+    isRelationalQueryNode(node) &&
+    node.nodeType === RelationalNodeType.DELETE &&
+    isNamedRelationalQueryNode(node)
+  )
 }
 
 /**
@@ -453,7 +521,9 @@ export function isColumnAlias(node: QueryNode): node is ColumnAlias {
  */
 export function isTableQueryNode(node: QueryNode): node is TableQueryNode {
   return (
-    isRelationalQueryNode(node) && node.nodeType === RelationalNodeType.TABLE
+    isRelationalQueryNode(node) &&
+    node.nodeType === RelationalNodeType.TABLE &&
+    isNamedRelationalQueryNode(node)
   )
 }
 
