@@ -161,7 +161,7 @@ export interface NamedRelationalQueryNode
 }
 
 type ReturningClause = {
-  returning?: string[]
+  returning?: string[] | STAR
 }
 
 type FilteredClause = {

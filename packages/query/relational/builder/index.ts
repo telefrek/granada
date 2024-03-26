@@ -105,6 +105,7 @@ export interface InsertBuilder<
   R extends RelationalDataTable,
   P extends RequiredLiteralKeys<D["tables"][T]>,
 > extends RelationalNodeProcessor<D, QueryType.PARAMETERIZED, R, P> {
+  returning(columns: STAR): InsertBuilder<D, T, D["tables"][T], P>
   returning<C extends keyof D["tables"][T]>(
     ...columns: C[]
   ): InsertBuilder<D, T, Pick<D["tables"][T], C>, P>

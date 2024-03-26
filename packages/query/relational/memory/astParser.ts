@@ -58,8 +58,7 @@ export function materializeNode<RowType extends RelationalDataTable>(
   } else if (isJoinQueryNode(current)) {
     return materializeJoin(current, context, parameters) as RowType[]
   } else if (isInsertClause(current)) {
-    materializeInsert(current, context, parameters!)
-    return
+    return materializeInsert(current, context, parameters!) as RowType[]
   } else {
     throw new QueryError(`Unsupported generator type: ${current.nodeType}`)
   }
@@ -121,8 +120,21 @@ function materializeInsert(
   insert: InsertClause,
   context: MaterializerContext,
   parameters: QueryParameters,
-): void {
+): RelationalDataTable[] | undefined {
   context.store[insert.tableName].push(parameters)
+
+  if (insert.returning) {
+    if (insert.returning === "*") {
+      return [parameters]
+    }
+
+    return [
+      Object.fromEntries(
+        insert.returning.map((r) => [r as PropertyKey, parameters[r]]),
+      ) as RelationalDataTable,
+    ]
+  }
+
   return
 }
 

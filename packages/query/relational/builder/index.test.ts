@@ -499,6 +499,7 @@ describe("Relational query builder should support basic select functionality", (
   it("Should support a simple insert", async () => {
     const query = useDataStore<TestDataStore>()
       .insert("orders")
+      .returning("id", "name", "categories")
       .build(InMemoryQueryBuilder, "insertOrder")
 
     expect(query).not.toBeUndefined()
@@ -521,7 +522,11 @@ describe("Relational query builder should support basic select functionality", (
 
     const results = await executor.run(bound)
     expect(results).not.toBeUndefined()
-    expect(results.rows).toBeUndefined()
+
+    const returned = Array.isArray(results.rows) ? results.rows : []
+    expect(returned.length).toBe(1)
+    expect(returned[0].categories.length).toBe(1)
+    expect(returned[0].name).toBe("order1")
 
     expect(STORE.orders.length).toBe(1)
     expect(STORE.orders[0].id).toBe(1)

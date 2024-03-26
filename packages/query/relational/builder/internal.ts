@@ -216,19 +216,34 @@ class InternalInsertBuilder<
 > implements InsertBuilder<D, T, R, P>
 {
   tableName: T
-  returningColumns?: string[]
+  returningColumns?: string[] | STAR
 
-  constructor(tableName: T, returningColumns?: string[]) {
+  constructor(tableName: T, returningColumns?: string[] | STAR) {
     this.tableName = tableName
     this.returningColumns = returningColumns
   }
 
+  returning(columns: "*"): InsertBuilder<D, T, D["tables"][T], P>
   returning<C extends keyof D["tables"][T]>(
     ...columns: C[]
-  ): InsertBuilder<D, T, Pick<D["tables"][T], C>, P> {
+  ): InsertBuilder<D, T, Pick<D["tables"][T], C>, P>
+  returning<C extends keyof D["tables"][T]>(
+    columns?: C | STAR,
+    ...rest: C[]
+  ):
+    | InsertBuilder<D, T, D["tables"][T], P>
+    | InsertBuilder<D, T, Pick<D["tables"][T], C>, P> {
+    if (columns === "*") {
+      return new InternalInsertBuilder(this.tableName, columns)
+    }
+
     return new InternalInsertBuilder(
       this.tableName,
-      columns.map((c) => c as string),
+      rest
+        ? [columns as string].concat(rest.map((r: C) => r as string))
+        : columns
+          ? [columns as string]
+          : undefined,
     )
   }
 
