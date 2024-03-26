@@ -6,16 +6,19 @@ import type {
   OptionalLiteralKeys,
   RequiredLiteralKeys,
 } from "@telefrek/core/type/utils"
-import { QueryError } from "@telefrek/query/query/error"
+import { QueryError } from "@telefrek/query/error"
 import {
   ExecutionMode,
   QueryType,
   type BoundQuery,
+  type BuildableQueryTypes,
   type ParameterizedQuery,
+  type QueryNode,
   type QueryParameters,
+  type QueryProvider,
   type RowType,
   type SimpleQuery,
-} from "@telefrek/query/query/index"
+} from "@telefrek/query/index"
 import type { RelationalNodeType } from "@telefrek/query/relational/ast"
 import {
   IsArrayFilter,
@@ -24,6 +27,7 @@ import {
   isFilterGroup,
   isJoinQueryNode,
   isParameterNode,
+  isRelationalQueryNode,
   isTableQueryNode,
   type CteClause,
   type FilterGroup,
@@ -32,11 +36,7 @@ import {
   type RelationalQueryNode,
   type TableQueryNode,
 } from "@telefrek/query/relational/ast"
-import type {
-  QueryBuilder,
-  RelationalNodeBuilder,
-  SupportedQueryTypes,
-} from "@telefrek/query/relational/builder/index"
+import type { RelationalNodeBuilder } from "@telefrek/query/relational/builder/index"
 import { DefaultRelationalNodeBuilder } from "@telefrek/query/relational/builder/internal"
 import {
   CteNodeManager,
@@ -109,18 +109,6 @@ type BoundPostgresQuery<
   P extends QueryParameters,
 > = PostgresQuery & BoundQuery<R, P>
 
-type PostgresRelationalQuery<
-  Q extends QueryType,
-  R extends RowType,
-  P extends QueryParameters,
-> = [P] extends [never]
-  ? SimplePostgresQuery<R>
-  : Q extends QueryType.PARAMETERIZED
-    ? ParametizedPostgresQuery<R, P>
-    : Q extends QueryType.BOUND
-      ? BoundPostgresQuery<R, P>
-      : never
-
 export function isPostgresQuery(query: unknown): query is PostgresQuery {
   return (
     typeof query === "object" &&
@@ -130,43 +118,55 @@ export function isPostgresQuery(query: unknown): query is PostgresQuery {
   )
 }
 
-export function createPostgresQueryBuilder<
-  Q extends SupportedQueryTypes,
+export function PostgresQueryBuilder<
+  Q extends BuildableQueryTypes,
   R extends RelationalDataTable,
   P extends QueryParameters,
->(): QueryBuilder<Q, R, P> {
+>(): QueryProvider<Q, R, P> {
   return (
-    node: RelationalQueryNode<RelationalNodeType>,
+    node: QueryNode,
     queryType: Q,
     name: string,
     mode: ExecutionMode,
   ): [P] extends [never] ? SimpleQuery<R> : ParameterizedQuery<R, P> => {
-    const context: PostgresContext = {
-      parameterMapping: new Map(),
+    if (isRelationalQueryNode(node)) {
+      const context: PostgresContext = {
+        parameterMapping: new Map(),
+      }
+
+      const queryText = translateNode(getTreeRoot(node), context)
+
+      const simple: SimplePostgresQuery<R> = {
+        queryType: QueryType.SIMPLE,
+        name,
+        mode,
+        queryText,
+        context,
+      }
+
+      if (queryType === QueryType.SIMPLE) {
+        return simple as never
+      }
+
+      const parameterized: ParametizedPostgresQuery<R, P> = {
+        ...simple,
+        queryType: QueryType.PARAMETERIZED,
+        bind: (p: P): BoundQuery<R, P> => {
+          return {
+            parameters: p,
+            queryText,
+            context,
+            name,
+            mode,
+            queryType: QueryType.BOUND,
+          } as BoundPostgresQuery<R, P>
+        },
+      }
+
+      return parameterized as never
     }
 
-    const queryText = translateNode(getTreeRoot(node), context)
-
-    return {
-      name,
-      queryType,
-      mode,
-      queryText,
-      context,
-      bind:
-        queryType === QueryType.PARAMETERIZED
-          ? (p: P): BoundQuery<R, P> => {
-              return {
-                name,
-                queryType: QueryType.BOUND,
-                mode,
-                queryText,
-                parameters: p,
-                context,
-              } as BoundPostgresQuery<R, P>
-            }
-          : undefined,
-    } as PostgresRelationalQuery<Q, R, P>
+    throw new QueryError("Invalid query node, expected RelationalQueryNode")
   }
 }
 

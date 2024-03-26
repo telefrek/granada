@@ -2,14 +2,16 @@ import type {
   AliasedType,
   RequiredLiteralKeys,
 } from "@telefrek/core/type/utils"
-import { QueryError } from "../../query/error"
+import { QueryError } from "../../error"
 import {
   ExecutionMode,
   QueryParameters,
   QueryType,
+  type BuildableQueryTypes,
   type ParameterizedQuery,
+  type QueryBuilder,
   type SimpleQuery,
-} from "../../query/index"
+} from "../../index"
 import {
   BooleanOperation,
   ColumnFilteringOperation,
@@ -41,10 +43,8 @@ import {
 import {
   type InsertBuilder,
   type JoinNodeBuilder,
-  type QueryBuilder,
   type RelationalNodeBuilder,
   type RelationalProcessorBuilder,
-  type SupportedQueryTypes,
   type TableGenerator,
   type TableNodeBuilder,
   type WhereClauseBuilder,
@@ -56,7 +56,7 @@ import {
 
 export class DefaultRelationalNodeBuilder<
   D extends RelationalDataStore,
-  Q extends SupportedQueryTypes,
+  Q extends BuildableQueryTypes,
   R extends RelationalDataTable = never,
   P extends QueryParameters = never,
   A extends keyof D["tables"] = never,
@@ -245,7 +245,7 @@ class InternalInsertBuilder<
     name: string,
     mode: ExecutionMode = ExecutionMode.Normal,
   ): [P] extends [never] ? SimpleQuery<R> : ParameterizedQuery<R, P> {
-    return builder(this.asNode(), QueryType.PARAMETERIZED, name, mode)
+    return builder()(this.asNode(), QueryType.PARAMETERIZED, name, mode)
   }
 }
 
@@ -253,7 +253,7 @@ class InternalJoinBuilder<
   D extends RelationalDataStore,
   T extends keyof D["tables"],
   R extends RelationalDataTable,
-  Q extends SupportedQueryTypes,
+  Q extends BuildableQueryTypes,
   P extends QueryParameters,
 > implements JoinNodeBuilder<D, T, R, P, Q>
 {
@@ -357,7 +357,7 @@ class InternalJoinBuilder<
     name: string,
     mode: ExecutionMode = ExecutionMode.Normal,
   ): [P] extends [never] ? SimpleQuery<R> : ParameterizedQuery<R, P> {
-    return builder(this.asNode(), this.queryType, name, mode)
+    return builder()(this.asNode(), this.queryType, name, mode)
   }
 }
 
@@ -366,7 +366,7 @@ class InternalTableBuilder<
   T extends keyof D["tables"],
   R extends RelationalDataTable,
   P extends QueryParameters,
-  Q extends SupportedQueryTypes,
+  Q extends BuildableQueryTypes,
 > implements TableNodeBuilder<D, T, R, P, Q>
 {
   tableName: T
@@ -586,13 +586,13 @@ class InternalTableBuilder<
     name: string,
     mode: ExecutionMode,
   ): [P] extends [never] ? SimpleQuery<R> : ParameterizedQuery<R, P> {
-    return builder(this.asNode(), this.queryType, name, mode)
+    return builder()(this.asNode(), this.queryType, name, mode)
   }
 }
 
 class InternalWhereClauseBuilder<
   T extends RelationalDataTable,
-  Q extends SupportedQueryTypes,
+  Q extends BuildableQueryTypes,
   P extends QueryParameters,
 > implements WhereClauseBuilder<T, Q, P>
 {

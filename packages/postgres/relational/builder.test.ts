@@ -1,5 +1,5 @@
 import {
-  createPostgresQueryBuilder,
+  PostgresQueryBuilder,
   createPostgresQueryContext,
   isPostgresQuery,
 } from "./builder"
@@ -15,7 +15,7 @@ describe("Postgres query syntax should be translated correctly", () => {
       .columns("id", "categories")
       .withColumnAlias("id", "orderId")
       .where((clause) => clause.containsItems("categories", "purchase"))
-      .build(createPostgresQueryBuilder(), "testQuery")
+      .build(PostgresQueryBuilder, "testQuery")
 
     if (isPostgresQuery(query)) {
       expect(query.queryText).toEqual(
@@ -43,7 +43,7 @@ describe("Postgres query syntax should be translated correctly", () => {
       )
       .select("customerOrders")
       .columns("*")
-      .build(createPostgresQueryBuilder(), "testQuery")
+      .build(PostgresQueryBuilder, "testQuery")
 
     if (isPostgresQuery(query)) {
       expect(query.queryText).toEqual(
@@ -77,7 +77,7 @@ describe("Postgres query syntax should be translated correctly", () => {
         "customerId",
         "id",
       )
-      .build(createPostgresQueryBuilder(), "testQuery")
+      .build(PostgresQueryBuilder, "testQuery")
 
     if (isPostgresQuery(query)) {
       expect(query.queryText).toEqual(
@@ -115,19 +115,17 @@ describe("Postgres query syntax should be translated correctly", () => {
         "customerId",
         "id",
       )
-      .build(createPostgresQueryBuilder(), "testQuery")
+      .build(PostgresQueryBuilder, "testQuery")
 
     if (isPostgresQuery(query)) {
-      expect(query.parameters).toBeUndefined()
-
       expect(query.queryText).toEqual(
         "WITH customerOrders AS (SELECT id AS orderId, customerId, categories, amount FROM orders WHERE amount > $1 and $2 && categories), customerNames AS (SELECT id, firstName, lastName FROM customers) SELECT customerNames.firstName, customerNames.lastName, customerOrders.amount, customerOrders.categories, customerOrders.orderId FROM customerOrders JOIN customerNames ON customerOrders.customerId = customerNames.id",
       )
     }
 
     expect(query.bind).not.toBeUndefined()
-
     const b = query.bind({ amount: 40, categories: ["test"] })
     expect(b).not.toBeUndefined()
+    expect(b.parameters).not.toBeUndefined()
   })
 })

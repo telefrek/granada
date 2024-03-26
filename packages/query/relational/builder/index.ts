@@ -11,9 +11,11 @@ import {
   ExecutionMode,
   QueryParameters,
   QueryType,
+  type BuildableQueryTypes,
   type ParameterizedQuery,
+  type QueryBuilder,
   type SimpleQuery,
-} from "../../query/index"
+} from "../../index"
 import {
   RelationalNodeType,
   type FilterGroup,
@@ -36,22 +38,9 @@ export function useDataStore<
   return new DefaultRelationalNodeBuilder(QueryType.SIMPLE)
 }
 
-export type SupportedQueryTypes = QueryType.SIMPLE | QueryType.PARAMETERIZED
-
-export type QueryBuilder<
-  Q extends SupportedQueryTypes,
-  T extends RelationalDataTable,
-  P extends QueryParameters,
-> = (
-  node: RelationalQueryNode<RelationalNodeType>,
-  queryType: Q,
-  name: string,
-  mode: ExecutionMode,
-) => [P] extends [never] ? SimpleQuery<T> : ParameterizedQuery<T, P>
-
 interface RelationalNodeProcessor<
   D extends RelationalDataStore,
-  Q extends SupportedQueryTypes,
+  Q extends BuildableQueryTypes,
   T extends RelationalDataTable,
   P extends QueryParameters,
 > {
@@ -68,7 +57,7 @@ interface RelationalNodeProcessor<
 
 export interface RelationalNodeBuilder<
   D extends RelationalDataStore,
-  Q extends SupportedQueryTypes = QueryType.SIMPLE,
+  Q extends BuildableQueryTypes = QueryType.SIMPLE,
   R extends RelationalDataTable = never,
   P extends QueryParameters = never,
   A extends keyof D["tables"] = never,
@@ -123,7 +112,7 @@ export interface InsertBuilder<
 
 export type RelationalProcessorBuilder<
   D extends RelationalDataStore,
-  Q extends SupportedQueryTypes,
+  Q extends BuildableQueryTypes,
   T extends RelationalDataTable,
   P extends QueryParameters,
   A extends keyof D["tables"],
@@ -143,7 +132,7 @@ export type TableGenerator<
   T extends keyof D["tables"],
   R extends RelationalDataTable,
   P extends QueryParameters,
-  Q extends SupportedQueryTypes,
+  Q extends BuildableQueryTypes,
   TR extends RelationalDataTable = D["tables"][T],
 > = (
   from: TableNodeBuilder<D, T, TR, P, Q>,
@@ -154,7 +143,7 @@ export interface JoinNodeBuilder<
   T extends keyof D["tables"],
   R extends RelationalDataTable,
   P extends QueryParameters,
-  Q extends SupportedQueryTypes,
+  Q extends BuildableQueryTypes,
 > extends RelationalNodeProcessor<D, Q, R, P> {
   join<
     JT extends T & string,
@@ -174,7 +163,7 @@ export interface TableNodeBuilder<
   T extends keyof D["tables"],
   R extends RelationalDataTable,
   P extends QueryParameters,
-  Q extends SupportedQueryTypes,
+  Q extends BuildableQueryTypes,
 > extends RelationalNodeProcessor<D, Q, R, P> {
   tableName: T
   builder: RelationalNodeBuilder<
@@ -215,7 +204,7 @@ export interface TableNodeBuilder<
 
 export interface WhereClauseBuilder<
   T extends RelationalDataTable,
-  Q extends SupportedQueryTypes,
+  Q extends BuildableQueryTypes,
   P extends QueryParameters = never,
 > {
   eq<C extends keyof T>(

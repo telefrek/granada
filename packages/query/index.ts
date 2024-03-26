@@ -4,6 +4,33 @@
 
 import { Duration } from "@telefrek/core/time"
 
+export type BuildableQueryTypes = QueryType.SIMPLE | QueryType.PARAMETERIZED
+
+export type QueryProvider<
+  Q extends BuildableQueryTypes,
+  T extends RowType,
+  P extends QueryParameters,
+> = (
+  node: QueryNode,
+  queryType: Q,
+  name: string,
+  mode: ExecutionMode,
+) => [P] extends [never] ? SimpleQuery<T> : ParameterizedQuery<T, P>
+
+export type QueryBuilder<
+  Q extends BuildableQueryTypes,
+  T extends RowType,
+  P extends QueryParameters,
+> = () => QueryProvider<Q, T, P>
+
+/**
+ * Represents the basic information about a node in the query AST
+ */
+export interface QueryNode {
+  parent?: QueryNode
+  children?: QueryNode[]
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type RowType = Record<string, any>
 
@@ -33,15 +60,10 @@ export type QueryParameters = Record<string, any>
 /**
  * Base type for all queries
  */
-export type QueryBase<
-  Q extends QueryType,
-  R extends RowType,
-  P extends QueryParameters = never,
-> = {
+export type QueryBase<Q extends QueryType, R extends RowType> = {
   queryType: Q
   name: string
   mode: ExecutionMode
-  parameters: Readonly<P>
   defaults?: Readonly<Partial<R>>
 }
 
@@ -58,7 +80,7 @@ export type SimpleQuery<R extends RowType> = QueryBase<QueryType.SIMPLE, R>
 export type ParameterizedQuery<
   R extends RowType,
   P extends QueryParameters,
-> = QueryBase<QueryType.PARAMETERIZED, R, P> & {
+> = QueryBase<QueryType.PARAMETERIZED, R> & {
   /**
    *
    * @param parameters The parameters to bind to the query
@@ -73,7 +95,9 @@ export type ParameterizedQuery<
 export type BoundQuery<
   R extends RowType,
   P extends QueryParameters,
-> = QueryBase<QueryType.BOUND, R, P>
+> = QueryBase<QueryType.BOUND, R> & {
+  parameters: Readonly<P>
+}
 
 /**
  * Represents an object that is capable of executing a query

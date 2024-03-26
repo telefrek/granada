@@ -8,7 +8,7 @@ import type { QueryBase, QueryType } from "."
  * Extension of {@link ErrorOptions} for query execution
  */
 interface QueryErrorOptions extends ErrorOptions {
-  query?: QueryBase<QueryType, object, never>
+  query?: QueryBase<QueryType, object>
 }
 
 /**

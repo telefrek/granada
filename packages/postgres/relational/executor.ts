@@ -4,16 +4,17 @@
 
 import { Timer } from "@telefrek/core/time/index"
 import { makeCaseInsensitive } from "@telefrek/core/type/utils"
-import { QueryError } from "@telefrek/query/query/error"
-import type {
-  BoundQuery,
-  QueryExecutor,
-  QueryParameters,
-  QueryResult,
-  RowType,
-  SimpleQuery,
-  StreamingQueryResult,
-} from "@telefrek/query/query/index"
+import { QueryError } from "@telefrek/query/error"
+import {
+  QueryType,
+  type BoundQuery,
+  type QueryExecutor,
+  type QueryParameters,
+  type QueryResult,
+  type RowType,
+  type SimpleQuery,
+  type StreamingQueryResult,
+} from "@telefrek/query/index"
 import pg from "pg"
 import { isPostgresQuery } from "./builder"
 
@@ -31,15 +32,16 @@ export class PostgresQueryExecutor implements QueryExecutor {
       const timer = new Timer()
       timer.start()
 
-      const parameters: unknown[] | undefined = query.parameters
-        ? Array.from(query.context.parameterMapping.keys())
-            .sort(
-              (a, b) =>
-                query.context.parameterMapping.get(a)! -
-                query.context.parameterMapping.get(b)!,
-            )
-            .map((k) => query.parameters[k])
-        : undefined
+      const parameters: unknown[] | undefined =
+        query.queryType === QueryType.BOUND
+          ? Array.from(query.context.parameterMapping.keys())
+              .sort(
+                (a, b) =>
+                  query.context.parameterMapping.get(a)! -
+                  query.context.parameterMapping.get(b)!,
+              )
+              .map((k) => query.parameters[k])
+          : undefined
 
       try {
         const results = await this.#client.query(query.queryText, parameters)

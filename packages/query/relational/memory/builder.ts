@@ -9,19 +9,19 @@ import {
   QueryParameters,
   QueryType,
   type BoundQuery,
+  type BuildableQueryTypes,
   type ParameterizedQuery,
   type QueryExecutor,
+  type QueryNode,
+  type QueryProvider,
   type QueryResult,
   type RowType,
   type SimpleQuery,
   type StreamingQueryResult,
-} from "../../query"
-import type {
-  QueryBuilder,
-  SupportedQueryTypes,
-} from "../../relational/builder/index"
+} from "../.."
+import { QueryError } from "../../error"
 import { getTreeRoot } from "../../relational/helpers"
-import { type RelationalNodeType, type RelationalQueryNode } from "../ast"
+import { isRelationalQueryNode } from "../ast"
 import { materializeNode } from "./astParser"
 
 /**
@@ -105,52 +105,51 @@ type BoundInMemoryQuery<
   P extends QueryParameters,
 > = BoundQuery<R, P> & InMemoryQuery<D, R>
 
-type InMemQ<
-  Q extends QueryType,
+export function InMemoryQueryBuilder<
   D extends RelationalDataStore,
+  Q extends BuildableQueryTypes,
   R extends RelationalDataTable,
   P extends QueryParameters,
-> = [P] extends [never]
-  ? SimpleInMemoryQuery<D, R>
-  : Q extends QueryType.PARAMETERIZED
-    ? ParameterizedInMemoryQuery<D, R, P>
-    : Q extends QueryType.BOUND
-      ? BoundInMemoryQuery<D, R, P>
-      : never
-
-export function createMemoryBuilder<
-  D extends RelationalDataStore,
-  Q extends SupportedQueryTypes,
-  R extends RelationalDataTable,
-  P extends QueryParameters,
->(): QueryBuilder<Q, R, P> {
+>(): QueryProvider<Q, R, P> {
   return (
-    node: RelationalQueryNode<RelationalNodeType>,
+    node: QueryNode,
     queryType: Q,
     name: string,
     mode: ExecutionMode,
   ): [P] extends [never] ? SimpleQuery<R> : ParameterizedQuery<R, P> => {
-    return {
-      queryType,
-      source: (store) => {
-        return materializeNode<R>(getTreeRoot(node), store)
-      },
-      name,
-      mode,
-      bind:
-        queryType === QueryType.PARAMETERIZED
-          ? (p: P): BoundQuery<R, P> => {
-              return {
-                parameters: p,
-                source: (store) => {
-                  return materializeNode<R>(getTreeRoot(node), store, p)
-                },
-                name,
-                mode,
-                queryType: QueryType.BOUND,
-              } as BoundInMemoryQuery<D, R, P>
-            }
-          : undefined,
-    } as InMemQ<Q, D, R, P>
+    if (isRelationalQueryNode(node)) {
+      const simple: SimpleInMemoryQuery<D, R> = {
+        queryType: QueryType.SIMPLE,
+        name,
+        mode,
+        source: (store) => {
+          return materializeNode<R>(getTreeRoot(node), store)
+        },
+      }
+
+      if (queryType === QueryType.SIMPLE) {
+        return simple as never
+      }
+
+      const parameterized: ParameterizedInMemoryQuery<D, R, P> = {
+        ...simple,
+        queryType: QueryType.PARAMETERIZED,
+        bind: (p: P): BoundQuery<R, P> => {
+          return {
+            parameters: p,
+            source: (store) => {
+              return materializeNode<R>(getTreeRoot(node), store, p)
+            },
+            name,
+            mode,
+            queryType: QueryType.BOUND,
+          } as BoundInMemoryQuery<D, R, P>
+        },
+      }
+
+      return parameterized as never
+    }
+
+    throw new QueryError("Invalid query node, expected RelationalQueryNode")
   }
 }

@@ -3,7 +3,7 @@
  */
 
 import type { RelationalDataStore, STAR } from "."
-import type { QueryNode } from "../query/ast"
+import type { QueryNode } from "../"
 
 /**
  * The valid set of join types supported

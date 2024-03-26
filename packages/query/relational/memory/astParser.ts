@@ -2,8 +2,8 @@
  * Contains the logic for parsing an {@link RelationalQueryNode} AST into a set of in memory operations
  */
 
-import { QueryError } from "../../query/error"
-import type { QueryParameters } from "../../query/index"
+import { QueryError } from "../../error"
+import type { QueryParameters } from "../../index"
 import {
   BooleanOperation,
   ColumnFilteringOperation,

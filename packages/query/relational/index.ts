@@ -3,7 +3,7 @@
  * objects has meaning
  */
 
-import type { RowType } from "../query/index"
+import type { RowType } from "../index"
 
 /**
  * Represents a table schema which can have named columns and values
