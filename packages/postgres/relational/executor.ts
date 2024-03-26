@@ -4,7 +4,7 @@
 
 import { Timer } from "@telefrek/core/time/index"
 import { makeCaseInsensitive } from "@telefrek/core/type/utils"
-import { QueryError } from "@telefrek/data/query/error"
+import { QueryError } from "@telefrek/query/query/error"
 import type {
   BoundQuery,
   QueryExecutor,
@@ -13,7 +13,7 @@ import type {
   RowType,
   SimpleQuery,
   StreamingQueryResult,
-} from "@telefrek/data/query/index"
+} from "@telefrek/query/query/index"
 import pg from "pg"
 import { isPostgresQuery } from "./builder"
 

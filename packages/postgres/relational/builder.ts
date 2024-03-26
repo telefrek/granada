@@ -1,12 +1,12 @@
 /**
- * Implementation of the @telefrek/data packages
+ * Implementation of the @telefrek/query packages
  */
 
 import type {
   OptionalLiteralKeys,
   RequiredLiteralKeys,
 } from "@telefrek/core/type/utils"
-import { QueryError } from "@telefrek/data/query/error"
+import { QueryError } from "@telefrek/query/query/error"
 import {
   ExecutionMode,
   QueryType,
@@ -15,8 +15,8 @@ import {
   type QueryParameters,
   type RowType,
   type SimpleQuery,
-} from "@telefrek/data/query/index"
-import type { RelationalNodeType } from "@telefrek/data/relational/ast"
+} from "@telefrek/query/query/index"
+import type { RelationalNodeType } from "@telefrek/query/relational/ast"
 import {
   IsArrayFilter,
   isColumnFilter,
@@ -31,24 +31,24 @@ import {
   type JoinQueryNode,
   type RelationalQueryNode,
   type TableQueryNode,
-} from "@telefrek/data/relational/ast"
+} from "@telefrek/query/relational/ast"
 import type {
   QueryBuilder,
   RelationalNodeBuilder,
   SupportedQueryTypes,
-} from "@telefrek/data/relational/builder/index"
-import { DefaultRelationalNodeBuilder } from "@telefrek/data/relational/builder/internal"
+} from "@telefrek/query/relational/builder/index"
+import { DefaultRelationalNodeBuilder } from "@telefrek/query/relational/builder/internal"
 import {
   CteNodeManager,
   JoinNodeManager,
   TableNodeManager,
   getTreeRoot,
   hasProjections,
-} from "@telefrek/data/relational/helpers"
+} from "@telefrek/query/relational/helpers"
 import type {
   RelationalDataStore,
   RelationalDataTable,
-} from "@telefrek/data/relational/index"
+} from "@telefrek/query/relational/index"
 import type {
   PostgresColumnType,
   PostgresColumnTypes,

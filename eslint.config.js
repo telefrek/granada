@@ -47,6 +47,6 @@ module.exports = [
     },
   },
   {
-    ignores: ["eslint.config.js", "**/dist/*"],
+    ignores: ["eslint.config.js", "**/dist/*", "**/*.integration.ts"],
   },
 ]

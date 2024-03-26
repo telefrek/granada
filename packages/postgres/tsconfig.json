@@ -6,11 +6,11 @@
     "paths": {
       "@telefrek/core": ["../core"],
       "@telefrek/core/*": ["../core/*"],
-      "@telefrek/data": ["../data"],
-      "@telefrek/data/*": ["../data/*"]
+      "@telefrek/query": ["../query"],
+      "@telefrek/query/*": ["../query/*"]
     }
   },
-  "references": [{ "path": "../core" }, { "path": "../data" }],
+  "references": [{ "path": "../core" }, { "path": "../query" }],
   "include": ["./**/*.ts"],
   "exclude": ["node_modules", "./dist/**/*"]
 }

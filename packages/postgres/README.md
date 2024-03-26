@@ -11,6 +11,6 @@ ______         _
 
 # Overview
 
-This package is an extension of the `@telefrek/data` package that uses
+This package is an extension of the `@telefrek/query` package that uses
 [Postgres](https://www.postgresql.org/) (via the
 [pg](https://github.com/brianc/node-postgres) package) to back the relational queries.

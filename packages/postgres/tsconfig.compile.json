@@ -6,8 +6,8 @@
     "paths": {
       "@telefrek/core": ["../core"],
       "@telefrek/core/*": ["../core/*"],
-      "@telefrek/data": ["../data"],
-      "@telefrek/data/*": ["../data/*"]
+      "@telefrek/query": ["../data"],
+      "@telefrek/query/*": ["../data/*"]
     }
   },
   "references": [{ "path": "../core" }, { "path": "../data" }],

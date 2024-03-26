@@ -1,5 +1,4 @@
 {
-  "typescript.preferences.importModuleSpecifierEnding": "index",
   "eslint.lintTask.enable": true,
   "eslint.experimental.useFlatConfig": true
 }

@@ -9,15 +9,15 @@
     "format": "npx prettier --write .",
     "ci": "npm install && npm run compile --workspaces --if-present && npm run test:unit",
     "upgrade-all": "npx npm-check-updates -u && npm install && npm run upgrade --workspaces --if-present",
-    "tsc-diagnostics": "tsc --extendedDiagnostics --diagnostics",
-    "lint": "npx eslint . --fix"
+    "build": "turbo build",
+    "lint": "npm run lint --workspaces --if-present"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.0.2",
     "@types/jest": "^29.5.12",
     "@types/node": "^20.11.30",
-    "@typescript-eslint/eslint-plugin": "^7.3.1",
-    "@typescript-eslint/parser": "^7.3.1",
+    "@typescript-eslint/eslint-plugin": "^7.4.0",
+    "@typescript-eslint/parser": "^7.4.0",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.1.3",

@@ -3,9 +3,10 @@
   "version": "1.0.0-alpha.12",
   "description": "This package standardizes how HTTP clients and servers interact at a low level",
   "scripts": {
-    "compile": "tsc -p tsconfig.compile.json",
     "upgrade": "npx npm-check-updates -u && npm install",
-    "build": "tsc --extendedDiagnostics --diagnostics"
+    "build": "tsc",
+    "compile": "tsc -p tsconfig.compile.json",
+    "lint": "npx eslint . --fix"
   },
   "keywords": [
     "granada",
