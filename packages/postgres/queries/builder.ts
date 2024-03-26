@@ -19,7 +19,6 @@ import {
   type RowType,
   type SimpleQuery,
 } from "@telefrek/query/index"
-import type { RelationalNodeType } from "@telefrek/query/relational/ast"
 import {
   IsArrayFilter,
   isColumnFilter,
@@ -27,28 +26,26 @@ import {
   isFilterGroup,
   isJoinQueryNode,
   isParameterNode,
-  isRelationalQueryNode,
+  isSQLQueryNode,
   isTableQueryNode,
   type CteClause,
   type FilterGroup,
   type FilterTypes,
   type JoinQueryNode,
-  type RelationalQueryNode,
+  type SQLNodeType,
+  type SQLQueryNode,
   type TableQueryNode,
-} from "@telefrek/query/relational/ast"
-import type { RelationalNodeBuilder } from "@telefrek/query/relational/builder/index"
-import { DefaultRelationalNodeBuilder } from "@telefrek/query/relational/builder/internal"
+} from "@telefrek/query/sql/ast"
+import type { SQLNodeBuilder } from "@telefrek/query/sql/builder/index"
+import { DefaultSQLNodeBuilder } from "@telefrek/query/sql/builder/internal"
 import {
   CteNodeManager,
   JoinNodeManager,
   TableNodeManager,
   getTreeRoot,
   hasProjections,
-} from "@telefrek/query/relational/helpers"
-import type {
-  RelationalDataStore,
-  RelationalDataTable,
-} from "@telefrek/query/relational/index"
+} from "@telefrek/query/sql/helpers"
+import type { SQLDataStore, SQLDataTable } from "@telefrek/query/sql/index"
 import type {
   PostgresColumnType,
   PostgresColumnTypes,
@@ -70,9 +67,7 @@ export type PostgresTableRow<
     : c
 }>
 
-export interface PostgresRelationalDataStore<
-  Database extends PostgresDatabase,
-> {
+export interface PostgresSQLDataStore<Database extends PostgresDatabase> {
   tables: {
     [key in keyof Database["tables"]]: PostgresTableRow<
       Database["tables"][key]["schema"]
@@ -82,12 +77,9 @@ export interface PostgresRelationalDataStore<
 
 export function createPostgresQueryContext<
   Database extends PostgresDatabase,
->(): RelationalNodeBuilder<
-  PostgresRelationalDataStore<Database>,
-  QueryType.SIMPLE
-> {
-  return new DefaultRelationalNodeBuilder<
-    PostgresRelationalDataStore<Database>,
+>(): SQLNodeBuilder<PostgresSQLDataStore<Database>, QueryType.SIMPLE> {
+  return new DefaultSQLNodeBuilder<
+    PostgresSQLDataStore<Database>,
     QueryType.SIMPLE
   >(QueryType.SIMPLE)
 }
@@ -120,7 +112,7 @@ export function isPostgresQuery(query: unknown): query is PostgresQuery {
 
 export function PostgresQueryBuilder<
   Q extends BuildableQueryTypes,
-  R extends RelationalDataTable,
+  R extends SQLDataTable,
   P extends QueryParameters,
 >(): QueryProvider<Q, R, P> {
   return (
@@ -129,7 +121,7 @@ export function PostgresQueryBuilder<
     name: string,
     mode: ExecutionMode,
   ): [P] extends [never] ? SimpleQuery<R> : ParameterizedQuery<R, P> => {
-    if (isRelationalQueryNode(node)) {
+    if (isSQLQueryNode(node)) {
       const context: PostgresContext = {
         parameterMapping: new Map(),
       }
@@ -166,7 +158,7 @@ export function PostgresQueryBuilder<
       return parameterized as never
     }
 
-    throw new QueryError("Invalid query node, expected RelationalQueryNode")
+    throw new QueryError("Invalid query node, expected SQLQueryNode")
   }
 }
 
@@ -267,7 +259,7 @@ function translateTableQuery(
 }
 
 function translateNode(
-  node: RelationalQueryNode<RelationalNodeType>,
+  node: SQLQueryNode<SQLNodeType>,
   context: PostgresContext,
 ): string {
   if (hasProjections(node)) {
@@ -297,24 +289,19 @@ function translateNode(
 }
 
 interface ProjectionInfo {
-  projections: RelationalQueryNode<RelationalNodeType>[]
-  aliasing: Map<
-    keyof RelationalDataStore["tables"],
-    RelationalQueryNode<RelationalNodeType>
-  >
-  queryNode: RelationalQueryNode<RelationalNodeType>
+  projections: SQLQueryNode<SQLNodeType>[]
+  aliasing: Map<keyof SQLDataStore["tables"], SQLQueryNode<SQLNodeType>>
+  queryNode: SQLQueryNode<SQLNodeType>
 }
 
-function extractProjections(
-  root: RelationalQueryNode<RelationalNodeType>,
-): ProjectionInfo {
+function extractProjections(root: SQLQueryNode<SQLNodeType>): ProjectionInfo {
   const info: ProjectionInfo = {
     projections: [],
     queryNode: root,
     aliasing: new Map(),
   }
 
-  let current: RelationalQueryNode<RelationalNodeType> | undefined = root
+  let current: SQLQueryNode<SQLNodeType> | undefined = root
   while (current) {
     // Terminal cases
     if (isTableQueryNode(current) || isJoinQueryNode(current)) {

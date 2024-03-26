@@ -4,11 +4,11 @@
 
 import { getDebugInfo } from "@telefrek/core"
 import {
-  RelationalNodeType,
+  SQLNodeType,
   isColumnAlias,
   isGenerator,
   isJoinClauseNode,
-  isRelationalQueryNode,
+  isSQLQueryNode,
   isSelectClause,
   isTableQueryNode,
   isWhereClause,
@@ -16,23 +16,23 @@ import {
   type CteClause,
   type JoinClauseQueryNode,
   type JoinQueryNode,
-  type RelationalQueryNode,
+  type SQLQueryNode,
   type SelectClause,
   type TableQueryNode,
   type WhereClause,
 } from "./ast"
 
-type RNode = RelationalQueryNode<RelationalNodeType>
+type RNode = SQLQueryNode<SQLNodeType>
 
 /**
  * Find the root of the AST
  *
- * @param node The {@link RelationalQueryNode} to start with
+ * @param node The {@link SQLQueryNode} to start with
  * @returns The root of the AST
  */
 export function getTreeRoot(node: RNode): RNode {
   let current = node
-  while (current.parent && isRelationalQueryNode(current.parent)) {
+  while (current.parent && isSQLQueryNode(current.parent)) {
     current = current.parent
   }
 
@@ -42,7 +42,7 @@ export function getTreeRoot(node: RNode): RNode {
 /**
  * Helper method to identify if the query utilizes any projections
  *
- * @param node The {@link RelationalQueryNode} to search
+ * @param node The {@link SQLQueryNode} to search
  * @returns True if there are any projections that need to be resolved
  */
 export function hasProjections(node: RNode): boolean {
@@ -58,9 +58,9 @@ export function hasProjections(node: RNode): boolean {
     // Check if we have any nodes that are known projection types (aliasing,
     // compositional sets, etc.)
     switch (next.nodeType) {
-      case RelationalNodeType.CTE:
+      case SQLNodeType.CTE:
         return true
-      case RelationalNodeType.TABLE:
+      case SQLNodeType.TABLE:
         if (isTableQueryNode(next) && next.alias) {
           return true
         }
@@ -68,14 +68,14 @@ export function hasProjections(node: RNode): boolean {
     }
 
     // Queue the children to search
-    queue.push(...(next.children?.filter(isRelationalQueryNode) ?? []))
+    queue.push(...(next.children?.filter(isSQLQueryNode) ?? []))
   }
 
   return false
 }
 
 /**
- * Common logic shared by all {@link RelationalQueryNode} objects
+ * Common logic shared by all {@link SQLQueryNode} objects
  */
 abstract class RelationalASTNodeManager<NodeType extends RNode> {
   protected node: NodeType
@@ -85,13 +85,10 @@ abstract class RelationalASTNodeManager<NodeType extends RNode> {
   }
 
   /**
-   * Get the {@link RelationalQueryNode} that is a child of this query
+   * Get the {@link SQLQueryNode} that is a child of this query
    */
   get child(): RNode | undefined {
-    return this.node.children
-      ?.filter(isRelationalQueryNode)
-      .filter(isGenerator)
-      .at(0)
+    return this.node.children?.filter(isSQLQueryNode).filter(isGenerator).at(0)
   }
 
   public toString = (): string => getDebugInfo(this.node)
@@ -131,7 +128,7 @@ export class TableNodeManager extends RelationalASTNodeManager<TableQueryNode> {
 export class CteNodeManager extends RelationalASTNodeManager<CteClause> {
   override get child(): RNode | undefined {
     return this.node.children
-      ?.filter(isRelationalQueryNode)
+      ?.filter(isSQLQueryNode)
       .filter((c) => c !== this.node.source)
       .at(0)
   }

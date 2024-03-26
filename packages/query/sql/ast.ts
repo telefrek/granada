@@ -1,8 +1,8 @@
 /**
- * Extensions to the base query AST specific for relational data sources
+ * Extensions to the base query AST specific for sql data sources
  */
 
-import type { RelationalDataStore, STAR } from "."
+import type { SQLDataStore, STAR } from "."
 import type { QueryNode } from "../"
 
 /**
@@ -43,27 +43,17 @@ export enum BooleanOperation {
 }
 
 /**
- * Custom type to map records of RelationalDataStore keys
+ * Custom type to map records of {@link SQLDataStore} keys
  */
 export type TableAlias = Record<
-  keyof RelationalDataStore["tables"],
-  keyof RelationalDataStore["tables"]
+  keyof SQLDataStore["tables"],
+  keyof SQLDataStore["tables"]
 >
 
 /**
- * A provider that returns relational query nodes
+ * The supported types a {@link SQLQueryNode} can have
  */
-export interface RelationalNodeProvider<
-  NodeType extends
-    RelationalQueryNode<RelationalNodeType> = RelationalQueryNode<RelationalNodeType>,
-> {
-  asNode(): NodeType
-}
-
-/**
- * The supported types a {@link RelationalQueryNode} can have
- */
-export enum RelationalNodeType {
+export enum SQLNodeType {
   TABLE = "table",
   WHERE = "where",
   CTE = "cte",
@@ -79,12 +69,11 @@ export enum RelationalNodeType {
 }
 
 /**
- * Represents an internal {@link QueryNode} use for building relational queries
+ * Represents an internal {@link QueryNode} use for building sql queries
  */
-export type RelationalQueryNode<NodeType extends RelationalNodeType> =
-  QueryNode & {
-    nodeType: NodeType
-  }
+export type SQLQueryNode<NodeType extends SQLNodeType> = QueryNode & {
+  nodeType: NodeType
+}
 
 /**
  * Represents a filter on a given column like:`table.column {op} value`
@@ -153,10 +142,9 @@ export interface FilterGroup {
 }
 
 /**
- * A type of {@link RelationalQueryNode} that produces rows with a named table (either alias or existing)
+ * A type of {@link SQLQueryNode} that produces rows with a named table (either alias or existing)
  */
-export interface NamedRelationalQueryNode
-  extends RelationalQueryNode<RelationalNodeType> {
+export interface NamedSQLQueryNode extends SQLQueryNode<SQLNodeType> {
   tableName: string
 }
 
@@ -168,52 +156,52 @@ type FilteredClause = {
   filter: FilterGroup | FilterTypes
 }
 
-export type InsertClause = RelationalQueryNode<RelationalNodeType.INSERT> &
-  NamedRelationalQueryNode &
+export type InsertClause = SQLQueryNode<SQLNodeType.INSERT> &
+  NamedSQLQueryNode &
   ReturningClause
 
-export type UpdateClause = RelationalQueryNode<RelationalNodeType.UPDATE> &
-  NamedRelationalQueryNode &
+export type UpdateClause = SQLQueryNode<SQLNodeType.UPDATE> &
+  NamedSQLQueryNode &
   ReturningClause &
   FilteredClause
 
-export type MergeClause = RelationalQueryNode<RelationalNodeType.MERGE> &
-  NamedRelationalQueryNode &
+export type MergeClause = SQLQueryNode<SQLNodeType.MERGE> &
+  NamedSQLQueryNode &
   ReturningClause &
   FilteredClause
 
-export type DeleteClause = RelationalQueryNode<RelationalNodeType.DELETE> &
-  NamedRelationalQueryNode &
+export type DeleteClause = SQLQueryNode<SQLNodeType.DELETE> &
+  NamedSQLQueryNode &
   ReturningClause &
   FilteredClause
 
 /**
- * A {@link RelationalQueryNode} that represents a common table expression
+ * A {@link SQLQueryNode} that represents a common table expression
  */
-export type CteClause = RelationalQueryNode<RelationalNodeType.CTE> &
-  NamedRelationalQueryNode & {
-    source: RelationalQueryNode<RelationalNodeType>
+export type CteClause = SQLQueryNode<SQLNodeType.CTE> &
+  NamedSQLQueryNode & {
+    source: SQLQueryNode<SQLNodeType>
   }
 
 /**
- * A {@link RelationalQueryNode} that indicates a table query
+ * A {@link SQLQueryNode} that indicates a table query
  */
-export type TableQueryNode = RelationalQueryNode<RelationalNodeType.TABLE> &
-  NamedRelationalQueryNode & {
+export type TableQueryNode = SQLQueryNode<SQLNodeType.TABLE> &
+  NamedSQLQueryNode & {
     alias?: string
   }
 
 /**
- * A {@link RelationalQueryNode} that indicates a select clause
+ * A {@link SQLQueryNode} that indicates a select clause
  */
-export type SelectClause = RelationalQueryNode<RelationalNodeType.SELECT> & {
+export type SelectClause = SQLQueryNode<SQLNodeType.SELECT> & {
   columns: string[] | STAR
 }
 
 /**
  * An alias for a column in a {@link SelectClause}
  */
-export type ColumnAlias = RelationalQueryNode<RelationalNodeType.ALIAS> & {
+export type ColumnAlias = SQLQueryNode<SQLNodeType.ALIAS> & {
   column: string
   alias: string
 }
@@ -221,18 +209,17 @@ export type ColumnAlias = RelationalQueryNode<RelationalNodeType.ALIAS> & {
 /**
  * Represents a where clause
  */
-export type WhereClause = RelationalQueryNode<RelationalNodeType.WHERE> &
-  FilteredClause
+export type WhereClause = SQLQueryNode<SQLNodeType.WHERE> & FilteredClause
 
 /**
- * A type of {@link RelationalQueryNode} that represents a join operation
+ * A type of {@link SQLQueryNode} that represents a join operation
  */
-export type JoinQueryNode = RelationalQueryNode<RelationalNodeType.JOIN>
+export type JoinQueryNode = SQLQueryNode<SQLNodeType.JOIN>
 
 /**
- * A type of {@link RelationalQueryNode} that represents a join clause
+ * A type of {@link SQLQueryNode} that represents a join clause
  */
-export type JoinClauseQueryNode = RelationalQueryNode<RelationalNodeType.ON> & {
+export type JoinClauseQueryNode = SQLQueryNode<SQLNodeType.ON> & {
   left: string
   right: string
   filter: JoinColumnFilter
@@ -249,29 +236,26 @@ export interface JoinColumnFilter {
 }
 
 /**
- * A type of {@link RelationalQueryNode} that indicates a parameter reference
+ * A type of {@link SQLQueryNode} that indicates a parameter reference
  */
-export type ParameterNode =
-  RelationalQueryNode<RelationalNodeType.PARAMETER> & {
-    name: string
-  }
+export type ParameterNode = SQLQueryNode<SQLNodeType.PARAMETER> & {
+  name: string
+}
 
 /**
- * Type guard for {@link RelationalQueryNode}
+ * Type guard for {@link SQLQueryNode}
  *
  * @param node The {@link QueryNode} to check
- * @returns True if the node is a {@link RelationalQueryNode}
+ * @returns True if the node is a {@link SQLQueryNode}
  */
-export function isRelationalQueryNode(
+export function isSQLQueryNode(
   node: unknown,
-): node is RelationalQueryNode<RelationalNodeType> {
+): node is SQLQueryNode<SQLNodeType> {
   return (
     typeof node === "object" &&
     node !== null &&
     "nodeType" in node &&
-    Object.values(RelationalNodeType).includes(
-      node.nodeType as RelationalNodeType,
-    )
+    Object.values(SQLNodeType).includes(node.nodeType as SQLNodeType)
   )
 }
 
@@ -282,10 +266,7 @@ export function isRelationalQueryNode(
  * @returns True if the node is a {@link ParameterNode}
  */
 export function isParameterNode(node: unknown): node is ParameterNode {
-  return (
-    isRelationalQueryNode(node) &&
-    node.nodeType === RelationalNodeType.PARAMETER
-  )
+  return isSQLQueryNode(node) && node.nodeType === SQLNodeType.PARAMETER
 }
 
 /**
@@ -378,32 +359,32 @@ export function isStringFilter(
 }
 
 /**
- * Type guard for {@link RelationalQueryNode} that generate rows
+ * Type guard for {@link SQLQueryNode} that generate rows
  *
  * @param node The {@link QueryNode} to check
- * @returns True if the object is a {@link RelationalQueryNode} that generated rows
+ * @returns True if the object is a {@link SQLQueryNode} that generated rows
  */
 export function isGenerator(
   node: QueryNode,
-): node is RelationalQueryNode<RelationalNodeType> {
+): node is SQLQueryNode<SQLNodeType> {
   return (
-    isRelationalQueryNode(node) &&
-    (node.nodeType === RelationalNodeType.TABLE ||
-      node.nodeType === RelationalNodeType.JOIN ||
-      node.nodeType === RelationalNodeType.CTE ||
-      node.nodeType === RelationalNodeType.ALIAS)
+    isSQLQueryNode(node) &&
+    (node.nodeType === SQLNodeType.TABLE ||
+      node.nodeType === SQLNodeType.JOIN ||
+      node.nodeType === SQLNodeType.CTE ||
+      node.nodeType === SQLNodeType.ALIAS)
   )
 }
 
 /**
- * Type guard for {@link NamedRelationalQueryNode} objects
+ * Type guard for {@link NamedSQLQueryNode} objects
  *
  * @param node The {@link QueryNode} to check
- * @returns True if the node is a {@link NamedRelationalQueryNode}
+ * @returns True if the node is a {@link NamedSQLQueryNode}
  */
-export function isNamedRelationalQueryNode(
+export function isNamedSQLQueryNode(
   node: QueryNode,
-): node is NamedRelationalQueryNode {
+): node is NamedSQLQueryNode {
   return "tableName" in node && typeof node.tableName === "string"
 }
 
@@ -415,9 +396,9 @@ export function isNamedRelationalQueryNode(
  */
 export function isCteClause(node: QueryNode): node is CteClause {
   return (
-    isRelationalQueryNode(node) &&
-    node.nodeType === RelationalNodeType.CTE &&
-    isNamedRelationalQueryNode(node)
+    isSQLQueryNode(node) &&
+    node.nodeType === SQLNodeType.CTE &&
+    isNamedSQLQueryNode(node)
   )
 }
 
@@ -429,9 +410,9 @@ export function isCteClause(node: QueryNode): node is CteClause {
  */
 export function isInsertClause(node: QueryNode): node is InsertClause {
   return (
-    isRelationalQueryNode(node) &&
-    node.nodeType === RelationalNodeType.INSERT &&
-    isNamedRelationalQueryNode(node)
+    isSQLQueryNode(node) &&
+    node.nodeType === SQLNodeType.INSERT &&
+    isNamedSQLQueryNode(node)
   )
 }
 
@@ -443,9 +424,9 @@ export function isInsertClause(node: QueryNode): node is InsertClause {
  */
 export function isUpdateClause(node: QueryNode): node is UpdateClause {
   return (
-    isRelationalQueryNode(node) &&
-    node.nodeType === RelationalNodeType.UPDATE &&
-    isNamedRelationalQueryNode(node)
+    isSQLQueryNode(node) &&
+    node.nodeType === SQLNodeType.UPDATE &&
+    isNamedSQLQueryNode(node)
   )
 }
 
@@ -457,9 +438,9 @@ export function isUpdateClause(node: QueryNode): node is UpdateClause {
  */
 export function isMergeClause(node: QueryNode): node is MergeClause {
   return (
-    isRelationalQueryNode(node) &&
-    node.nodeType === RelationalNodeType.MERGE &&
-    isNamedRelationalQueryNode(node)
+    isSQLQueryNode(node) &&
+    node.nodeType === SQLNodeType.MERGE &&
+    isNamedSQLQueryNode(node)
   )
 }
 
@@ -471,9 +452,9 @@ export function isMergeClause(node: QueryNode): node is MergeClause {
  */
 export function isDeleteClause(node: QueryNode): node is DeleteClause {
   return (
-    isRelationalQueryNode(node) &&
-    node.nodeType === RelationalNodeType.DELETE &&
-    isNamedRelationalQueryNode(node)
+    isSQLQueryNode(node) &&
+    node.nodeType === SQLNodeType.DELETE &&
+    isNamedSQLQueryNode(node)
   )
 }
 
@@ -484,9 +465,7 @@ export function isDeleteClause(node: QueryNode): node is DeleteClause {
  * @returns True if the node is a {@link WhereClause}
  */
 export function isWhereClause(node: QueryNode): node is WhereClause {
-  return (
-    isRelationalQueryNode(node) && node.nodeType === RelationalNodeType.WHERE
-  )
+  return isSQLQueryNode(node) && node.nodeType === SQLNodeType.WHERE
 }
 
 /**
@@ -496,9 +475,7 @@ export function isWhereClause(node: QueryNode): node is WhereClause {
  * @returns True if the node is a {@link SelectClause}
  */
 export function isSelectClause(node: QueryNode): node is SelectClause {
-  return (
-    isRelationalQueryNode(node) && node.nodeType === RelationalNodeType.SELECT
-  )
+  return isSQLQueryNode(node) && node.nodeType === SQLNodeType.SELECT
 }
 
 /**
@@ -508,9 +485,7 @@ export function isSelectClause(node: QueryNode): node is SelectClause {
  * @returns True if the node is a {@link ColumnAlias}
  */
 export function isColumnAlias(node: QueryNode): node is ColumnAlias {
-  return (
-    isRelationalQueryNode(node) && node.nodeType === RelationalNodeType.ALIAS
-  )
+  return isSQLQueryNode(node) && node.nodeType === SQLNodeType.ALIAS
 }
 
 /**
@@ -521,9 +496,9 @@ export function isColumnAlias(node: QueryNode): node is ColumnAlias {
  */
 export function isTableQueryNode(node: QueryNode): node is TableQueryNode {
   return (
-    isRelationalQueryNode(node) &&
-    node.nodeType === RelationalNodeType.TABLE &&
-    isNamedRelationalQueryNode(node)
+    isSQLQueryNode(node) &&
+    node.nodeType === SQLNodeType.TABLE &&
+    isNamedSQLQueryNode(node)
   )
 }
 
@@ -556,9 +531,7 @@ export function isJoinColumnFilter(
  * @returns True if the node is a {@link JoinQueryNode}
  */
 export function isJoinQueryNode(node: QueryNode): node is JoinQueryNode {
-  return (
-    isRelationalQueryNode(node) && node.nodeType === RelationalNodeType.JOIN
-  )
+  return isSQLQueryNode(node) && node.nodeType === SQLNodeType.JOIN
 }
 
 /**
@@ -568,7 +541,7 @@ export function isJoinQueryNode(node: QueryNode): node is JoinQueryNode {
  * @returns True if the node is a {@link JoinClauseQueryNode}
  */
 export function isJoinClauseNode(node: QueryNode): node is JoinClauseQueryNode {
-  return isRelationalQueryNode(node) && node.nodeType === RelationalNodeType.ON
+  return isSQLQueryNode(node) && node.nodeType === SQLNodeType.ON
 }
 
 /**

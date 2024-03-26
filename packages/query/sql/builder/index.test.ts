@@ -3,7 +3,7 @@ import {
   InMemoryQueryBuilder,
   InMemoryQueryExecutor,
   type InMemoryRelationalDataStore,
-} from "../../relational/memory/builder"
+} from "../../sql/memory/builder"
 import { useDataStore } from "../builder"
 
 enum Category {

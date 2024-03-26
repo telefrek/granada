@@ -3,7 +3,7 @@
  */
 
 import { Duration } from "@telefrek/core/time/index"
-import type { RelationalDataStore, RelationalDataTable } from ".."
+import type { SQLDataStore, SQLDataTable } from ".."
 import {
   ExecutionMode,
   QueryParameters,
@@ -20,8 +20,8 @@ import {
   type StreamingQueryResult,
 } from "../.."
 import { QueryError } from "../../error"
-import { getTreeRoot } from "../../relational/helpers"
-import { isRelationalQueryNode } from "../ast"
+import { getTreeRoot } from "../../sql/helpers"
+import { isSQLQueryNode } from "../ast"
 import { materializeNode } from "./astParser"
 
 /**
@@ -30,26 +30,24 @@ import { materializeNode } from "./astParser"
 export type InMemoryTable<TableType> = TableType[]
 
 /**
- * Define an in memory {@link RelationalDataStore} as a collection of table
+ * Define an in memory {@link SQLDataStore} as a collection of table
  * name, {@link InMemoryTable} for the given type
  */
-export type InMemoryRelationalDataStore<
-  DataStoreType extends RelationalDataStore,
-> = {
+export type InMemoryRelationalDataStore<DataStoreType extends SQLDataStore> = {
   [key in keyof DataStoreType["tables"]]: InMemoryTable<
     DataStoreType["tables"][key]
   >
 }
 
 export function createInMemoryStore<
-  DataStoreType extends RelationalDataStore,
+  DataStoreType extends SQLDataStore,
 >(): InMemoryRelationalDataStore<DataStoreType> {
   return {
     sources: {},
   } as InMemoryRelationalDataStore<DataStoreType>
 }
 
-export class InMemoryQueryExecutor<DataStoreType extends RelationalDataStore>
+export class InMemoryQueryExecutor<DataStoreType extends SQLDataStore>
   implements QueryExecutor
 {
   store: InMemoryRelationalDataStore<DataStoreType>
@@ -74,41 +72,38 @@ export class InMemoryQueryExecutor<DataStoreType extends RelationalDataStore>
 }
 
 type InMemoryQuerySourceMaterializer<
-  DataStoreType extends RelationalDataStore,
+  DataStoreType extends SQLDataStore,
   RowType,
 > = (
   store: InMemoryRelationalDataStore<DataStoreType>,
   parameters?: QueryParameters,
 ) => RowType[] | undefined
 
-type InMemoryQuery<
-  D extends RelationalDataStore,
-  R extends RelationalDataTable,
-> = {
+type InMemoryQuery<D extends SQLDataStore, R extends SQLDataTable> = {
   source: InMemoryQuerySourceMaterializer<D, R>
 }
 
 type SimpleInMemoryQuery<
-  D extends RelationalDataStore,
-  R extends RelationalDataTable,
+  D extends SQLDataStore,
+  R extends SQLDataTable,
 > = SimpleQuery<R> & InMemoryQuery<D, R>
 
 type ParameterizedInMemoryQuery<
-  D extends RelationalDataStore,
-  R extends RelationalDataTable,
+  D extends SQLDataStore,
+  R extends SQLDataTable,
   P extends QueryParameters,
 > = ParameterizedQuery<R, P> & InMemoryQuery<D, R>
 
 type BoundInMemoryQuery<
-  D extends RelationalDataStore,
-  R extends RelationalDataTable,
+  D extends SQLDataStore,
+  R extends SQLDataTable,
   P extends QueryParameters,
 > = BoundQuery<R, P> & InMemoryQuery<D, R>
 
 export function InMemoryQueryBuilder<
-  D extends RelationalDataStore,
+  D extends SQLDataStore,
   Q extends BuildableQueryTypes,
-  R extends RelationalDataTable,
+  R extends SQLDataTable,
   P extends QueryParameters,
 >(): QueryProvider<Q, R, P> {
   return (
@@ -117,7 +112,7 @@ export function InMemoryQueryBuilder<
     name: string,
     mode: ExecutionMode,
   ): [P] extends [never] ? SimpleQuery<R> : ParameterizedQuery<R, P> => {
-    if (isRelationalQueryNode(node)) {
+    if (isSQLQueryNode(node)) {
       const simple: SimpleInMemoryQuery<D, R> = {
         queryType: QueryType.SIMPLE,
         name,

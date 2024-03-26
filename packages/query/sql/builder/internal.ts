@@ -1,5 +1,9 @@
 import type {
   AliasedType,
+  ArrayItemType,
+  ArrayProperty,
+  MergedNonOverlappingType,
+  PropertyOfType,
   RequiredLiteralKeys,
 } from "@telefrek/core/type/utils"
 import { QueryError } from "../../error"
@@ -18,7 +22,7 @@ import {
   ColumnValueContainsOperation,
   ContainmentObjectType,
   JoinType,
-  RelationalNodeType,
+  SQLNodeType,
   isFilter,
   type ColumnAlias,
   type CteClause,
@@ -26,25 +30,19 @@ import {
   type FilterTypes,
   type InsertClause,
   type JoinClauseQueryNode,
-  type RelationalQueryNode,
+  type SQLQueryNode,
   type SelectClause,
   type TableAlias,
   type TableQueryNode,
   type WhereClause,
 } from "../ast"
-import type { RelationalDataStore, RelationalDataTable, STAR } from "../index"
-import {
-  type ArrayItemType,
-  type ArrayProperty,
-  type MergedNonOverlappingType,
-  type ModifiedStore,
-  type PropertyOfType,
-} from "../types"
+import type { SQLDataStore, SQLDataTable, STAR } from "../index"
 import {
   type InsertBuilder,
   type JoinNodeBuilder,
-  type RelationalNodeBuilder,
-  type RelationalProcessorBuilder,
+  type ModifiedStore,
+  type SQLNodeBuilder,
+  type SQLProcessorBuilder,
   type TableGenerator,
   type TableNodeBuilder,
   type WhereClauseBuilder,
@@ -54,19 +52,19 @@ import {
  * Internal implementation
  ******************************************************************************/
 
-export class DefaultRelationalNodeBuilder<
-  D extends RelationalDataStore,
+export class DefaultSQLNodeBuilder<
+  D extends SQLDataStore,
   Q extends BuildableQueryTypes,
-  R extends RelationalDataTable = never,
+  R extends SQLDataTable = never,
   P extends QueryParameters = never,
   A extends keyof D["tables"] = never,
-> implements RelationalNodeBuilder<D, Q, R, P, A>
+> implements SQLNodeBuilder<D, Q, R, P, A>
 {
-  #context?: RelationalQueryNode<RelationalNodeType>
+  #context?: SQLQueryNode<SQLNodeType>
   #tableAlias: TableAlias
 
   // Only all the context to transit to the next node in the chain
-  get context(): RelationalQueryNode<RelationalNodeType> | undefined {
+  get context(): SQLQueryNode<SQLNodeType> | undefined {
     const current = this.#context
     this.#context = undefined
 
@@ -82,7 +80,7 @@ export class DefaultRelationalNodeBuilder<
 
   constructor(
     queryType: Q,
-    context?: RelationalQueryNode<RelationalNodeType>,
+    context?: SQLQueryNode<SQLNodeType>,
     tableAlias: TableAlias = {},
   ) {
     this.queryType = queryType
@@ -95,7 +93,7 @@ export class DefaultRelationalNodeBuilder<
     return new InternalInsertBuilder(tableName)
   }
 
-  withParameters<QP extends QueryParameters>(): RelationalNodeBuilder<
+  withParameters<QP extends QueryParameters>(): SQLNodeBuilder<
     D,
     QueryType.PARAMETERIZED,
     R,
@@ -106,7 +104,7 @@ export class DefaultRelationalNodeBuilder<
       throw new QueryError("Query Parameters are already defined")
     }
 
-    return new DefaultRelationalNodeBuilder(
+    return new DefaultSQLNodeBuilder(
       QueryType.PARAMETERIZED,
       this.#context,
       this.tableAlias,
@@ -119,7 +117,7 @@ export class DefaultRelationalNodeBuilder<
   >(
     table: TN,
     alias: Alias,
-  ): RelationalNodeBuilder<
+  ): SQLNodeBuilder<
     ModifiedStore<D, Alias, D["tables"][TN]>,
     Q,
     R,
@@ -127,7 +125,7 @@ export class DefaultRelationalNodeBuilder<
     A | Alias
   > {
     const a = Object.fromEntries([[alias, table as string]])
-    return new DefaultRelationalNodeBuilder<
+    return new DefaultSQLNodeBuilder<
       ModifiedStore<D, Alias, D["tables"][TN]>,
       Q,
       R,
@@ -139,10 +137,10 @@ export class DefaultRelationalNodeBuilder<
     })
   }
 
-  withCte<Alias extends string, TT extends RelationalDataTable>(
+  withCte<Alias extends string, TT extends SQLDataTable>(
     alias: Alias,
-    source: RelationalProcessorBuilder<D, Q, R, P, A, TT>,
-  ): RelationalNodeBuilder<ModifiedStore<D, Alias, TT>, Q, R, P, A | Alias> {
+    source: SQLProcessorBuilder<D, Q, R, P, A, TT>,
+  ): SQLNodeBuilder<ModifiedStore<D, Alias, TT>, Q, R, P, A | Alias> {
     // Get the row generator
     const generator = source(this).asNode()
 
@@ -150,7 +148,7 @@ export class DefaultRelationalNodeBuilder<
 
     const cte: CteClause = {
       tableName: alias,
-      nodeType: RelationalNodeType.CTE,
+      nodeType: SQLNodeType.CTE,
       source: generator,
     }
 
@@ -165,7 +163,7 @@ export class DefaultRelationalNodeBuilder<
       generator.parent = cte
     }
 
-    return new DefaultRelationalNodeBuilder<
+    return new DefaultSQLNodeBuilder<
       ModifiedStore<D, Alias, TT>,
       Q,
       R,
@@ -193,7 +191,7 @@ export class DefaultRelationalNodeBuilder<
     )
   }
 
-  asNode(): RelationalQueryNode<RelationalNodeType> {
+  asNode(): SQLQueryNode<SQLNodeType> {
     throw new Error("Relation Node Builders cannot themselves provide an AST")
   }
 
@@ -209,9 +207,9 @@ export class DefaultRelationalNodeBuilder<
 }
 
 class InternalInsertBuilder<
-  D extends RelationalDataStore,
+  D extends SQLDataStore,
   T extends keyof D["tables"],
-  R extends RelationalDataTable = never,
+  R extends SQLDataTable = never,
   P extends RequiredLiteralKeys<D["tables"][T]> = D["tables"][T],
 > implements InsertBuilder<D, T, R, P>
 {
@@ -247,9 +245,9 @@ class InternalInsertBuilder<
     )
   }
 
-  asNode(): RelationalQueryNode<RelationalNodeType> {
+  asNode(): SQLQueryNode<SQLNodeType> {
     return {
-      nodeType: RelationalNodeType.INSERT,
+      nodeType: SQLNodeType.INSERT,
       tableName: this.tableName,
       returning: this.returningColumns,
     } as InsertClause
@@ -265,39 +263,27 @@ class InternalInsertBuilder<
 }
 
 class InternalJoinBuilder<
-  D extends RelationalDataStore,
+  D extends SQLDataStore,
   T extends keyof D["tables"],
-  R extends RelationalDataTable,
+  R extends SQLDataTable,
   Q extends BuildableQueryTypes,
   P extends QueryParameters,
 > implements JoinNodeBuilder<D, T, R, P, Q>
 {
   tableName?: keyof D["tables"]
 
-  builder: RelationalNodeBuilder<
-    D,
-    Q,
-    RelationalDataTable,
-    P,
-    keyof D["tables"]
-  >
+  builder: SQLNodeBuilder<D, Q, SQLDataTable, P, keyof D["tables"]>
   tables: TableQueryNode[]
   filters: JoinClauseQueryNode[]
   queryType: Q
-  parent?: RelationalQueryNode<RelationalNodeType>
+  parent?: SQLQueryNode<SQLNodeType>
 
   constructor(
-    builder: RelationalNodeBuilder<
-      D,
-      Q,
-      RelationalDataTable,
-      P,
-      keyof D["tables"]
-    >,
+    builder: SQLNodeBuilder<D, Q, SQLDataTable, P, keyof D["tables"]>,
     tables: TableQueryNode[],
     filters: JoinClauseQueryNode[],
     queryType: Q,
-    parent?: RelationalQueryNode<RelationalNodeType>,
+    parent?: SQLQueryNode<SQLNodeType>,
   ) {
     this.builder = builder
     this.tables = tables
@@ -309,7 +295,7 @@ class InternalJoinBuilder<
   join<
     JT extends T & string,
     JTB extends keyof Exclude<D["tables"], T> & string,
-    TT extends RelationalDataTable,
+    TT extends SQLDataTable,
   >(
     target: JT,
     joinTable: JTB,
@@ -319,7 +305,7 @@ class InternalJoinBuilder<
   ): JoinNodeBuilder<D, T | JTB, MergedNonOverlappingType<R, TT>, P, Q> {
     const filters = this.filters
     filters.push({
-      nodeType: RelationalNodeType.ON,
+      nodeType: SQLNodeType.ON,
       left: target,
       right: joinTable,
       type: JoinType.INNER,
@@ -344,10 +330,10 @@ class InternalJoinBuilder<
     )
   }
 
-  asNode(): RelationalQueryNode<RelationalNodeType> {
-    const join: RelationalQueryNode<RelationalNodeType.JOIN> = {
+  asNode(): SQLQueryNode<SQLNodeType> {
+    const join: SQLQueryNode<SQLNodeType.JOIN> = {
       parent: this.parent,
-      nodeType: RelationalNodeType.JOIN,
+      nodeType: SQLNodeType.JOIN,
     }
 
     if (join.parent) {
@@ -377,44 +363,32 @@ class InternalJoinBuilder<
 }
 
 class InternalTableBuilder<
-  D extends RelationalDataStore,
+  D extends SQLDataStore,
   T extends keyof D["tables"],
-  R extends RelationalDataTable,
+  R extends SQLDataTable,
   P extends QueryParameters,
   Q extends BuildableQueryTypes,
 > implements TableNodeBuilder<D, T, R, P, Q>
 {
   tableName: T
-  builder: RelationalNodeBuilder<
-    D,
-    Q,
-    RelationalDataTable,
-    P,
-    keyof D["tables"]
-  >
+  builder: SQLNodeBuilder<D, Q, SQLDataTable, P, keyof D["tables"]>
   tableAlias?: keyof D["tables"]
   private queryType: Q
 
   private selectClause?: SelectClause
   private whereClause?: WhereClause
   private columnAlias?: ColumnAlias[]
-  private parent?: RelationalQueryNode<RelationalNodeType>
+  private parent?: SQLQueryNode<SQLNodeType>
 
   constructor(
     tableName: T,
-    builder: RelationalNodeBuilder<
-      D,
-      Q,
-      RelationalDataTable,
-      P,
-      keyof D["tables"]
-    >,
+    builder: SQLNodeBuilder<D, Q, SQLDataTable, P, keyof D["tables"]>,
     queryType: Q,
     tableAlias?: keyof D["tables"],
     selectClause?: SelectClause,
     whereClause?: WhereClause,
     columnAlias?: ColumnAlias[],
-    parent?: RelationalQueryNode<RelationalNodeType>,
+    parent?: SQLQueryNode<SQLNodeType>,
   ) {
     this.tableName = tableName
     this.builder = builder
@@ -441,7 +415,7 @@ class InternalTableBuilder<
         this.queryType,
         this.tableAlias,
         {
-          nodeType: RelationalNodeType.SELECT,
+          nodeType: SQLNodeType.SELECT,
           columns: column as STAR,
         },
         this.whereClause,
@@ -456,7 +430,7 @@ class InternalTableBuilder<
       this.queryType,
       this.tableAlias,
       {
-        nodeType: RelationalNodeType.SELECT,
+        nodeType: SQLNodeType.SELECT,
         columns: [column as C].concat(rest as C[]),
       },
       this.whereClause,
@@ -465,7 +439,7 @@ class InternalTableBuilder<
     )
   }
 
-  join<JT extends keyof D["tables"], JR extends RelationalDataTable>(
+  join<JT extends keyof D["tables"], JR extends SQLDataTable>(
     joinTable: JT,
     tableGenerator: TableGenerator<D, JT, JR, P, Q>,
     leftColumn: keyof D["tables"][T],
@@ -484,7 +458,7 @@ class InternalTableBuilder<
       ],
       [
         {
-          nodeType: RelationalNodeType.ON,
+          nodeType: SQLNodeType.ON,
           left: (this.tableAlias ?? this.tableName) as string,
           right: joinTable as string,
           type: JoinType.INNER,
@@ -508,7 +482,7 @@ class InternalTableBuilder<
     alias: Alias,
   ): TableNodeBuilder<D, T, AliasedType<R, C, Alias>, P, Q> {
     const aliasing = this.columnAlias ?? []
-    aliasing.push({ nodeType: RelationalNodeType.ALIAS, column, alias })
+    aliasing.push({ nodeType: SQLNodeType.ALIAS, column, alias })
     return new InternalTableBuilder(
       this.tableName,
       this.builder,
@@ -539,7 +513,7 @@ class InternalTableBuilder<
       filter
         ? {
             filter,
-            nodeType: RelationalNodeType.WHERE,
+            nodeType: SQLNodeType.WHERE,
           }
         : undefined,
       this.columnAlias,
@@ -547,9 +521,9 @@ class InternalTableBuilder<
     )
   }
 
-  asNode(): RelationalQueryNode<RelationalNodeType> {
+  asNode(): SQLQueryNode<SQLNodeType> {
     const select = this.selectClause ?? {
-      nodeType: RelationalNodeType.SELECT,
+      nodeType: SQLNodeType.SELECT,
       columns: [],
     }
 
@@ -557,7 +531,7 @@ class InternalTableBuilder<
     const aliasing = this.columnAlias
 
     const node: TableQueryNode = {
-      nodeType: RelationalNodeType.TABLE,
+      nodeType: SQLNodeType.TABLE,
       tableName: this.tableName as string,
       alias: this.tableAlias as string,
     }
@@ -606,7 +580,7 @@ class InternalTableBuilder<
 }
 
 class InternalWhereClauseBuilder<
-  T extends RelationalDataTable,
+  T extends SQLDataTable,
   Q extends BuildableQueryTypes,
   P extends QueryParameters,
 > implements WhereClauseBuilder<T, Q, P>
@@ -620,7 +594,7 @@ class InternalWhereClauseBuilder<
       op: ColumnFilteringOperation.EQ,
       value:
         this.queryType === QueryType.PARAMETERIZED
-          ? { nodeType: RelationalNodeType.PARAMETER, name: value as string }
+          ? { nodeType: SQLNodeType.PARAMETER, name: value as string }
           : (value as T[C]),
     })
   }
@@ -633,7 +607,7 @@ class InternalWhereClauseBuilder<
       op: ColumnFilteringOperation.GT,
       value:
         this.queryType === QueryType.PARAMETERIZED
-          ? { nodeType: RelationalNodeType.PARAMETER, name: value as string }
+          ? { nodeType: SQLNodeType.PARAMETER, name: value as string }
           : (value as T[C]),
     })
   }
@@ -646,7 +620,7 @@ class InternalWhereClauseBuilder<
       op: ColumnFilteringOperation.GTE,
       value:
         this.queryType === QueryType.PARAMETERIZED
-          ? { nodeType: RelationalNodeType.PARAMETER, name: value as string }
+          ? { nodeType: SQLNodeType.PARAMETER, name: value as string }
           : (value as T[C]),
     })
   }
@@ -659,7 +633,7 @@ class InternalWhereClauseBuilder<
       op: ColumnFilteringOperation.LT,
       value:
         this.queryType === QueryType.PARAMETERIZED
-          ? { nodeType: RelationalNodeType.PARAMETER, name: value as string }
+          ? { nodeType: SQLNodeType.PARAMETER, name: value as string }
           : (value as T[C]),
     })
   }
@@ -672,7 +646,7 @@ class InternalWhereClauseBuilder<
       op: ColumnFilteringOperation.LTE,
       value:
         this.queryType === QueryType.PARAMETERIZED
-          ? { nodeType: RelationalNodeType.PARAMETER, name: value as string }
+          ? { nodeType: SQLNodeType.PARAMETER, name: value as string }
           : (value as T[C]),
     })
   }
@@ -704,7 +678,7 @@ class InternalWhereClauseBuilder<
       op: ColumnValueContainsOperation.IN,
       value:
         this.queryType === QueryType.PARAMETERIZED
-          ? { nodeType: RelationalNodeType.PARAMETER, name: value as string }
+          ? { nodeType: SQLNodeType.PARAMETER, name: value as string }
           : (value as T[C]),
     })
   }
@@ -721,7 +695,7 @@ class InternalWhereClauseBuilder<
       column: column as string,
       value:
         this.queryType === QueryType.PARAMETERIZED
-          ? { nodeType: RelationalNodeType.PARAMETER, name: value as string }
+          ? { nodeType: SQLNodeType.PARAMETER, name: value as string }
           : Array.isArray(value)
             ? value.length === 1
               ? (value[0] as T[C])

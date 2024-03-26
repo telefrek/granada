@@ -34,6 +34,30 @@ export enum PostgresColumnTypeName {
   UUID = "uuid",
 }
 
+interface PostgresColumnTypeMapping {
+  [PostgresColumnTypeName.BIGINT]: bigint
+  [PostgresColumnTypeName.BIGSERIAL]: bigint
+  [PostgresColumnTypeName.BOOLEAN]: boolean
+  [PostgresColumnTypeName.BYTEA]: Int8Array
+  [PostgresColumnTypeName.DOUBLE_PRECISION]: number
+  [PostgresColumnTypeName.FLOAT4]: number
+  [PostgresColumnTypeName.FLOAT8]: number
+  [PostgresColumnTypeName.INTEGER]: number
+  [PostgresColumnTypeName.INT]: number
+  [PostgresColumnTypeName.INT2]: number
+  [PostgresColumnTypeName.INT4]: number
+  [PostgresColumnTypeName.JSON]: string
+  [PostgresColumnTypeName.JSONB]: object
+  [PostgresColumnTypeName.REAL]: number
+  [PostgresColumnTypeName.SERIAL]: number
+  [PostgresColumnTypeName.SERIAL2]: number
+  [PostgresColumnTypeName.SERIAL4]: number
+  [PostgresColumnTypeName.SMALLINT]: number
+  [PostgresColumnTypeName.SMALLSERIAL]: number
+  [PostgresColumnTypeName.TEXT]: string
+  [PostgresColumnTypeName.UUID]: string
+}
+
 type EnumType = Record<string, string>
 
 /**
@@ -76,28 +100,4 @@ export interface PostgresTable {
 
 export interface PostgresDatabase {
   tables: Record<string, PostgresTable>
-}
-
-interface PostgresColumnTypeMapping {
-  [PostgresColumnTypeName.BIGINT]: bigint
-  [PostgresColumnTypeName.BIGSERIAL]: bigint
-  [PostgresColumnTypeName.BOOLEAN]: boolean
-  [PostgresColumnTypeName.BYTEA]: Int8Array
-  [PostgresColumnTypeName.DOUBLE_PRECISION]: number
-  [PostgresColumnTypeName.FLOAT4]: number
-  [PostgresColumnTypeName.FLOAT8]: number
-  [PostgresColumnTypeName.INTEGER]: number
-  [PostgresColumnTypeName.INT]: number
-  [PostgresColumnTypeName.INT2]: number
-  [PostgresColumnTypeName.INT4]: number
-  [PostgresColumnTypeName.JSON]: string
-  [PostgresColumnTypeName.JSONB]: object
-  [PostgresColumnTypeName.REAL]: number
-  [PostgresColumnTypeName.SERIAL]: number
-  [PostgresColumnTypeName.SERIAL2]: number
-  [PostgresColumnTypeName.SERIAL4]: number
-  [PostgresColumnTypeName.SMALLINT]: number
-  [PostgresColumnTypeName.SMALLSERIAL]: number
-  [PostgresColumnTypeName.TEXT]: string
-  [PostgresColumnTypeName.UUID]: string
 }

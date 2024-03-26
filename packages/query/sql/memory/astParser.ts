@@ -1,5 +1,5 @@
 /**
- * Contains the logic for parsing an {@link RelationalQueryNode} AST into a set of in memory operations
+ * Contains the logic for parsing an {@link SQLQueryNode} AST into a set of in memory operations
  */
 
 import { QueryError } from "../../error"
@@ -15,7 +15,7 @@ import {
   isInsertClause,
   isJoinQueryNode,
   isParameterNode,
-  isRelationalQueryNode,
+  isSQLQueryNode,
   isStringFilter,
   isTableQueryNode,
   type ArrayFilter,
@@ -26,25 +26,22 @@ import {
   type InsertClause,
   type JoinColumnFilter,
   type JoinQueryNode,
-  type RelationalNodeType,
-  type RelationalQueryNode,
+  type SQLNodeType,
+  type SQLQueryNode,
   type StringFilter,
   type TableQueryNode,
-} from "../../relational/ast"
+} from "../../sql/ast"
 import {
   JoinNodeManager,
   TableNodeManager,
   hasProjections,
-} from "../../relational/helpers"
-import type {
-  RelationalDataStore,
-  RelationalDataTable,
-} from "../../relational/index"
+} from "../../sql/helpers"
+import type { SQLDataStore, SQLDataTable } from "../../sql/index"
 import type { InMemoryRelationalDataStore } from "./builder"
 
-export function materializeNode<RowType extends RelationalDataTable>(
-  root: RelationalQueryNode<RelationalNodeType>,
-  store: InMemoryRelationalDataStore<RelationalDataStore>,
+export function materializeNode<RowType extends SQLDataTable>(
+  root: SQLQueryNode<SQLNodeType>,
+  store: InMemoryRelationalDataStore<SQLDataStore>,
   parameters?: QueryParameters,
 ): RowType[] | undefined {
   const context = new MaterializerContext(store)
@@ -67,16 +64,13 @@ export function materializeNode<RowType extends RelationalDataTable>(
 /**
  * Simple type rename
  */
-type Projections = Map<
-  keyof RelationalDataStore["tables"],
-  RelationalDataTable[]
->
+type Projections = Map<keyof SQLDataStore["tables"], SQLDataTable[]>
 
 // Internal symbols for tracking projected information
 const ORIGINAL: unique symbol = Symbol()
 
 // Need to a way to identified original row sources for joins
-type RowPointer<T> = RelationalDataTable & {
+type RowPointer<T> = SQLDataTable & {
   [ORIGINAL]: T
 } & T
 
@@ -95,23 +89,20 @@ function makePointer<T extends object>(row: T): RowPointer<T> {
 
 class MaterializerContext {
   projections: Projections = new Map()
-  store: InMemoryRelationalDataStore<RelationalDataStore>
+  store: InMemoryRelationalDataStore<SQLDataStore>
 
-  constructor(store: InMemoryRelationalDataStore<RelationalDataStore>) {
+  constructor(store: InMemoryRelationalDataStore<SQLDataStore>) {
     this.store = store
   }
 
-  get(table: keyof RelationalDataStore["tables"]): RelationalDataTable[] {
+  get(table: keyof SQLDataStore["tables"]): SQLDataTable[] {
     return (
       this.projections.get(table) ??
       (table in this.store ? this.store[table].map(makePointer) : [])
     )
   }
 
-  set(
-    table: keyof RelationalDataStore["tables"],
-    rows: RelationalDataTable[],
-  ): void {
+  set(table: keyof SQLDataStore["tables"], rows: SQLDataTable[]): void {
     this.projections.set(table, rows)
   }
 }
@@ -120,7 +111,7 @@ function materializeInsert(
   insert: InsertClause,
   context: MaterializerContext,
   parameters: QueryParameters,
-): RelationalDataTable[] | undefined {
+): SQLDataTable[] | undefined {
   context.store[insert.tableName].push(parameters)
 
   if (insert.returning) {
@@ -131,7 +122,7 @@ function materializeInsert(
     return [
       Object.fromEntries(
         insert.returning.map((r) => [r as PropertyKey, parameters[r]]),
-      ) as RelationalDataTable,
+      ) as SQLDataTable,
     ]
   }
 
@@ -142,8 +133,8 @@ function materializeTable(
   table: TableQueryNode,
   context: MaterializerContext,
   parameters?: QueryParameters,
-): RelationalDataTable[] {
-  let ret: RelationalDataTable[] = []
+): SQLDataTable[] {
+  let ret: SQLDataTable[] = []
   let rows = context.get(table.tableName)
 
   const manager = new TableNodeManager(table)
@@ -178,7 +169,7 @@ function materializeTable(
         entries.push([ORIGINAL, r[ORIGINAL]])
       }
 
-      return Object.fromEntries(entries) as RelationalDataTable
+      return Object.fromEntries(entries) as SQLDataTable
     })
   }
 
@@ -189,15 +180,15 @@ function materializeJoin(
   join: JoinQueryNode,
   context: MaterializerContext,
   parameters?: QueryParameters,
-): RelationalDataTable[] {
-  let rows: RelationalDataTable[] = []
+): SQLDataTable[] {
+  let rows: SQLDataTable[] = []
 
   const manager = new JoinNodeManager(join)
 
   // Need to find all the table nodes and map them to data
   const tables = new Map<
-    keyof RelationalDataStore["tables"],
-    RowPointer<RelationalDataTable>[]
+    keyof SQLDataStore["tables"],
+    RowPointer<SQLDataTable>[]
   >()
   for (const table of manager.tables) {
     tables.set(
@@ -243,7 +234,7 @@ function materializeJoin(
     for (const l of left) {
       for (const r of right.filter((r) => check(l, r))) {
         // Spread the values
-        const m: RelationalDataTable = { ...l, ...r }
+        const m: SQLDataTable = { ...l, ...r }
         if (current.length > 0) {
           for (const c of current) {
             rows.push({ ...c, ...m })
@@ -262,8 +253,8 @@ function materializeCte(
   cte: CteClause,
   context: MaterializerContext,
   parameters?: QueryParameters,
-): RelationalQueryNode<RelationalNodeType> | undefined {
-  if (isRelationalQueryNode(cte.source)) {
+): SQLQueryNode<SQLNodeType> | undefined {
+  if (isSQLQueryNode(cte.source)) {
     switch (true) {
       case isTableQueryNode(cte.source):
         context.set(
@@ -280,7 +271,7 @@ function materializeCte(
 
     if (cte.children) {
       return cte.children
-        .filter(isRelationalQueryNode)
+        .filter(isSQLQueryNode)
         .filter((r) => r !== cte.source) // Filter select and where
         .at(0)
     }
@@ -290,10 +281,10 @@ function materializeCte(
 }
 
 function materializeTableAlias(
-  root: RelationalQueryNode<RelationalNodeType>,
+  root: SQLQueryNode<SQLNodeType>,
   context: MaterializerContext,
 ): void {
-  const nodes: RelationalQueryNode<RelationalNodeType>[] = [root]
+  const nodes: SQLQueryNode<SQLNodeType>[] = [root]
   while (nodes.length > 0) {
     const next = nodes.shift()!
 
@@ -302,15 +293,15 @@ function materializeTableAlias(
       context.set(next.tableName, context.get(next.alias))
     }
 
-    nodes.push(...(next.children?.filter(isRelationalQueryNode) ?? []))
+    nodes.push(...(next.children?.filter(isSQLQueryNode) ?? []))
   }
 }
 
 function materializeProjections(
-  root: RelationalQueryNode<RelationalNodeType>,
+  root: SQLQueryNode<SQLNodeType>,
   context: MaterializerContext,
   parameters?: QueryParameters,
-): RelationalQueryNode<RelationalNodeType> {
+): SQLQueryNode<SQLNodeType> {
   // Fill any table projections
   materializeTableAlias(root, context)
 
@@ -331,8 +322,8 @@ function materializeProjections(
 }
 
 function buildJoinFilter<
-  LeftTable extends RelationalDataTable,
-  RightTable extends RelationalDataTable,
+  LeftTable extends SQLDataTable,
+  RightTable extends SQLDataTable,
 >(
   filter: JoinColumnFilter,
 ): (l: RowPointer<LeftTable>, r: RowPointer<RightTable>) => boolean {
@@ -344,7 +335,7 @@ function buildJoinFilter<
 function buildFilter<ParameterType extends QueryParameters = never>(
   clause: FilterGroup | FilterTypes,
   parameters?: ParameterType,
-): (input: RelationalDataTable) => boolean {
+): (input: SQLDataTable) => boolean {
   if (isFilterGroup(clause)) {
     const filters = clause.filters.map((f) => buildFilter(f, parameters))
     switch (clause.op) {
@@ -374,7 +365,7 @@ function buildFilter<ParameterType extends QueryParameters = never>(
 function buildArrayFilter<ParameterType extends QueryParameters = never>(
   columnFilter: ArrayFilter,
   parameters?: ParameterType,
-): (input: RelationalDataTable) => boolean {
+): (input: SQLDataTable) => boolean {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
   const value: any = isParameterNode(columnFilter.value)
     ? parameters![columnFilter.value.name]
@@ -397,7 +388,7 @@ function buildArrayFilter<ParameterType extends QueryParameters = never>(
 function buildStringFilter<ParameterType extends QueryParameters = never>(
   columnFilter: StringFilter,
   parameters?: ParameterType,
-): (input: RelationalDataTable) => boolean {
+): (input: SQLDataTable) => boolean {
   const value = isParameterNode(columnFilter.value)
     ? (parameters![columnFilter.value.name] as string)
     : columnFilter.value
@@ -414,7 +405,7 @@ function buildStringFilter<ParameterType extends QueryParameters = never>(
 function buildColumnFilter<ParameterType extends QueryParameters = never>(
   columnFilter: ColumnFilter,
   parameters?: ParameterType,
-): (input: RelationalDataTable) => boolean {
+): (input: SQLDataTable) => boolean {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
   const value: any = isParameterNode(columnFilter.value)
     ? parameters![columnFilter.value.name]

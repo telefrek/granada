@@ -8,14 +8,14 @@ import type { RowType } from "../index"
 /**
  * Represents a table schema which can have named columns and values
  */
-export type RelationalDataTable = RowType
+export type SQLDataTable = RowType
 
 /**
  * Represents a relational data store that has a collection of tables and other
  * objects that can be useful for describing data sources and building valid queries
  */
-export interface RelationalDataStore {
-  tables: Record<string, RelationalDataTable>
+export interface SQLDataStore {
+  tables: Record<string, SQLDataTable>
 }
 
 /** Sentinel indicator for all columns */

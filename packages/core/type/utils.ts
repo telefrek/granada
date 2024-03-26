@@ -39,6 +39,36 @@ export type ArrayItemType<
 > = T[K] extends (infer U)[] ? U : never
 
 /**
+ * Helper to get properties of a given type
+ */
+export type PropertyOfType<T, TargetType> = {
+  [K in keyof T]: T[K] extends TargetType ? K : never
+}[keyof T]
+
+/**
+ * Helper to find the set of properties on the {@link Right} object that match
+ * the type of the {@link LeftProperty} on the {@link Left} object
+ */
+export type MatchingProperty<
+  Left,
+  Right,
+  LeftProperty extends keyof Left,
+> = PropertyOfType<Right, Left[LeftProperty]>
+
+/**
+ * Merges the two types
+ */
+export type MergedType<A, B> = A & B
+
+/**
+ * Merges the two types such that keys in A override any keys in B
+ */
+export type MergedNonOverlappingType<A, B> = MergedType<
+  A,
+  { [K in keyof B]: K extends keyof A ? never : B[K] }
+>
+
+/**
  * Type that allows aliasing a property with a different name
  */
 export type AliasedType<
