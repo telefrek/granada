@@ -254,27 +254,20 @@ function materializeCte(
   context: MaterializerContext,
   parameters?: QueryParameters,
 ): SQLQueryNode<SQLNodeType> | undefined {
-  if (isSQLQueryNode(cte.source)) {
-    switch (true) {
-      case isTableQueryNode(cte.source):
-        context.set(
-          cte.tableName,
-          materializeTable(cte.source, context, parameters),
-        )
-        break
-      case isJoinQueryNode(cte.source):
-        context.set(
-          cte.tableName,
-          materializeJoin(cte.source, context, parameters),
-        )
-    }
+  if (isTableQueryNode(cte.source)) {
+    context.set(
+      cte.tableName,
+      materializeTable(cte.source, context, parameters),
+    )
+  } else if (isJoinQueryNode(cte.source)) {
+    context.set(cte.tableName, materializeJoin(cte.source, context, parameters))
+  }
 
-    if (cte.children) {
-      return cte.children
-        .filter(isSQLQueryNode)
-        .filter((r) => r !== cte.source) // Filter select and where
-        .at(0)
-    }
+  if (cte.children) {
+    return cte.children
+      .filter(isSQLQueryNode)
+      .filter((r) => r !== cte.source) // Filter select and where
+      .at(0)
   }
 
   return

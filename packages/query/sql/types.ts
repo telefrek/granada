@@ -19,15 +19,12 @@ export enum SQLColumnType {
   YEAR = "year",
   CHAR = "char",
   VARCHAR = "varchar",
-  VARCHAR_N = "varchar_n",
   TEXT = "text",
   NCHAR = "nchar",
   NVARCHAR = "nvarchar",
-  NVARCHAR_N = "nvarchar_n",
   NTEXT = "ntext",
   BINARY = "binary",
   VARBINARY = "varbinary",
-  VARBINARY_N = "varbinary_n",
   IMAGE = "image",
   CLOB = "clob",
   BLOB = "blob",
@@ -44,39 +41,64 @@ export type SQLType<S> =
       ? _SQLType<S>
       : never
 
-type _SQLType<T extends SQLColumnType> = T extends keyof SQLToTypescriptMapping
-  ? SQLToTypescriptMapping[T]
-  : never
+export type ColumnDefinition<ColumnType extends SQLColumnType> =
+  ColumnType extends VariableSQLTypes
+    ? VariableColumnDefinition<ColumnType>
+    : ColumnType extends IncrementalSQLTypes
+      ? IncrementalColumnDefinition<ColumnType>
+      : BaseColumnDefinition<ColumnType>
 
-interface SQLToTypescriptMapping {
-  [SQLColumnType.BIT]: boolean
-  [SQLColumnType.TINYINT]: number
-  [SQLColumnType.SMALLINT]: number
-  [SQLColumnType.INT]: number
-  [SQLColumnType.BIGINT]: bigint
-  [SQLColumnType.DECIMAL]: number
-  [SQLColumnType.NUMERIC]: number
-  [SQLColumnType.FLOAT]: number
-  [SQLColumnType.REAL]: number
-  [SQLColumnType.DATE]: string
-  [SQLColumnType.TIME]: string
-  [SQLColumnType.DATETIME]: Date
-  [SQLColumnType.TIMESTAMP]: bigint
-  [SQLColumnType.YEAR]: string
-  [SQLColumnType.CHAR]: string
-  [SQLColumnType.VARCHAR]: string
-  [SQLColumnType.VARCHAR_N]: string
-  [SQLColumnType.TEXT]: string
-  [SQLColumnType.NCHAR]: string
-  [SQLColumnType.NVARCHAR]: string
-  [SQLColumnType.NVARCHAR_N]: string
-  [SQLColumnType.NTEXT]: string
-  [SQLColumnType.BINARY]: Int8Array
-  [SQLColumnType.VARBINARY]: Int8Array
-  [SQLColumnType.VARBINARY_N]: Int8Array
-  [SQLColumnType.IMAGE]: Int8Array
-  [SQLColumnType.CLOB]: string
-  [SQLColumnType.BLOB]: Int8Array
-  [SQLColumnType.XML]: string
-  [SQLColumnType.JSON]: string
+type VariableSQLTypes =
+  | SQLColumnType.VARBINARY
+  | SQLColumnType.VARCHAR
+  | SQLColumnType.NVARCHAR
+
+type IncrementalSQLTypes =
+  | SQLColumnType.BIGINT
+  | SQLColumnType.INT
+  | SQLColumnType.FLOAT
+  | SQLColumnType.DECIMAL
+
+type BaseColumnDefinition<ColumnType extends SQLColumnType> = {
+  type: ColumnType | SQLArray<ColumnType>
+  nullable: boolean
+  default?: SQLType<ColumnType> | (() => SQLType<ColumnType>)
 }
+
+type IncrementalColumnDefinition<ColumnType extends IncrementalSQLTypes> =
+  BaseColumnDefinition<ColumnType> & {
+    autoIncrement?: boolean
+  }
+
+type VariableColumnDefinition<ColumnType extends VariableSQLTypes> =
+  BaseColumnDefinition<ColumnType> & {
+    size: number
+  }
+
+type BigIntSQLTypes = SQLColumnType.BIGINT | SQLColumnType.TIMESTAMP
+
+type BinarySQLTypes =
+  | SQLColumnType.BINARY
+  | SQLColumnType.BLOB
+  | SQLColumnType.CLOB
+  | SQLColumnType.VARBINARY
+  | SQLColumnType.IMAGE
+
+type NumericSQLTypes =
+  | SQLColumnType.DECIMAL
+  | SQLColumnType.FLOAT
+  | SQLColumnType.INT
+  | SQLColumnType.NUMERIC
+  | SQLColumnType.REAL
+  | SQLColumnType.SMALLINT
+  | SQLColumnType.TINYINT
+
+type _SQLType<T extends SQLColumnType> = T extends BigIntSQLTypes
+  ? number | bigint
+  : T extends BinarySQLTypes
+    ? Int8Array
+    : T extends NumericSQLTypes
+      ? number
+      : T extends SQLColumnType.BIT
+        ? boolean
+        : string

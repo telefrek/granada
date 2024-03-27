@@ -2,6 +2,7 @@ import type {
   AliasedType,
   ArrayItemType,
   ArrayProperty,
+  MatchingProperty,
   MergedNonOverlappingType,
   PropertyOfType,
   RequiredLiteralKeys,
@@ -296,12 +297,14 @@ class InternalJoinBuilder<
     JT extends T & string,
     JTB extends keyof Exclude<D["tables"], T> & string,
     TT extends SQLDataTable,
+    LC extends keyof D["tables"][JT] & string,
   >(
     target: JT,
     joinTable: JTB,
     tableGenerator: TableGenerator<D, JTB, TT, P, Q>,
-    leftColumn: keyof D["tables"][JT] & string,
-    rightColumn: keyof D["tables"][JTB] & string,
+    leftColumn: LC,
+    rightColumn: MatchingProperty<D["tables"][JT], D["tables"][JT], LC> &
+      string,
   ): JoinNodeBuilder<D, T | JTB, MergedNonOverlappingType<R, TT>, P, Q> {
     const filters = this.filters
     filters.push({
@@ -439,11 +442,15 @@ class InternalTableBuilder<
     )
   }
 
-  join<JT extends keyof D["tables"], JR extends SQLDataTable>(
+  join<
+    JT extends keyof D["tables"],
+    JR extends SQLDataTable,
+    LC extends keyof D["tables"][T] & string,
+  >(
     joinTable: JT,
     tableGenerator: TableGenerator<D, JT, JR, P, Q>,
-    leftColumn: keyof D["tables"][T],
-    rightColumn: keyof D["tables"][JT],
+    leftColumn: LC,
+    rightColumn: MatchingProperty<D["tables"][T], D["tables"][JT], LC> & string,
   ): JoinNodeBuilder<D, JT, MergedNonOverlappingType<R, JR>, P, Q> {
     const parent = this.parent
     this.parent = undefined
@@ -464,8 +471,8 @@ class InternalTableBuilder<
           type: JoinType.INNER,
           filter: {
             op: ColumnFilteringOperation.EQ,
-            leftColumn: leftColumn as string,
-            rightColumn: rightColumn as string,
+            leftColumn: leftColumn,
+            rightColumn: rightColumn,
           },
         },
       ],

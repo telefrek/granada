@@ -6,10 +6,11 @@ import type {
   AliasedType,
   ArrayItemType,
   ArrayProperty,
+  MatchingProperty,
   MergedNonOverlappingType,
   PropertyOfType,
   RequiredLiteralKeys,
-} from "@telefrek/core/type/utils.js"
+} from "@telefrek/core/type/utils"
 import type { SQLDataStore, SQLDataTable, STAR } from ".."
 import {
   ExecutionMode,
@@ -159,12 +160,14 @@ export interface JoinNodeBuilder<
     JT extends T & string,
     JTB extends keyof Exclude<D["tables"], T> & string,
     TT extends SQLDataTable,
+    LC extends keyof D["tables"][JT] & string,
   >(
     target: JT,
     joinTable: JTB,
     tableGenerator: TableGenerator<D, JTB, TT, P, Q>,
-    leftColumn: keyof D["tables"][JT] & string,
-    rightColumn: keyof D["tables"][JTB] & string,
+    leftColumn: LC,
+    rightColumn: MatchingProperty<D["tables"][JT], D["tables"][JT], LC> &
+      string,
   ): JoinNodeBuilder<D, T | JTB, MergedNonOverlappingType<R, TT>, P, Q>
 }
 
@@ -184,11 +187,15 @@ export interface TableNodeBuilder<
     ...columns: C[]
   ): Omit<TableNodeBuilder<D, T, R, P, Q>, "columns">
 
-  join<JT extends keyof D["tables"], JR extends SQLDataTable>(
+  join<
+    JT extends keyof D["tables"],
+    JR extends SQLDataTable,
+    LC extends keyof D["tables"][T] & string,
+  >(
     joinTable: JT,
     tableGenerator: TableGenerator<D, JT, JR, P, Q>,
-    leftColumn: keyof D["tables"][T],
-    rightColumn: keyof D["tables"][JT],
+    leftColumn: LC,
+    rightColumn: MatchingProperty<D["tables"][T], D["tables"][JT], LC> & string,
   ): JoinNodeBuilder<D, JT | T, MergedNonOverlappingType<R, JR>, P, Q>
 
   withColumnAlias<

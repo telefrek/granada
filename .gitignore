@@ -2,6 +2,7 @@
 **/dist
 **/coverage
 **/.turbo
+**/traces
 
 # Don't store local build cache results
 **/*.tsbuildinfo

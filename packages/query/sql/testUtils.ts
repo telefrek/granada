@@ -2,38 +2,27 @@
  * Test utilities for verifying the SQL packages
  */
 
-import type { SQLDatabase, SQLTableDefinition } from "./schema"
+import { SchemaBuilder } from "./schema"
 import { SQLColumnType } from "./types"
 
 const Order = {
   id: SQLColumnType.BIGINT,
   name: SQLColumnType.TEXT,
+  customerId: SQLColumnType.BIGINT,
+  createdAt: SQLColumnType.TIMESTAMP,
+  updatedAt: SQLColumnType.TIMESTAMP,
+  amount: SQLColumnType.DECIMAL,
 } as const
 
-const OrderTable: SQLTableDefinition<typeof Order> = {
-  columns: Order,
-  key: {
-    column: "id",
-  },
-  defaults: {
-    name: "test",
-  },
-}
+const Customer = {
+  id: SQLColumnType.BIGINT,
+  firstName: SQLColumnType.TEXT,
+  lastName: SQLColumnType.TEXT,
+  createdAt: SQLColumnType.TIMESTAMP,
+} as const
 
-type TestDatabaseTables = {
-  orders: SQLTableDefinition<typeof Order>
-}
-
-export const TestDatabase: SQLDatabase<TestDatabaseTables> = {
-  tables: {
-    orders: OrderTable,
-  },
-  relations: [
-    {
-      right: "orders",
-      left: "orders",
-      leftColumn: "id",
-      rightColumn: "id",
-    },
-  ],
-}
+export const TestDatabase = new SchemaBuilder()
+  .withTable(Order, "orders", { column: "id" })
+  .withTable(Customer, "customers", { column: "id" })
+  .withForeignKey("orders", "customers", "customerId", "id")
+  .build()
