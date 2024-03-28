@@ -3,7 +3,7 @@
  */
 
 import { Duration } from "@telefrek/core/time/index"
-import type { SQLDataStore, SQLDataTable } from ".."
+import type { RelationalQueryBuilder, SQLDataStore, SQLDataTable } from ".."
 import {
   ExecutionMode,
   QueryParameters,
@@ -13,7 +13,6 @@ import {
   type ParameterizedQuery,
   type QueryExecutor,
   type QueryNode,
-  type QueryProvider,
   type QueryResult,
   type RowType,
   type SimpleQuery,
@@ -100,18 +99,19 @@ type BoundInMemoryQuery<
   P extends QueryParameters,
 > = BoundQuery<R, P> & InMemoryQuery<D, R>
 
-export function InMemoryQueryBuilder<
-  D extends SQLDataStore,
-  Q extends BuildableQueryTypes,
-  R extends SQLDataTable,
-  P extends QueryParameters,
->(): QueryProvider<Q, R, P> {
-  return (
+export class InMemoryQueryBuilder<D extends SQLDataStore>
+  implements RelationalQueryBuilder<D>
+{
+  build<
+    Q extends BuildableQueryTypes,
+    R extends RowType,
+    P extends QueryParameters,
+  >(
     node: QueryNode,
     queryType: Q,
     name: string,
     mode: ExecutionMode,
-  ): [P] extends [never] ? SimpleQuery<R> : ParameterizedQuery<R, P> => {
+  ): [P] extends [never] ? SimpleQuery<R> : ParameterizedQuery<R, P> {
     if (isSQLQueryNode(node)) {
       const simple: SimpleInMemoryQuery<D, R> = {
         queryType: QueryType.SIMPLE,

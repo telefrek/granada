@@ -11,14 +11,18 @@ import type {
   PropertyOfType,
   RequiredLiteralKeys,
 } from "@telefrek/core/type/utils"
-import type { SQLDataStore, SQLDataTable, STAR } from ".."
+import type {
+  RelationalQueryBuilder,
+  SQLDataStore,
+  SQLDataTable,
+  STAR,
+} from ".."
 import {
   ExecutionMode,
   QueryParameters,
   QueryType,
   type BuildableQueryTypes,
   type ParameterizedQuery,
-  type QueryBuilder,
   type SimpleQuery,
 } from "../../index"
 import {
@@ -26,7 +30,6 @@ import {
   type FilterGroup,
   type FilterTypes,
   type SQLQueryNode,
-  type TableAlias,
 } from "../ast"
 import { DefaultSQLNodeBuilder } from "./internal"
 
@@ -45,16 +48,14 @@ export interface ModifiedStore<
   }
 }
 
-export function useDataStore<D extends SQLDataStore>(): SQLNodeBuilder<
-  D,
-  QueryType.SIMPLE
-> {
-  return new DefaultSQLNodeBuilder(QueryType.SIMPLE)
+export function useDataStore<D extends SQLDataStore>(
+  ctor: new () => RelationalQueryBuilder<D>,
+): SQLNodeBuilder<D, QueryType.SIMPLE> {
+  return new DefaultSQLNodeBuilder(QueryType.SIMPLE, new ctor())
 }
 
 interface SQLNodeProcessor<
   D extends SQLDataStore,
-  Q extends BuildableQueryTypes,
   T extends SQLDataTable,
   P extends QueryParameters,
 > {
@@ -63,7 +64,6 @@ interface SQLNodeProcessor<
   asNode(): SQLQueryNode<SQLNodeType>
 
   build(
-    builder: QueryBuilder<Q, T, P>,
     name: string,
     mode?: ExecutionMode,
   ): [P] extends [never] ? SimpleQuery<T> : ParameterizedQuery<T, P>
@@ -75,11 +75,7 @@ export interface SQLNodeBuilder<
   R extends SQLDataTable = never,
   P extends QueryParameters = never,
   A extends keyof D["tables"] = never,
-> extends SQLNodeProcessor<D, Q, R, P> {
-  queryType: Q
-  context: SQLQueryNode<SQLNodeType> | undefined
-  tableAlias: TableAlias
-
+> {
   withParameters<QP extends QueryParameters>(): SQLNodeBuilder<
     D,
     QueryType.PARAMETERIZED,
@@ -118,7 +114,7 @@ export interface InsertBuilder<
   T extends keyof D["tables"],
   R extends SQLDataTable,
   P extends RequiredLiteralKeys<D["tables"][T]>,
-> extends SQLNodeProcessor<D, QueryType.PARAMETERIZED, R, P> {
+> extends SQLNodeProcessor<D, R, P> {
   returning(columns: STAR): InsertBuilder<D, T, D["tables"][T], P>
   returning<C extends keyof D["tables"][T]>(
     ...columns: C[]
@@ -132,7 +128,7 @@ export type SQLProcessorBuilder<
   P extends QueryParameters,
   A extends keyof D["tables"],
   TT extends SQLDataTable,
-> = (builder: SQLNodeBuilder<D, Q, T, P, A>) => SQLNodeProcessor<D, Q, TT, P>
+> = (builder: SQLNodeBuilder<D, Q, T, P, A>) => SQLNodeProcessor<D, TT, P>
 
 type ParameterOrValue<
   T extends SQLDataTable,
@@ -147,7 +143,7 @@ export type TableGenerator<
   P extends QueryParameters,
   Q extends BuildableQueryTypes,
   TR extends SQLDataTable = D["tables"][T],
-> = (from: TableNodeBuilder<D, T, TR, P, Q>) => SQLNodeProcessor<D, Q, R, P>
+> = (from: TableNodeBuilder<D, T, TR, P, Q>) => SQLNodeProcessor<D, R, P>
 
 export interface JoinNodeBuilder<
   D extends SQLDataStore,
@@ -155,7 +151,7 @@ export interface JoinNodeBuilder<
   R extends SQLDataTable,
   P extends QueryParameters,
   Q extends BuildableQueryTypes,
-> extends SQLNodeProcessor<D, Q, R, P> {
+> extends SQLNodeProcessor<D, R, P> {
   join<
     JT extends T & string,
     JTB extends keyof Exclude<D["tables"], T> & string,
@@ -177,7 +173,7 @@ export interface TableNodeBuilder<
   R extends SQLDataTable,
   P extends QueryParameters,
   Q extends BuildableQueryTypes,
-> extends SQLNodeProcessor<D, Q, R, P> {
+> extends SQLNodeProcessor<D, R, P> {
   tableName: T
   builder: SQLNodeBuilder<D, Q, SQLDataTable, P, keyof D["tables"]>
   tableAlias?: keyof D["tables"]

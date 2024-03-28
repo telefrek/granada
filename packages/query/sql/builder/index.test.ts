@@ -102,10 +102,10 @@ describe("Relational query builder should support basic select functionality", (
   it("should support a simple select * style query", async () => {
     // This should get the full row back
     const result = await executor.run(
-      useDataStore<TestDataStore>()
+      useDataStore<TestDataStore>(InMemoryQueryBuilder)
         .select("orders")
         .columns("*")
-        .build(InMemoryQueryBuilder, "testQuery"),
+        .build("testQuery"),
     )
     expect(result).not.toBeUndefined()
     if (Array.isArray(result.rows)) {
@@ -115,11 +115,11 @@ describe("Relational query builder should support basic select functionality", (
 
   it("should allow filtering rows via a simple where clause", async () => {
     let result = await executor.run(
-      useDataStore<TestDataStore>()
+      useDataStore<TestDataStore>(InMemoryQueryBuilder)
         .select("orders")
         .columns("*")
         .where((clause) => clause.gt("id", 2))
-        .build(InMemoryQueryBuilder, "testQuery"),
+        .build("testQuery"),
     )
 
     if (Array.isArray(result.rows)) {
@@ -127,11 +127,11 @@ describe("Relational query builder should support basic select functionality", (
     }
 
     result = await executor.run(
-      useDataStore<TestDataStore>()
+      useDataStore<TestDataStore>(InMemoryQueryBuilder)
         .select("orders")
         .columns("*")
         .where((clause) => clause.gte("id", 2))
-        .build(InMemoryQueryBuilder, "testQuery"),
+        .build("testQuery"),
     )
 
     if (Array.isArray(result.rows)) {
@@ -142,11 +142,11 @@ describe("Relational query builder should support basic select functionality", (
   it("should allow filtering via containment where clauses", async () => {
     // This should get the projected row with only 2 columns back
     let result = await executor.run(
-      useDataStore<TestDataStore>()
+      useDataStore<TestDataStore>(InMemoryQueryBuilder)
         .select("orders")
         .columns("*")
         .where((clause) => clause.contains("name", "ord3"))
-        .build(InMemoryQueryBuilder, "testQuery"),
+        .build("testQuery"),
     )
 
     if (Array.isArray(result.rows)) {
@@ -154,11 +154,11 @@ describe("Relational query builder should support basic select functionality", (
     }
 
     result = await executor.run(
-      useDataStore<TestDataStore>()
+      useDataStore<TestDataStore>(InMemoryQueryBuilder)
         .select("orders")
         .where((clause) => clause.containsItems("categories", Category.TEST))
         .columns("*")
-        .build(InMemoryQueryBuilder, "testQuery"),
+        .build("testQuery"),
     )
 
     if (Array.isArray(result.rows)) {
@@ -166,13 +166,13 @@ describe("Relational query builder should support basic select functionality", (
     }
 
     result = await executor.run(
-      useDataStore<TestDataStore>()
+      useDataStore<TestDataStore>(InMemoryQueryBuilder)
         .select("orders")
         .columns("*")
         .where((clause) =>
           clause.containsItems("categories", Category.PURCHASE),
         )
-        .build(InMemoryQueryBuilder, "testQuery"),
+        .build("testQuery"),
     )
 
     if (Array.isArray(result.rows)) {
@@ -183,10 +183,10 @@ describe("Relational query builder should support basic select functionality", (
   it("should allow for projections of rows via a simple select clause", async () => {
     // This should get the projected row with only 2 columns back
     const result = await executor.run(
-      useDataStore<TestDataStore>()
+      useDataStore<TestDataStore>(InMemoryQueryBuilder)
         .select("orders")
         .columns("name", "createdAt")
-        .build(InMemoryQueryBuilder, "testQuery"),
+        .build("testQuery"),
     )
     expect(result).not.toBeUndefined()
     if (Array.isArray(result.rows)) {
@@ -196,17 +196,17 @@ describe("Relational query builder should support basic select functionality", (
 
   it("should allow for projections of rows via a simple select clause in addition to row filtering via where clause", async () => {
     // Query order shouldn't matter
-    const query1 = useDataStore<TestDataStore>()
+    const query1 = useDataStore<TestDataStore>(InMemoryQueryBuilder)
       .select("orders")
       .columns("name", "createdAt")
       .where((clause) => clause.contains("name", "ord3"))
-      .build(InMemoryQueryBuilder, "testQuery")
+      .build("testQuery")
 
-    const query2 = useDataStore<TestDataStore>()
+    const query2 = useDataStore<TestDataStore>(InMemoryQueryBuilder)
       .select("orders")
       .where((clause) => clause.contains("name", "ord3"))
       .columns("name", "createdAt")
-      .build(InMemoryQueryBuilder, "testQuery")
+      .build("testQuery")
 
     // This should get the projected row with only 2 columns back
     for (const query of [query1, query2]) {
@@ -221,7 +221,7 @@ describe("Relational query builder should support basic select functionality", (
   it("should allow complex grouped where clauses", async () => {
     // This should get the projected row with only 1 columns back
     const result = await executor.run(
-      useDataStore<TestDataStore>()
+      useDataStore<TestDataStore>(InMemoryQueryBuilder)
         .select("orders")
         .columns("name")
         .where((clause) =>
@@ -230,7 +230,7 @@ describe("Relational query builder should support basic select functionality", (
             clause.not(clause.eq("id", 1)),
           ),
         )
-        .build(InMemoryQueryBuilder, "testQuery"),
+        .build("testQuery"),
     )
     expect(result).not.toBeUndefined()
     if (Array.isArray(result.rows)) {
@@ -242,12 +242,12 @@ describe("Relational query builder should support basic select functionality", (
   it("should allow columns to be aliased", async () => {
     // This should get the projected row with only 2 columns back
     const result = await executor.run(
-      useDataStore<TestDataStore>()
+      useDataStore<TestDataStore>(InMemoryQueryBuilder)
         .select("orders")
         .columns("name", "createdAt")
         .withColumnAlias("name", "foo")
         .withColumnAlias("createdAt", "date")
-        .build(InMemoryQueryBuilder, "testQuery"),
+        .build("testQuery"),
     )
 
     if (Array.isArray(result.rows)) {
@@ -263,11 +263,11 @@ describe("Relational query builder should support basic select functionality", (
     // Note this more more useful for joins but need to verify this weird
     // signature still works...
     const result = await executor.run(
-      useDataStore<TestDataStore>()
+      useDataStore<TestDataStore>(InMemoryQueryBuilder)
         .withTableAlias("orders", "newOrders")
         .select("newOrders")
         .columns("name", "createdAt")
-        .build(InMemoryQueryBuilder, "testQuery"),
+        .build("testQuery"),
     )
 
     // This should get the projected row with only 2 columns back
@@ -280,7 +280,7 @@ describe("Relational query builder should support basic select functionality", (
 
   it("should allow cte clauses", async () => {
     const result = await executor.run(
-      useDataStore<TestDataStore>()
+      useDataStore<TestDataStore>(InMemoryQueryBuilder)
         .withCte("foo", (builder) =>
           builder
             .select("orders")
@@ -292,7 +292,7 @@ describe("Relational query builder should support basic select functionality", (
         .where((clause) =>
           clause.containsItems("categories", Category.PURCHASE),
         )
-        .build(InMemoryQueryBuilder, "testQuery"),
+        .build("testQuery"),
     )
 
     if (Array.isArray(result.rows)) {
@@ -303,7 +303,7 @@ describe("Relational query builder should support basic select functionality", (
 
   it("should allow multiple cte clauses", async () => {
     const result = await executor.run(
-      useDataStore<TestDataStore>()
+      useDataStore<TestDataStore>(InMemoryQueryBuilder)
         .withCte("foo", (builder) =>
           builder
             .select("orders")
@@ -320,7 +320,7 @@ describe("Relational query builder should support basic select functionality", (
         )
         .select("bar")
         .columns("*")
-        .build(InMemoryQueryBuilder, "testQuery"),
+        .build("testQuery"),
     )
 
     if (Array.isArray(result.rows)) {
@@ -330,7 +330,7 @@ describe("Relational query builder should support basic select functionality", (
   })
 
   it("should allow basic inner joins", async () => {
-    const store = useDataStore<TestDataStore>()
+    const store = useDataStore<TestDataStore>(InMemoryQueryBuilder)
 
     const result = await executor.run(
       store
@@ -346,7 +346,7 @@ describe("Relational query builder should support basic select functionality", (
           "customerId",
           "id",
         )
-        .build(InMemoryQueryBuilder, "testQuery"),
+        .build("testQuery"),
     )
 
     if (Array.isArray(result.rows)) {
@@ -358,7 +358,7 @@ describe("Relational query builder should support basic select functionality", (
   })
 
   it("should allow a join with a source that has no values", async () => {
-    const store = useDataStore<TestDataStore>()
+    const store = useDataStore<TestDataStore>(InMemoryQueryBuilder)
 
     const result = await executor.run(
       store
@@ -370,7 +370,7 @@ describe("Relational query builder should support basic select functionality", (
           "customerId",
           "id",
         )
-        .build(InMemoryQueryBuilder, "testQuery"),
+        .build("testQuery"),
     )
 
     // Should only get orders from customer id 2
@@ -382,7 +382,7 @@ describe("Relational query builder should support basic select functionality", (
 
   it("should allow multiple joins", async () => {
     const result = await executor.run(
-      useDataStore<TestDataStore>()
+      useDataStore<TestDataStore>(InMemoryQueryBuilder)
         .withTableAlias("orders", "orders2")
         .select("orders")
         .columns("id")
@@ -400,7 +400,7 @@ describe("Relational query builder should support basic select functionality", (
           "customerId",
           "id",
         )
-        .build(InMemoryQueryBuilder, "testQuery"),
+        .build("testQuery"),
     )
 
     if (Array.isArray(result.rows)) {
@@ -414,7 +414,7 @@ describe("Relational query builder should support basic select functionality", (
 
   it("should allow a join inside of a cte", async () => {
     const result = await executor.run(
-      useDataStore<TestDataStore>()
+      useDataStore<TestDataStore>(InMemoryQueryBuilder)
         .withCte("customerOrders", (builder) =>
           builder
             .select("orders")
@@ -437,7 +437,7 @@ describe("Relational query builder should support basic select functionality", (
           "lastName",
         )
 
-        .build(InMemoryQueryBuilder, "testQuery"),
+        .build("testQuery"),
     )
 
     if (Array.isArray(result.rows)) {
@@ -452,7 +452,7 @@ describe("Relational query builder should support basic select functionality", (
 
   it("should allow a join utilizing a cte", async () => {
     const result = await executor.run(
-      useDataStore<TestDataStore>()
+      useDataStore<TestDataStore>(InMemoryQueryBuilder)
         .withCte("customerOrders", (builder) =>
           builder
             .select("orders")
@@ -467,7 +467,7 @@ describe("Relational query builder should support basic select functionality", (
           "customerId",
           "id",
         )
-        .build(InMemoryQueryBuilder, "testQuery"),
+        .build("testQuery"),
     )
 
     expect(Array.isArray(result.rows)).toBeTruthy()
@@ -497,10 +497,10 @@ describe("Relational query builder should support basic select functionality", (
   })
 
   it("Should support a simple insert", async () => {
-    const query = useDataStore<TestDataStore>()
+    const query = useDataStore<TestDataStore>(InMemoryQueryBuilder)
       .insert("orders")
       .returning("id", "name", "categories")
-      .build(InMemoryQueryBuilder, "insertOrder")
+      .build("insertOrder")
 
     expect(query).not.toBeUndefined()
     expect(query.queryType).toBe(QueryType.PARAMETERIZED)
@@ -532,10 +532,10 @@ describe("Relational query builder should support basic select functionality", (
     expect(STORE.orders[0].id).toBe(1)
 
     const selectRes = await executor.run(
-      useDataStore<TestDataStore>()
+      useDataStore<TestDataStore>(InMemoryQueryBuilder)
         .select("orders")
         .columns("*")
-        .build(InMemoryQueryBuilder, "select"),
+        .build("select"),
     )
     expect(Array.isArray(selectRes.rows)).toBeTruthy()
     const rows = Array.isArray(selectRes.rows) ? selectRes.rows : []

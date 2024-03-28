@@ -6,22 +6,29 @@ import { Duration } from "@telefrek/core/time"
 
 export type BuildableQueryTypes = QueryType.SIMPLE | QueryType.PARAMETERIZED
 
-export type QueryProvider<
-  Q extends BuildableQueryTypes,
-  T extends RowType,
-  P extends QueryParameters,
-> = (
-  node: QueryNode,
-  queryType: Q,
-  name: string,
-  mode: ExecutionMode,
-) => [P] extends [never] ? SimpleQuery<T> : ParameterizedQuery<T, P>
-
-export type QueryBuilder<
-  Q extends BuildableQueryTypes,
-  T extends RowType,
-  P extends QueryParameters,
-> = () => QueryProvider<Q, T, P>
+/**
+ * Type responsible for building queries from nodes
+ */
+export interface QueryBuilder {
+  /**
+   * Responsible for translating between a {@link QueryNode} and a query
+   *
+   * @param node The {@link QueryNode} that represents the query intent
+   * @param queryType The {@link QueryType} being built for
+   * @param name The name of the query
+   * @param mode The {@link ExecutionMode} for the query
+   */
+  build<
+    Q extends BuildableQueryTypes,
+    R extends RowType,
+    P extends QueryParameters,
+  >(
+    node: QueryNode,
+    queryType: Q,
+    name: string,
+    mode: ExecutionMode,
+  ): [P] extends [never] ? SimpleQuery<R> : ParameterizedQuery<R, P>
+}
 
 /**
  * Represents the basic information about a node in the query AST

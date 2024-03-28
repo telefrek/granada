@@ -1,8 +1,4 @@
-import {
-  PostgresQueryBuilder,
-  createPostgresQueryContext,
-  isPostgresQuery,
-} from "./builder"
+import { createPostgresQueryContext, isPostgresQuery } from "./builder"
 
 import type { PostgresEnum } from "../"
 import { Category, TestDatabase } from "./testUtils"
@@ -15,7 +11,7 @@ describe("Postgres query syntax should be translated correctly", () => {
       .columns("id", "categories")
       .withColumnAlias("id", "orderId")
       .where((clause) => clause.containsItems("categories", "purchase"))
-      .build(PostgresQueryBuilder, "testQuery")
+      .build("testQuery")
 
     if (isPostgresQuery(query)) {
       expect(query.queryText).toEqual(
@@ -43,7 +39,7 @@ describe("Postgres query syntax should be translated correctly", () => {
       )
       .select("customerOrders")
       .columns("*")
-      .build(PostgresQueryBuilder, "testQuery")
+      .build("testQuery")
 
     if (isPostgresQuery(query)) {
       expect(query.queryText).toEqual(
@@ -77,7 +73,7 @@ describe("Postgres query syntax should be translated correctly", () => {
         "customerId",
         "id",
       )
-      .build(PostgresQueryBuilder, "testQuery")
+      .build("testQuery")
 
     if (isPostgresQuery(query)) {
       expect(query.queryText).toEqual(
@@ -115,7 +111,7 @@ describe("Postgres query syntax should be translated correctly", () => {
         "customerId",
         "id",
       )
-      .build(PostgresQueryBuilder, "testQuery")
+      .build("testQuery")
 
     if (isPostgresQuery(query)) {
       expect(query.queryText).toEqual(

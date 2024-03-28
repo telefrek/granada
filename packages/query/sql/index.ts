@@ -3,7 +3,7 @@
  * objects has meaning
  */
 
-import type { RowType } from "../index"
+import type { QueryBuilder, RowType } from "../index"
 
 /**
  * Represents a table schema which can have named columns and values
@@ -20,3 +20,5 @@ export interface SQLDataStore {
 
 /** Sentinel indicator for all columns */
 export type STAR = "*"
+
+export type RelationalQueryBuilder<_D extends SQLDataStore> = QueryBuilder

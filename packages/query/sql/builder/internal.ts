@@ -37,7 +37,12 @@ import {
   type TableQueryNode,
   type WhereClause,
 } from "../ast"
-import type { SQLDataStore, SQLDataTable, STAR } from "../index"
+import type {
+  RelationalQueryBuilder,
+  SQLDataStore,
+  SQLDataTable,
+  STAR,
+} from "../index"
 import {
   type InsertBuilder,
   type JoinNodeBuilder,
@@ -53,13 +58,26 @@ import {
  * Internal implementation
  ******************************************************************************/
 
+interface SQLNodeBuilderContext<
+  D extends SQLDataStore,
+  Q extends BuildableQueryTypes = QueryType.SIMPLE,
+  R extends SQLDataTable = never,
+  P extends QueryParameters = never,
+  A extends keyof D["tables"] = never,
+> extends SQLNodeBuilder<D, Q, R, P, A> {
+  queryType: Q
+  context: SQLQueryNode<SQLNodeType> | undefined
+  tableAlias: TableAlias
+  queryBuilder: QueryBuilder
+}
+
 export class DefaultSQLNodeBuilder<
   D extends SQLDataStore,
   Q extends BuildableQueryTypes,
   R extends SQLDataTable = never,
   P extends QueryParameters = never,
   A extends keyof D["tables"] = never,
-> implements SQLNodeBuilder<D, Q, R, P, A>
+> implements SQLNodeBuilderContext<D, Q, R, P, A>
 {
   #context?: SQLQueryNode<SQLNodeType>
   #tableAlias: TableAlias
@@ -76,22 +94,34 @@ export class DefaultSQLNodeBuilder<
     return this.#tableAlias
   }
 
+  queryBuilder: QueryBuilder
   queryType: Q
   tableName?: keyof D["tables"]
 
   constructor(
     queryType: Q,
+    queryBuilder: RelationalQueryBuilder<D>,
     context?: SQLQueryNode<SQLNodeType>,
     tableAlias: TableAlias = {},
   ) {
     this.queryType = queryType
+    this.queryBuilder = queryBuilder
     this.#context = context
     this.#tableAlias = tableAlias
   }
+
   insert<T extends keyof D["tables"]>(
     tableName: T,
   ): InsertBuilder<D, T, never, D["tables"][T]> {
-    return new InternalInsertBuilder(tableName)
+    return new InternalInsertBuilder(
+      tableName,
+      new DefaultSQLNodeBuilder(
+        QueryType.PARAMETERIZED,
+        this.queryBuilder,
+        this.#context,
+        this.tableAlias,
+      ),
+    )
   }
 
   withParameters<QP extends QueryParameters>(): SQLNodeBuilder<
@@ -107,6 +137,7 @@ export class DefaultSQLNodeBuilder<
 
     return new DefaultSQLNodeBuilder(
       QueryType.PARAMETERIZED,
+      this.queryBuilder,
       this.#context,
       this.tableAlias,
     )
@@ -132,7 +163,7 @@ export class DefaultSQLNodeBuilder<
       R,
       P,
       A | Alias
-    >(this.queryType, this.#context, {
+    >(this.queryType, this.queryBuilder, this.#context, {
       ...this.tableAlias,
       ...a,
     })
@@ -170,7 +201,7 @@ export class DefaultSQLNodeBuilder<
       R,
       P,
       A | Alias
-    >(this.queryType, cte, this.tableAlias)
+    >(this.queryType, this.queryBuilder, cte, this.tableAlias)
   }
 
   select<T extends keyof D["tables"]>(
@@ -183,26 +214,11 @@ export class DefaultSQLNodeBuilder<
     return new InternalTableBuilder(
       tableName,
       this,
-      this.queryType,
       alias,
       undefined,
       undefined,
       undefined,
       this.context,
-    )
-  }
-
-  asNode(): SQLQueryNode<SQLNodeType> {
-    throw new Error("Relation Node Builders cannot themselves provide an AST")
-  }
-
-  build(
-    _builder: QueryBuilder<Q, R, P>,
-    _name: string,
-    _mode: ExecutionMode = ExecutionMode.Normal,
-  ): [P] extends [never] ? SimpleQuery<R> : ParameterizedQuery<R, P> {
-    throw new Error(
-      "Relation Node Builders cannot themselves provide an AST to build",
     )
   }
 }
@@ -216,9 +232,15 @@ class InternalInsertBuilder<
 {
   tableName: T
   returningColumns?: string[] | STAR
+  builder: SQLNodeBuilderContext<D, QueryType.PARAMETERIZED, R, P, never>
 
-  constructor(tableName: T, returningColumns?: string[] | STAR) {
+  constructor(
+    tableName: T,
+    builder: SQLNodeBuilderContext<D, QueryType.PARAMETERIZED, R, P, never>,
+    returningColumns?: string[] | STAR,
+  ) {
     this.tableName = tableName
+    this.builder = builder
     this.returningColumns = returningColumns
   }
 
@@ -233,11 +255,16 @@ class InternalInsertBuilder<
     | InsertBuilder<D, T, D["tables"][T], P>
     | InsertBuilder<D, T, Pick<D["tables"][T], C>, P> {
     if (columns === "*") {
-      return new InternalInsertBuilder(this.tableName, columns)
+      return new InternalInsertBuilder<D, T, D["tables"][T], P>(
+        this.tableName,
+        this.builder,
+        columns,
+      )
     }
 
-    return new InternalInsertBuilder(
+    return new InternalInsertBuilder<D, T, Pick<D["tables"][T], C>, P>(
       this.tableName,
+      this.builder,
       rest
         ? [columns as string].concat(rest.map((r: C) => r as string))
         : columns
@@ -255,11 +282,15 @@ class InternalInsertBuilder<
   }
 
   build(
-    builder: QueryBuilder<QueryType.PARAMETERIZED, R, P>,
     name: string,
     mode: ExecutionMode = ExecutionMode.Normal,
   ): [P] extends [never] ? SimpleQuery<R> : ParameterizedQuery<R, P> {
-    return builder()(this.asNode(), QueryType.PARAMETERIZED, name, mode)
+    return this.builder.queryBuilder.build(
+      this.asNode(),
+      QueryType.PARAMETERIZED,
+      name,
+      mode,
+    )
   }
 }
 
@@ -273,23 +304,20 @@ class InternalJoinBuilder<
 {
   tableName?: keyof D["tables"]
 
-  builder: SQLNodeBuilder<D, Q, SQLDataTable, P, keyof D["tables"]>
+  builder: SQLNodeBuilderContext<D, Q, SQLDataTable, P, keyof D["tables"]>
   tables: TableQueryNode[]
   filters: JoinClauseQueryNode[]
-  queryType: Q
   parent?: SQLQueryNode<SQLNodeType>
 
   constructor(
-    builder: SQLNodeBuilder<D, Q, SQLDataTable, P, keyof D["tables"]>,
+    builder: SQLNodeBuilderContext<D, Q, SQLDataTable, P, keyof D["tables"]>,
     tables: TableQueryNode[],
     filters: JoinClauseQueryNode[],
-    queryType: Q,
     parent?: SQLQueryNode<SQLNodeType>,
   ) {
     this.builder = builder
     this.tables = tables
     this.filters = filters
-    this.queryType = queryType
     this.parent = parent
   }
 
@@ -324,13 +352,7 @@ class InternalJoinBuilder<
       tableGenerator(this.builder.select(joinTable)).asNode() as TableQueryNode,
     )
 
-    return new InternalJoinBuilder(
-      this.builder,
-      tables,
-      filters,
-      this.queryType,
-      this.parent,
-    )
+    return new InternalJoinBuilder(this.builder, tables, filters, this.parent)
   }
 
   asNode(): SQLQueryNode<SQLNodeType> {
@@ -356,12 +378,17 @@ class InternalJoinBuilder<
 
     return join
   }
+
   build(
-    builder: QueryBuilder<Q, R, P>,
     name: string,
     mode: ExecutionMode = ExecutionMode.Normal,
   ): [P] extends [never] ? SimpleQuery<R> : ParameterizedQuery<R, P> {
-    return builder()(this.asNode(), this.queryType, name, mode)
+    return this.builder.queryBuilder.build(
+      this.asNode(),
+      this.builder.queryType,
+      name,
+      mode,
+    )
   }
 }
 
@@ -374,9 +401,8 @@ class InternalTableBuilder<
 > implements TableNodeBuilder<D, T, R, P, Q>
 {
   tableName: T
-  builder: SQLNodeBuilder<D, Q, SQLDataTable, P, keyof D["tables"]>
+  builder: SQLNodeBuilderContext<D, Q, SQLDataTable, P, keyof D["tables"]>
   tableAlias?: keyof D["tables"]
-  private queryType: Q
 
   private selectClause?: SelectClause
   private whereClause?: WhereClause
@@ -385,8 +411,7 @@ class InternalTableBuilder<
 
   constructor(
     tableName: T,
-    builder: SQLNodeBuilder<D, Q, SQLDataTable, P, keyof D["tables"]>,
-    queryType: Q,
+    builder: SQLNodeBuilderContext<D, Q, SQLDataTable, P, keyof D["tables"]>,
     tableAlias?: keyof D["tables"],
     selectClause?: SelectClause,
     whereClause?: WhereClause,
@@ -395,7 +420,6 @@ class InternalTableBuilder<
   ) {
     this.tableName = tableName
     this.builder = builder
-    this.queryType = queryType
     this.tableAlias = tableAlias
     this.selectClause = selectClause
     this.whereClause = whereClause
@@ -415,7 +439,6 @@ class InternalTableBuilder<
       return new InternalTableBuilder(
         this.tableName,
         this.builder,
-        this.queryType,
         this.tableAlias,
         {
           nodeType: SQLNodeType.SELECT,
@@ -430,7 +453,6 @@ class InternalTableBuilder<
     return new InternalTableBuilder(
       this.tableName,
       this.builder,
-      this.queryType,
       this.tableAlias,
       {
         nodeType: SQLNodeType.SELECT,
@@ -476,7 +498,6 @@ class InternalTableBuilder<
           },
         },
       ],
-      this.queryType,
       parent,
     )
   }
@@ -493,7 +514,6 @@ class InternalTableBuilder<
     return new InternalTableBuilder(
       this.tableName,
       this.builder,
-      this.queryType,
       this.tableAlias,
       this.selectClause,
       this.whereClause,
@@ -508,13 +528,12 @@ class InternalTableBuilder<
     ) => WhereClauseBuilder<D["tables"][T], Q, P>,
   ): Omit<TableNodeBuilder<D, T, R, P, Q>, "where"> {
     const filter = clause(
-      new InternalWhereClauseBuilder(this.queryType),
+      new InternalWhereClauseBuilder(this.builder.queryType),
     ).current
 
     return new InternalTableBuilder(
       this.tableName,
       this.builder,
-      this.queryType,
       this.tableAlias,
       this.selectClause,
       filter
@@ -578,11 +597,15 @@ class InternalTableBuilder<
   }
 
   build(
-    builder: QueryBuilder<Q, R, P>,
     name: string,
     mode: ExecutionMode,
   ): [P] extends [never] ? SimpleQuery<R> : ParameterizedQuery<R, P> {
-    return builder()(this.asNode(), this.queryType, name, mode)
+    return this.builder.queryBuilder.build(
+      this.asNode(),
+      this.builder.queryType,
+      name,
+      mode,
+    )
   }
 }
 

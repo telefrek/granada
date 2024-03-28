@@ -15,7 +15,6 @@ import {
   type ParameterizedQuery,
   type QueryNode,
   type QueryParameters,
-  type QueryProvider,
   type RowType,
   type SimpleQuery,
 } from "@telefrek/query/index"
@@ -45,7 +44,10 @@ import {
   getTreeRoot,
   hasProjections,
 } from "@telefrek/query/sql/helpers"
-import type { SQLDataStore, SQLDataTable } from "@telefrek/query/sql/index"
+import type {
+  RelationalQueryBuilder,
+  SQLDataStore,
+} from "@telefrek/query/sql/index"
 import type {
   PostgresColumnType,
   PostgresColumnTypes,
@@ -81,7 +83,7 @@ export function createPostgresQueryContext<
   return new DefaultSQLNodeBuilder<
     PostgresSQLDataStore<Database>,
     QueryType.SIMPLE
-  >(QueryType.SIMPLE)
+  >(QueryType.SIMPLE, new PostgresQueryBuilder())
 }
 
 type PostgresQuery = {
@@ -110,17 +112,19 @@ export function isPostgresQuery(query: unknown): query is PostgresQuery {
   )
 }
 
-export function PostgresQueryBuilder<
-  Q extends BuildableQueryTypes,
-  R extends SQLDataTable,
-  P extends QueryParameters,
->(): QueryProvider<Q, R, P> {
-  return (
+export class PostgresQueryBuilder<D extends SQLDataStore>
+  implements RelationalQueryBuilder<D>
+{
+  build<
+    Q extends BuildableQueryTypes,
+    R extends RowType,
+    P extends QueryParameters,
+  >(
     node: QueryNode,
     queryType: Q,
     name: string,
     mode: ExecutionMode,
-  ): [P] extends [never] ? SimpleQuery<R> : ParameterizedQuery<R, P> => {
+  ): [P] extends [never] ? SimpleQuery<R> : ParameterizedQuery<R, P> {
     if (isSQLQueryNode(node)) {
       const context: PostgresContext = {
         parameterMapping: new Map(),

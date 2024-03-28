@@ -34,7 +34,7 @@ export enum SQLColumnType {
 
 export type SQLArray<ItemType extends SQLColumnType> = ItemType[]
 
-export type SQLType<S> =
+export type SQLType<S extends SQLColumnType | SQLArray<SQLColumnType>> =
   S extends SQLArray<infer U>
     ? _SQLType<U>[]
     : S extends SQLColumnType
@@ -42,11 +42,43 @@ export type SQLType<S> =
       : never
 
 export type ColumnDefinition<ColumnType extends SQLColumnType> =
+  BaseColumnDefinition<ColumnType> & ExtendedColumnDefinition<ColumnType>
+
+type ExtendedColumnDefinition<ColumnType extends SQLColumnType> =
   ColumnType extends VariableSQLTypes
     ? VariableColumnDefinition<ColumnType>
     : ColumnType extends IncrementalSQLTypes
       ? IncrementalColumnDefinition<ColumnType>
-      : BaseColumnDefinition<ColumnType>
+      : // eslint-disable-next-line @typescript-eslint/ban-types
+        {}
+
+type BigIntSQLTypes = SQLColumnType.BIGINT | SQLColumnType.TIMESTAMP
+
+type BinarySQLTypes =
+  | SQLColumnType.BINARY
+  | SQLColumnType.BLOB
+  | SQLColumnType.CLOB
+  | SQLColumnType.VARBINARY
+  | SQLColumnType.IMAGE
+
+type NumericSQLTypes =
+  | SQLColumnType.DECIMAL
+  | SQLColumnType.FLOAT
+  | SQLColumnType.INT
+  | SQLColumnType.NUMERIC
+  | SQLColumnType.REAL
+  | SQLColumnType.SMALLINT
+  | SQLColumnType.TINYINT
+
+type _SQLType<T extends SQLColumnType> = [T] extends [BigIntSQLTypes]
+  ? number | bigint
+  : [T] extends [BinarySQLTypes]
+    ? Int8Array
+    : [T] extends [NumericSQLTypes]
+      ? number
+      : T extends SQLColumnType.BIT
+        ? boolean
+        : string
 
 type VariableSQLTypes =
   | SQLColumnType.VARBINARY
@@ -74,31 +106,3 @@ type VariableColumnDefinition<ColumnType extends VariableSQLTypes> =
   BaseColumnDefinition<ColumnType> & {
     size: number
   }
-
-type BigIntSQLTypes = SQLColumnType.BIGINT | SQLColumnType.TIMESTAMP
-
-type BinarySQLTypes =
-  | SQLColumnType.BINARY
-  | SQLColumnType.BLOB
-  | SQLColumnType.CLOB
-  | SQLColumnType.VARBINARY
-  | SQLColumnType.IMAGE
-
-type NumericSQLTypes =
-  | SQLColumnType.DECIMAL
-  | SQLColumnType.FLOAT
-  | SQLColumnType.INT
-  | SQLColumnType.NUMERIC
-  | SQLColumnType.REAL
-  | SQLColumnType.SMALLINT
-  | SQLColumnType.TINYINT
-
-type _SQLType<T extends SQLColumnType> = T extends BigIntSQLTypes
-  ? number | bigint
-  : T extends BinarySQLTypes
-    ? Int8Array
-    : T extends NumericSQLTypes
-      ? number
-      : T extends SQLColumnType.BIT
-        ? boolean
-        : string

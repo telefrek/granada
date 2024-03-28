@@ -4,7 +4,7 @@ import {
 } from "@testcontainers/postgresql"
 import pg from "pg"
 import type { PostgresEnum } from "../"
-import { PostgresQueryBuilder, createPostgresQueryContext } from "./builder"
+import { createPostgresQueryContext } from "./builder"
 import { PostgresQueryExecutor } from "./executor"
 import {
   createTestDatabase,
@@ -77,7 +77,7 @@ describe("Postgres should be able to execute queries", () => {
         "customerId",
         "id",
       )
-      .build(PostgresQueryBuilder, "testQuery")
+      .build("testQuery")
 
     let result = await executor?.run(
       query.bind({ amount: 0, categories: ["test"] }),
@@ -114,7 +114,7 @@ describe("Postgres should be able to execute queries", () => {
           "customerId",
           "id",
         )
-        .build(PostgresQueryBuilder, "testQuery"),
+        .build("testQuery"),
     )
 
     expect(result).not.toBeUndefined()
