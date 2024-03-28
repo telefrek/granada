@@ -34,6 +34,8 @@ export enum SQLColumnType {
 
 export type SQLEnumType = Record<string, string>
 
+export type SQLEnum<E extends SQLEnumType> = E[keyof E]
+
 export type ValidSQLTypes = SQLColumnType | SQLEnumType
 
 export type ColumnType<S extends SimpleColumnDefinition<ValidSQLTypes>> =

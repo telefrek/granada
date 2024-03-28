@@ -1,4 +1,3 @@
-import { getDebugInfo } from "@telefrek/core"
 import type { MatchingProperty } from "@telefrek/core/type/utils"
 import type {
   ColumnSchema,
@@ -74,8 +73,6 @@ export class SchemaBuilder<
       leftColumn: leftColumn as string,
       rightColumn: rightColumn as string,
     }
-
-    console.log(getDebugInfo(key))
 
     if (this.relations) {
       this.relations.push(key)

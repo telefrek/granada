@@ -1,15 +1,15 @@
+import type { SQLEnum } from "@telefrek/query/sql/types"
 import {
   PostgreSqlContainer,
   StartedPostgreSqlContainer,
 } from "@testcontainers/postgresql"
 import pg from "pg"
-import type { PostgresEnum } from "../"
 import { createPostgresQueryContext } from "./builder"
 import { PostgresQueryExecutor } from "./executor"
 import {
+  Category,
   createTestDatabase,
-  type Category,
-  type TestDatabase,
+  type TestDatabaseType,
 } from "./testUtils"
 
 describe("Postgres should be able to execute queries", () => {
@@ -49,10 +49,50 @@ describe("Postgres should be able to execute queries", () => {
   })
 
   it("Should be able to issue a simple query", async () => {
-    const query = createPostgresQueryContext<TestDatabase>()
+    await executor?.run(
+      createPostgresQueryContext<TestDatabaseType>()
+        .insert("customers", [
+          "id",
+          "firstName",
+          "lastName",
+          "createdAt",
+          "updatedAt",
+        ])
+        .build("insertCustomer")
+        .bind({
+          id: 1,
+          firstName: "test",
+          lastName: "customer1",
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }),
+    )
+
+    await executor?.run(
+      createPostgresQueryContext<TestDatabaseType>()
+        .insert("orders", [
+          "id",
+          "amount",
+          "categories",
+          "customerId",
+          "createdAt",
+          "updatedAt",
+        ])
+        .build("insertCustomer")
+        .bind({
+          id: 1,
+          amount: 10,
+          categories: ["purchase"],
+          customerId: 1,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }),
+    )
+
+    const query = createPostgresQueryContext<TestDatabaseType>()
       .withParameters<{
         amount: number
-        categories: PostgresEnum<typeof Category>[]
+        categories: SQLEnum<typeof Category>[]
       }>()
       .withCte("customerOrders", (builder) =>
         builder
@@ -80,17 +120,17 @@ describe("Postgres should be able to execute queries", () => {
       .build("testQuery")
 
     let result = await executor?.run(
-      query.bind({ amount: 0, categories: ["test"] }),
+      query.bind({ amount: 1, categories: [Category.PURCHASE] }),
     )
     expect(result).not.toBeUndefined()
 
     expect(Array.isArray(result?.rows))
     let rows = Array.isArray(result?.rows) ? result.rows : []
 
-    expect(rows.length).toBe(0)
+    expect(rows.length).toBe(1)
 
     result = await executor?.run(
-      createPostgresQueryContext<TestDatabase>()
+      createPostgresQueryContext<TestDatabaseType>()
         .withCte("customerOrders", (builder) =>
           builder
             .select("orders")

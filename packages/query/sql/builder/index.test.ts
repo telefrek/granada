@@ -462,7 +462,15 @@ describe("Relational query builder should support basic select functionality", (
 
   it("Should support a simple insert", async () => {
     const query = useDataStore<TestDatabaseType>(InMemoryQueryBuilder)
-      .insert("orders")
+      .insert("orders", [
+        "id",
+        "customerId",
+        "name",
+        "categories",
+        "createdAt",
+        "updatedAt",
+        "amount",
+      ])
       .returning("id", "name", "categories")
       .build("insertOrder")
 

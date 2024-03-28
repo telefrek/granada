@@ -1,50 +1,68 @@
-import type {
-  PostgresArray,
-  PostgresColumnTypeName,
-  PostgresColumnTypes,
-  PostgresDatabase,
-  PostgresEnum,
-} from "../"
-
+import { SchemaBuilder } from "@telefrek/query/sql/schema/builder"
+import type { SQLDatabaseSchema } from "@telefrek/query/sql/schema/index"
+import { SQLColumnType } from "@telefrek/query/sql/types"
 import pg from "pg"
+
+/**
+ * Test utilities for verifying the SQL packages
+ */
 
 export const Category = {
   TEST: "test",
   PURCHASE: "purchase",
 } as const
 
-type Table = Record<string, PostgresColumnTypes | undefined>
+const Order = {
+  id: {
+    type: SQLColumnType.BIGINT,
+  },
+  name: {
+    type: SQLColumnType.TEXT,
+  },
+  customerId: {
+    type: SQLColumnType.BIGINT,
+  },
+  createdAt: {
+    type: SQLColumnType.TIMESTAMP,
+    nullable: true,
+  },
+  updatedAt: {
+    type: SQLColumnType.TIMESTAMP,
+  },
+  amount: {
+    type: SQLColumnType.DECIMAL,
+  },
+  categories: {
+    type: Category,
+    isArray: true,
+  },
+} as const
 
-export interface Order extends Table {
-  id: PostgresColumnTypeName.SERIAL
-  createdAt: PostgresColumnTypeName.BIGINT
-  updatedAt: PostgresColumnTypeName.BIGINT
-  removedAt?: PostgresColumnTypeName.BIGINT
-  name: PostgresColumnTypeName.TEXT
-  categories: PostgresArray<PostgresEnum<typeof Category>>
-  amount: PostgresColumnTypeName.REAL
-  customerId: PostgresColumnTypeName.INTEGER
-}
+const Customer = {
+  id: {
+    type: SQLColumnType.BIGINT,
+  },
+  firstName: {
+    type: SQLColumnType.TEXT,
+  },
+  lastName: {
+    type: SQLColumnType.TEXT,
+  },
+  createdAt: {
+    type: SQLColumnType.TIMESTAMP,
+  },
+  updatedAt: {
+    type: SQLColumnType.TIMESTAMP,
+  },
+} as const
 
-export interface Customer extends Table {
-  id: PostgresColumnTypeName.SERIAL
-  createdAt: PostgresColumnTypeName.BIGINT
-  updatedAt: PostgresColumnTypeName.BIGINT
-  removedAt?: PostgresColumnTypeName.BIGINT
-  firstName: PostgresColumnTypeName.TEXT
-  lastName: PostgresColumnTypeName.TEXT
-}
+export const TestDatabase = new SchemaBuilder()
+  .withTable(Order, "orders", { column: "id" })
+  .withTable(Customer, "customers", { column: "id" })
+  .withForeignKey("orders", "customers", "customerId", "id")
+  .build()
 
-export interface TestDatabase extends PostgresDatabase {
-  tables: {
-    orders: {
-      schema: Order
-    }
-    customers: {
-      schema: Customer
-    }
-  }
-}
+export type TestDatabaseType = SQLDatabaseSchema<typeof TestDatabase>
 
 export async function createTestDatabase(client: pg.Client): Promise<void> {
   await client.query(`
@@ -55,7 +73,6 @@ export async function createTestDatabase(client: pg.Client): Promise<void> {
             id serial PRIMARY KEY,
             createdAt bigint NOT NULL,
             updatedAt bigint NOT NULL,
-            removedAt bigint,
             firstName text NOT NULL,
             lastName text NOT NULL
         )`)
@@ -65,7 +82,6 @@ export async function createTestDatabase(client: pg.Client): Promise<void> {
             id serial PRIMARY KEY,
             createdAt bigint NOT NULL,
             updatedAt bigint NOT NULL,
-            removedAt bigint,
             categories Category[] NOT NULL,
             amount real NOT NULL,
             customerId integer NOT NULL

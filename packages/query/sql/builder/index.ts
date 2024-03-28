@@ -9,7 +9,6 @@ import type {
   MatchingProperty,
   MergedNonOverlappingType,
   PropertyOfType,
-  RequiredLiteralKeys,
 } from "@telefrek/core/type/utils"
 import type {
   RelationalQueryBuilder,
@@ -104,16 +103,17 @@ export interface SQLNodeBuilder<
     tableName: T,
   ): TableNodeBuilder<D, T, D["tables"][T], P, Q>
 
-  insert<T extends keyof D["tables"]>(
+  insert<T extends keyof D["tables"], C extends keyof D["tables"][T]>(
     tableName: T,
-  ): InsertBuilder<D, T, never, D["tables"][T]>
+    columns: C[],
+  ): InsertBuilder<D, T, never, Pick<D["tables"][T], C>>
 }
 
 export interface InsertBuilder<
   D extends SQLDataStore,
   T extends keyof D["tables"],
   R extends SQLDataTable,
-  P extends RequiredLiteralKeys<D["tables"][T]>,
+  P extends SQLDataTable,
 > extends SQLNodeProcessor<D, R, P> {
   returning(columns: STAR): InsertBuilder<D, T, D["tables"][T], P>
   returning<C extends keyof D["tables"][T]>(

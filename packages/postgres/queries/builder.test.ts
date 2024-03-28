@@ -1,11 +1,11 @@
+import type { SQLEnum } from "@telefrek/query/sql/types"
 import { createPostgresQueryContext, isPostgresQuery } from "./builder"
 
-import type { PostgresEnum } from "../"
-import { Category, TestDatabase } from "./testUtils"
+import { Category, type TestDatabaseType } from "./testUtils"
 
 describe("Postgres query syntax should be translated correctly", () => {
   it("Should create a valid query from a builder", () => {
-    const context = createPostgresQueryContext<TestDatabase>()
+    const context = createPostgresQueryContext<TestDatabaseType>()
     const query = context
       .select("orders")
       .columns("id", "categories")
@@ -21,7 +21,7 @@ describe("Postgres query syntax should be translated correctly", () => {
   })
 
   it("Should create a valid query from a builder with a cte and join", () => {
-    const context = createPostgresQueryContext<TestDatabase>()
+    const context = createPostgresQueryContext<TestDatabaseType>()
     const query = context
       .withCte("customerOrders", (builder) =>
         builder
@@ -49,7 +49,7 @@ describe("Postgres query syntax should be translated correctly", () => {
   })
 
   it("Should create a valid query for multiple cte and a join in the main query", () => {
-    const query = createPostgresQueryContext<TestDatabase>()
+    const query = createPostgresQueryContext<TestDatabaseType>()
       .withCte("customerOrders", (builder) =>
         builder
           .select("orders")
@@ -83,10 +83,10 @@ describe("Postgres query syntax should be translated correctly", () => {
   })
 
   it("Should allow creation of queries with parameters", () => {
-    const query = createPostgresQueryContext<TestDatabase>()
+    const query = createPostgresQueryContext<TestDatabaseType>()
       .withParameters<{
         amount: number
-        categories: PostgresEnum<typeof Category>[]
+        categories: SQLEnum<typeof Category>[]
       }>()
       .withCte("customerOrders", (builder) =>
         builder

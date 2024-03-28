@@ -5,7 +5,6 @@ import type {
   MatchingProperty,
   MergedNonOverlappingType,
   PropertyOfType,
-  RequiredLiteralKeys,
 } from "@telefrek/core/type/utils"
 import { QueryError } from "../../error"
 import {
@@ -15,6 +14,7 @@ import {
   type BuildableQueryTypes,
   type ParameterizedQuery,
   type QueryBuilder,
+  type RowType,
   type SimpleQuery,
 } from "../../index"
 import {
@@ -110,9 +110,10 @@ export class DefaultSQLNodeBuilder<
     this.#tableAlias = tableAlias
   }
 
-  insert<T extends keyof D["tables"]>(
+  insert<T extends keyof D["tables"], C extends keyof D["tables"][T]>(
     tableName: T,
-  ): InsertBuilder<D, T, never, D["tables"][T]> {
+    columns: C[],
+  ): InsertBuilder<D, T, never, Pick<D["tables"][T], C>> {
     return new InternalInsertBuilder(
       tableName,
       new DefaultSQLNodeBuilder(
@@ -121,6 +122,7 @@ export class DefaultSQLNodeBuilder<
         this.#context,
         this.tableAlias,
       ),
+      columns,
     )
   }
 
@@ -226,21 +228,25 @@ export class DefaultSQLNodeBuilder<
 class InternalInsertBuilder<
   D extends SQLDataStore,
   T extends keyof D["tables"],
+  IC extends keyof D["tables"][T],
   R extends SQLDataTable = never,
-  P extends RequiredLiteralKeys<D["tables"][T]> = D["tables"][T],
+  P extends RowType = Pick<D["tables"][T], IC>,
 > implements InsertBuilder<D, T, R, P>
 {
   tableName: T
   returningColumns?: string[] | STAR
-  builder: SQLNodeBuilderContext<D, QueryType.PARAMETERIZED, R, P, never>
+  columns: IC[]
+  builder: SQLNodeBuilderContext<D, QueryType.PARAMETERIZED, R>
 
   constructor(
     tableName: T,
-    builder: SQLNodeBuilderContext<D, QueryType.PARAMETERIZED, R, P, never>,
+    builder: SQLNodeBuilderContext<D, QueryType.PARAMETERIZED, R>,
+    columns: IC[],
     returningColumns?: string[] | STAR,
   ) {
     this.tableName = tableName
     this.builder = builder
+    this.columns = columns
     this.returningColumns = returningColumns
   }
 
@@ -255,16 +261,18 @@ class InternalInsertBuilder<
     | InsertBuilder<D, T, D["tables"][T], P>
     | InsertBuilder<D, T, Pick<D["tables"][T], C>, P> {
     if (columns === "*") {
-      return new InternalInsertBuilder<D, T, D["tables"][T], P>(
+      return new InternalInsertBuilder<D, T, IC, D["tables"][T], P>(
         this.tableName,
         this.builder,
+        this.columns,
         columns,
       )
     }
 
-    return new InternalInsertBuilder<D, T, Pick<D["tables"][T], C>, P>(
+    return new InternalInsertBuilder<D, T, IC, Pick<D["tables"][T], C>, P>(
       this.tableName,
       this.builder,
+      this.columns,
       rest
         ? [columns as string].concat(rest.map((r: C) => r as string))
         : columns
@@ -278,6 +286,7 @@ class InternalInsertBuilder<
       nodeType: SQLNodeType.INSERT,
       tableName: this.tableName,
       returning: this.returningColumns,
+      columns: this.columns,
     } as InsertClause
   }
 

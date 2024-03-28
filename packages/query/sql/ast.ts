@@ -158,7 +158,9 @@ type FilteredClause = {
 
 export type InsertClause = SQLQueryNode<SQLNodeType.INSERT> &
   NamedSQLQueryNode &
-  ReturningClause
+  ReturningClause & {
+    columns: string[]
+  }
 
 export type UpdateClause = SQLQueryNode<SQLNodeType.UPDATE> &
   NamedSQLQueryNode &

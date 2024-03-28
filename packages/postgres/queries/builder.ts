@@ -2,10 +2,6 @@
  * Implementation of the @telefrek/query packages
  */
 
-import type {
-  OptionalLiteralKeys,
-  RequiredLiteralKeys,
-} from "@telefrek/core/type/utils"
 import { QueryError } from "@telefrek/query/error"
 import {
   ExecutionMode,
@@ -23,6 +19,7 @@ import {
   isColumnFilter,
   isCteClause,
   isFilterGroup,
+  isInsertClause,
   isJoinQueryNode,
   isParameterNode,
   isSQLQueryNode,
@@ -30,6 +27,7 @@ import {
   type CteClause,
   type FilterGroup,
   type FilterTypes,
+  type InsertClause,
   type JoinQueryNode,
   type SQLNodeType,
   type SQLQueryNode,
@@ -48,42 +46,14 @@ import type {
   RelationalQueryBuilder,
   SQLDataStore,
 } from "@telefrek/query/sql/index"
-import type {
-  PostgresColumnType,
-  PostgresColumnTypes,
-  PostgresDatabase,
-  PostgresSchema,
-} from ".."
-
-export type PostgresTableRow<
-  Schema extends PostgresSchema,
-  L = RequiredLiteralKeys<Schema>,
-  R = Required<Pick<Schema, keyof OptionalLiteralKeys<Schema>>>,
-> = {
-  [c in keyof L]: L[c] extends PostgresColumnTypes
-    ? PostgresColumnType<L[c]>
-    : c
-} & Partial<{
-  [c in keyof R]: R[c] extends PostgresColumnTypes
-    ? PostgresColumnType<R[c]>
-    : c
-}>
-
-export interface PostgresSQLDataStore<Database extends PostgresDatabase> {
-  tables: {
-    [key in keyof Database["tables"]]: PostgresTableRow<
-      Database["tables"][key]["schema"]
-    >
-  }
-}
 
 export function createPostgresQueryContext<
-  Database extends PostgresDatabase,
->(): SQLNodeBuilder<PostgresSQLDataStore<Database>, QueryType.SIMPLE> {
-  return new DefaultSQLNodeBuilder<
-    PostgresSQLDataStore<Database>,
-    QueryType.SIMPLE
-  >(QueryType.SIMPLE, new PostgresQueryBuilder())
+  Database extends SQLDataStore,
+>(): SQLNodeBuilder<Database, QueryType.SIMPLE> {
+  return new DefaultSQLNodeBuilder<Database, QueryType.SIMPLE>(
+    QueryType.SIMPLE,
+    new PostgresQueryBuilder(),
+  )
 }
 
 type PostgresQuery = {
@@ -286,10 +256,12 @@ function translateNode(
       return translateTableQuery(node, context)
     } else if (isJoinQueryNode(node)) {
       return translateJoinQuery(node, context)
+    } else if (isInsertClause(node)) {
+      return translateInsert(node, context)
     }
   }
 
-  return ""
+  throw new QueryError("Unsupported type!")
 }
 
 interface ProjectionInfo {
@@ -320,6 +292,18 @@ function extractProjections(root: SQLQueryNode<SQLNodeType>): ProjectionInfo {
   }
 
   return info
+}
+
+function translateInsert(
+  insert: InsertClause,
+  context: PostgresContext,
+): string {
+  // Map the columns in order
+  insert.columns.forEach((c: string) =>
+    context.parameterMapping.set(c, context.parameterMapping.size + 1),
+  )
+
+  return `INSERT INTO ${insert.tableName}(${insert.columns.join(",")}) VALUES(${insert.columns.map((c: string) => `$${context.parameterMapping.get(c)!}`).join(",")})`
 }
 
 function translateCte(cte: CteClause, context: PostgresContext): string {
