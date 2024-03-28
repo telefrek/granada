@@ -15,7 +15,7 @@ export type ModifiedTables<
   N extends string,
   S extends ColumnSchema,
 > = {
-  [key in keyof D | N]: key extends keyof D ? D[key] : SQLTableDefinition<S>
+  [K in keyof D | N]: K extends keyof D ? D[K] : SQLTableDefinition<S>
 }
 
 export class SchemaBuilder<
@@ -31,7 +31,7 @@ export class SchemaBuilder<
     this.relations = relations
   }
 
-  withTable<const Schema extends ColumnSchema, Name extends string>(
+  withTable<Schema extends ColumnSchema, Name extends string>(
     schema: Schema,
     name: Name,
     tableKey: PrimaryKey<Schema> | CompositePrimaryKey<Schema>,
@@ -86,9 +86,10 @@ export class SchemaBuilder<
   }
 
   build(): D {
+    // Collapsed<D> {
     return {
       tables: this.tables,
       relations: this.relations,
-    } as D
+    } as D //as Collapsed<D>
   }
 }

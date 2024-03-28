@@ -14,52 +14,41 @@ export const Category = {
 const Order = {
   id: {
     type: SQLColumnType.BIGINT,
-    nullable: false,
   },
   name: {
     type: SQLColumnType.TEXT,
-    nullable: false,
   },
   customerId: {
     type: SQLColumnType.BIGINT,
-    nullable: false,
   },
   createdAt: {
     type: SQLColumnType.TIMESTAMP,
-    nullable: false,
+    nullable: true,
   },
   updatedAt: {
     type: SQLColumnType.TIMESTAMP,
-    nullable: false,
   },
   amount: {
     type: SQLColumnType.DECIMAL,
-    nullable: false,
   },
   categories: {
-    type: {
-      itemType: Category,
-    },
-    nullable: false,
+    type: Category,
+    isArray: true,
   },
 } as const
 
 const Customer = {
   id: {
     type: SQLColumnType.BIGINT,
-    nullable: false,
   },
   firstName: {
     type: SQLColumnType.TEXT,
-    nullable: false,
   },
   lastName: {
     type: SQLColumnType.TEXT,
-    nullable: false,
   },
   createdAt: {
     type: SQLColumnType.TIMESTAMP,
-    nullable: false,
   },
 } as const
 

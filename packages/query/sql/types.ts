@@ -32,35 +32,27 @@ export enum SQLColumnType {
   JSON = "json",
 }
 
-type EnumType = Record<string, string>
+export type SQLEnumType = Record<string, string>
 
-type SQLArray<ItemType = SQLColumnType | EnumType> = {
-  itemType: ItemType
-}
+export type ValidSQLTypes = SQLColumnType | SQLEnumType
 
-export type SQLType<S extends SQLColumnType | EnumType | SQLArray> =
-  S extends SQLColumnType
-    ? _SQLType<S>
-    : S extends EnumType
-      ? EnumType[keyof EnumType]
-      : S extends SQLArray
-        ? S["itemType"] extends SQLColumnType
-          ? _SQLType<S["itemType"]>[]
-          : S["itemType"] extends EnumType
-            ? S["itemType"][keyof S["itemType"]][]
-            : never
-        : never
+export type ColumnType<S extends SimpleColumnDefinition<ValidSQLTypes>> =
+  unknown extends S["isArray"]
+    ? SQLType<S["type"]>
+    : true extends S["isArray"]
+      ? SQLType<S["type"]>[]
+      : SQLType<S["type"]>
 
-export type ColumnDefinition<ColumnType extends SQLColumnType> =
-  BaseColumnDefinition<ColumnType> & ExtendedColumnDefinition<ColumnType>
+export type SQLType<S extends ValidSQLTypes> = S extends SQLColumnType
+  ? _SQLType<S>
+  : S extends SQLEnumType
+    ? S[keyof S]
+    : never
 
-type ExtendedColumnDefinition<ColumnType extends SQLColumnType> =
-  ColumnType extends VariableSQLTypes
-    ? VariableColumnDefinition<ColumnType>
-    : ColumnType extends IncrementalSQLTypes
-      ? IncrementalColumnDefinition<ColumnType>
-      : // eslint-disable-next-line @typescript-eslint/ban-types
-        {}
+export type ColumnDefinition<ColumnType extends ValidSQLTypes> =
+  | SimpleColumnDefinition<ColumnType>
+  | VariableColumnDefinition<ColumnType>
+  | IncrementalColumnDefinition<ColumnType>
 
 type BigIntSQLTypes = SQLColumnType.BIGINT | SQLColumnType.TIMESTAMP
 
@@ -80,9 +72,9 @@ type NumericSQLTypes =
   | SQLColumnType.SMALLINT
   | SQLColumnType.TINYINT
 
-type _SQLType<T extends SQLColumnType | EnumType> = T extends SQLColumnType
+type _SQLType<T extends SQLColumnType | SQLEnumType> = T extends SQLColumnType
   ? _SQLColumnType<T>
-  : T extends EnumType
+  : T extends SQLEnumType
     ? T[keyof T]
     : never
 
@@ -107,18 +99,22 @@ type IncrementalSQLTypes =
   | SQLColumnType.FLOAT
   | SQLColumnType.DECIMAL
 
-type BaseColumnDefinition<ColumnType extends SQLColumnType> = {
-  type: ColumnType | SQLArray<ColumnType>
-  nullable: boolean
-  default?: SQLType<ColumnType> | (() => SQLType<ColumnType>)
+export type SimpleColumnDefinition<ColumnType extends ValidSQLTypes> = {
+  type: ColumnType
+  nullable?: boolean
+  isArray?: boolean
 }
 
-type IncrementalColumnDefinition<ColumnType extends IncrementalSQLTypes> =
-  BaseColumnDefinition<ColumnType> & {
-    autoIncrement?: boolean
-  }
+type IncrementalColumnDefinition<ColumnType extends ValidSQLTypes> =
+  ColumnType extends IncrementalSQLTypes
+    ? SimpleColumnDefinition<ColumnType> & {
+        autoIncrement?: boolean
+      }
+    : object
 
-type VariableColumnDefinition<ColumnType extends VariableSQLTypes> =
-  BaseColumnDefinition<ColumnType> & {
-    size: number
-  }
+type VariableColumnDefinition<ColumnType extends ValidSQLTypes> =
+  ColumnType extends VariableSQLTypes
+    ? SimpleColumnDefinition<ColumnType> & {
+        size: number
+      }
+    : object

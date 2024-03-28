@@ -1,4 +1,4 @@
-import type { ColumnDefinition, SQLType } from "../types"
+import type { ColumnType, SimpleColumnDefinition } from "../types"
 
 export type SQLDatabase<Tables extends DatabaseTables> = {
   tables: Tables
@@ -17,7 +17,7 @@ export interface SQLTableDefinition<Schema extends ColumnSchema> {
 
 export type ColumnSchema = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [key: string]: ColumnDefinition<any>
+  [key: string]: SimpleColumnDefinition<any>
 }
 
 export interface PrimaryKey<Schema extends ColumnSchema> {
@@ -45,6 +45,19 @@ export type SQLDatabaseSchema<Database extends SQLDatabase<DatabaseTables>> = {
   }
 }
 
-export type SQLTableSchema<S extends ColumnSchema> = {
-  [K in keyof S]: SQLType<S[K]["type"]>
+type NullableKeys<S extends ColumnSchema> = {
+  [K in keyof S]: undefined extends S[K]["nullable"]
+    ? never
+    : true extends S[K]["nullable"]
+      ? K
+      : never
+}[keyof S]
+
+type TableSchema<S extends ColumnSchema> = {
+  [K in keyof S]: ColumnType<S[K]>
 }
+
+export type SQLTableSchema<S extends ColumnSchema> = TableSchema<
+  Omit<S, NullableKeys<S>>
+> &
+  Partial<TableSchema<Pick<S, NullableKeys<S>>>>
