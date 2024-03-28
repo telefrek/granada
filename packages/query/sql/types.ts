@@ -32,14 +32,24 @@ export enum SQLColumnType {
   JSON = "json",
 }
 
-export type SQLArray<ItemType extends SQLColumnType> = ItemType[]
+type EnumType = Record<string, string>
 
-export type SQLType<S extends SQLColumnType | SQLArray<SQLColumnType>> =
-  S extends SQLArray<infer U>
-    ? _SQLType<U>[]
-    : S extends SQLColumnType
-      ? _SQLType<S>
-      : never
+type SQLArray<ItemType = SQLColumnType | EnumType> = {
+  itemType: ItemType
+}
+
+export type SQLType<S extends SQLColumnType | EnumType | SQLArray> =
+  S extends SQLColumnType
+    ? _SQLType<S>
+    : S extends EnumType
+      ? EnumType[keyof EnumType]
+      : S extends SQLArray
+        ? S["itemType"] extends SQLColumnType
+          ? _SQLType<S["itemType"]>[]
+          : S["itemType"] extends EnumType
+            ? S["itemType"][keyof S["itemType"]][]
+            : never
+        : never
 
 export type ColumnDefinition<ColumnType extends SQLColumnType> =
   BaseColumnDefinition<ColumnType> & ExtendedColumnDefinition<ColumnType>
@@ -70,7 +80,13 @@ type NumericSQLTypes =
   | SQLColumnType.SMALLINT
   | SQLColumnType.TINYINT
 
-type _SQLType<T extends SQLColumnType> = [T] extends [BigIntSQLTypes]
+type _SQLType<T extends SQLColumnType | EnumType> = T extends SQLColumnType
+  ? _SQLColumnType<T>
+  : T extends EnumType
+    ? T[keyof T]
+    : never
+
+type _SQLColumnType<T extends SQLColumnType> = [T] extends [BigIntSQLTypes]
   ? number | bigint
   : [T] extends [BinarySQLTypes]
     ? Int8Array

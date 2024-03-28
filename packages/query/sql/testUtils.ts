@@ -3,7 +3,13 @@
  */
 
 import { SchemaBuilder } from "./schema/builder"
+import type { SQLDatabaseSchema } from "./schema/index"
 import { SQLColumnType } from "./types"
+
+export const Category = {
+  TEST: "test",
+  PURCHASE: "purchase",
+} as const
 
 const Order = {
   id: {
@@ -28,6 +34,12 @@ const Order = {
   },
   amount: {
     type: SQLColumnType.DECIMAL,
+    nullable: false,
+  },
+  categories: {
+    type: {
+      itemType: Category,
+    },
     nullable: false,
   },
 } as const
@@ -56,3 +68,5 @@ export const TestDatabase = new SchemaBuilder()
   .withTable(Customer, "customers", { column: "id" })
   .withForeignKey("orders", "customers", "customerId", "id")
   .build()
+
+export type TestDatabaseType = SQLDatabaseSchema<typeof TestDatabase>

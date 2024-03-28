@@ -36,11 +36,13 @@ export interface ForeignKey {
 }
 
 export type SQLDatabaseSchema<Database extends SQLDatabase<DatabaseTables>> = {
-  [key in keyof Database["tables"]]: Database["tables"][key] extends SQLTableDefinition<
-    infer S
-  >
-    ? SQLTableSchema<SQLTableDefinition<S>["columns"]>
-    : never
+  tables: {
+    [key in keyof Database["tables"]]: Database["tables"][key] extends SQLTableDefinition<
+      infer S
+    >
+      ? SQLTableSchema<SQLTableDefinition<S>["columns"]>
+      : never
+  }
 }
 
 export type SQLTableSchema<S extends ColumnSchema> = {
