@@ -3,6 +3,7 @@
   "version": "1.0.0-alpha.12",
   "description": "This package standardizes how HTTP clients and servers interact at a low level",
   "scripts": {
+    "clean": "rm -rf ./dist",
     "upgrade": "npx npm-check-updates -u && npm install",
     "build": "tsc",
     "compile": "tsc -p tsconfig.compile.json",

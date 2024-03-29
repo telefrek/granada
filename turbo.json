@@ -1,17 +1,23 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
+    "clean": {
+      "dependsOn": ["^clean"]
+    },
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
     "compile": {
+      "dependsOn": ["clean", "lint", "^compile"],
       "outputs": ["dist/**"]
     },
     "test": {
       "dependsOn": ["build"]
     },
-    "lint": {},
+    "lint": {
+      "dependsOn": ["^lint"]
+    },
     "dev": {
       "cache": false,
       "persistent": true

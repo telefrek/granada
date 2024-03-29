@@ -3,6 +3,7 @@
   "version": "1.0.0-alpha.12",
   "description": "This package makes creating new services easier than working with the raw HTTP stack",
   "scripts": {
+    "clean": "rm -rf ./dist",
     "upgrade": "npx npm-check-updates -u && npm install",
     "build": "tsc",
     "compile": "tsc -p tsconfig.compile.json",
