@@ -286,7 +286,6 @@ class InternalInsertBuilder<
       nodeType: SQLNodeType.INSERT,
       tableName: this.tableName,
       returning: this.returningColumns,
-      columns: this.columns,
     } as InsertClause
   }
 

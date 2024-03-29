@@ -156,16 +156,23 @@ type FilteredClause = {
   filter: FilterGroup | FilterTypes
 }
 
+type SetClause = {
+  column: string
+  value: unknown
+}
+
 export type InsertClause = SQLQueryNode<SQLNodeType.INSERT> &
   NamedSQLQueryNode &
   ReturningClause & {
-    columns: string[]
+    columns?: string[]
   }
 
 export type UpdateClause = SQLQueryNode<SQLNodeType.UPDATE> &
   NamedSQLQueryNode &
   ReturningClause &
-  FilteredClause
+  FilteredClause & {
+    setColumns: SetClause[]
+  }
 
 export type MergeClause = SQLQueryNode<SQLNodeType.MERGE> &
   NamedSQLQueryNode &

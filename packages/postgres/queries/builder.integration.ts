@@ -37,7 +37,7 @@ describe("Postgres should be able to execute queries", () => {
     if (postgresContainer) {
       await postgresContainer.stop()
     }
-  }, 30_000)
+  })
 
   beforeEach(async () => {
     await postgresClient?.query("TRUNCATE TABLE customers")
@@ -49,23 +49,25 @@ describe("Postgres should be able to execute queries", () => {
   })
 
   it("Should be able to issue a simple query", async () => {
+    const insertUserQuery = createPostgresQueryContext<TestDatabaseType>()
+      .insert("customers", [
+        "id",
+        "firstName",
+        "lastName",
+        "createdAt",
+        "updatedAt",
+      ])
+      .returning("*")
+      .build("insertCustomer")
+
     await executor?.run(
-      createPostgresQueryContext<TestDatabaseType>()
-        .insert("customers", [
-          "id",
-          "firstName",
-          "lastName",
-          "createdAt",
-          "updatedAt",
-        ])
-        .build("insertCustomer")
-        .bind({
-          id: 1,
-          firstName: "test",
-          lastName: "customer1",
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        }),
+      insertUserQuery.bind({
+        id: 1n,
+        firstName: "test",
+        lastName: "customer1",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }),
     )
 
     await executor?.run(
@@ -163,5 +165,5 @@ describe("Postgres should be able to execute queries", () => {
     rows = Array.isArray(result?.rows) ? result.rows : []
 
     expect(rows.length).toBe(0)
-  })
+  }, 180_000)
 })

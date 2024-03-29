@@ -24,6 +24,7 @@ import {
   isParameterNode,
   isSQLQueryNode,
   isTableQueryNode,
+  isUpdateClause,
   type CteClause,
   type FilterGroup,
   type FilterTypes,
@@ -32,6 +33,7 @@ import {
   type SQLNodeType,
   type SQLQueryNode,
   type TableQueryNode,
+  type UpdateClause,
 } from "@telefrek/query/sql/ast"
 import type { SQLNodeBuilder } from "@telefrek/query/sql/builder/index"
 import { DefaultSQLNodeBuilder } from "@telefrek/query/sql/builder/internal"
@@ -56,8 +58,20 @@ export function createPostgresQueryContext<
   )
 }
 
+type PostgresStaticContext = {
+  materializer: "static"
+  parameterMapping: Map<string, number>
+  queryString?: string
+}
+
+type PostgresDynamicContext = {
+  materializer: "dynamic"
+  queryMaterializer: (parameters: QueryParameters) => [string, unknown[]]
+}
+
+type PostgresContext = PostgresStaticContext | PostgresDynamicContext
+
 type PostgresQuery = {
-  queryText: string
   context: PostgresContext
 }
 
@@ -73,12 +87,22 @@ type BoundPostgresQuery<
   P extends QueryParameters,
 > = PostgresQuery & BoundQuery<R, P>
 
+function isPostgresContext(context: object): context is PostgresContext {
+  return (
+    "materializer" in context &&
+    typeof context.materializer === "string" &&
+    (context.materializer === "static" || context.materializer === "dynamic")
+  )
+}
+
 export function isPostgresQuery(query: unknown): query is PostgresQuery {
   return (
     typeof query === "object" &&
     query !== null &&
-    "queryText" in query &&
-    typeof query.queryText === "string"
+    "context" in query &&
+    typeof query.context === "object" &&
+    query.context !== null &&
+    isPostgresContext(query.context)
   )
 }
 
@@ -96,17 +120,12 @@ export class PostgresQueryBuilder<D extends SQLDataStore>
     mode: ExecutionMode,
   ): [P] extends [never] ? SimpleQuery<R> : ParameterizedQuery<R, P> {
     if (isSQLQueryNode(node)) {
-      const context: PostgresContext = {
-        parameterMapping: new Map(),
-      }
-
-      const queryText = translateNode(getTreeRoot(node), context)
+      const context = translateNode(getTreeRoot(node))
 
       const simple: SimplePostgresQuery<R> = {
         queryType: QueryType.SIMPLE,
         name,
         mode,
-        queryText,
         context,
       }
 
@@ -120,7 +139,6 @@ export class PostgresQueryBuilder<D extends SQLDataStore>
         bind: (p: P): BoundQuery<R, P> => {
           return {
             parameters: p,
-            queryText,
             context,
             name,
             mode,
@@ -136,13 +154,13 @@ export class PostgresQueryBuilder<D extends SQLDataStore>
   }
 }
 
-type PostgresContext = {
-  parameterMapping: Map<string, number>
+export function cleanQuery(query?: string): string | undefined {
+  return query?.trim().replace(/\s\s+/g, " ")
 }
 
 function translateJoinQuery(
   node: JoinQueryNode,
-  context: PostgresContext,
+  context: PostgresStaticContext,
 ): string {
   const manager = new JoinNodeManager(node)
 
@@ -202,7 +220,7 @@ function translateJoinQuery(
 
 function translateTableQuery(
   node: TableQueryNode,
-  context: PostgresContext,
+  context: PostgresStaticContext,
 ): string {
   const manager = new TableNodeManager(node)
 
@@ -232,10 +250,13 @@ function translateTableQuery(
   }`
 }
 
-function translateNode(
-  node: SQLQueryNode<SQLNodeType>,
-  context: PostgresContext,
-): string {
+function translateNode(node: SQLQueryNode<SQLNodeType>): PostgresContext {
+  // Assume we're using a static context (most cases...)
+  const context: PostgresContext = {
+    materializer: "static",
+    parameterMapping: new Map(),
+  }
+
   if (hasProjections(node)) {
     const info = extractProjections(node)
 
@@ -244,24 +265,32 @@ function translateNode(
       .map((c) => translateCte(c, context))
       .join(", ")}`
 
-    return `${CTE} ${
+    context.queryString = `${CTE} ${
       isTableQueryNode(info.queryNode)
         ? translateTableQuery(info.queryNode, context)
         : isJoinQueryNode(info.queryNode)
           ? translateJoinQuery(info.queryNode, context)
           : "error"
     }`
+
+    return context
   } else {
-    if (isTableQueryNode(node)) {
-      return translateTableQuery(node, context)
-    } else if (isJoinQueryNode(node)) {
-      return translateJoinQuery(node, context)
-    } else if (isInsertClause(node)) {
-      return translateInsert(node, context)
+    if (isInsertClause(node)) {
+      return translateInsert(node)
+    } else {
+      if (isTableQueryNode(node)) {
+        context.queryString = translateTableQuery(node, context)
+      } else if (isJoinQueryNode(node)) {
+        context.queryString = translateJoinQuery(node, context)
+      } else if (isUpdateClause(node)) {
+        context.queryString = translateUpdate(node, context)
+      } else {
+        throw new QueryError("Unsupported type!")
+      }
     }
   }
 
-  throw new QueryError("Unsupported type!")
+  return context
 }
 
 interface ProjectionInfo {
@@ -294,19 +323,35 @@ function extractProjections(root: SQLQueryNode<SQLNodeType>): ProjectionInfo {
   return info
 }
 
-function translateInsert(
-  insert: InsertClause,
-  context: PostgresContext,
+function translateUpdate(
+  update: UpdateClause,
+  context: PostgresStaticContext,
 ): string {
-  // Map the columns in order
-  insert.columns.forEach((c: string) =>
-    context.parameterMapping.set(c, context.parameterMapping.size + 1),
-  )
-
-  return `INSERT INTO ${insert.tableName}(${insert.columns.join(",")}) VALUES(${insert.columns.map((c: string) => `$${context.parameterMapping.get(c)!}`).join(",")})`
+  return `UPDATE ${update.tableName} SET ${update.setColumns.map((s) => `${s.column} = ${wrap(s.value)}`).join(",")}${update.filter ? ` WHERE ${translateFilterGroup(update.filter, context)}` : ""}`
 }
 
-function translateCte(cte: CteClause, context: PostgresContext): string {
+function translateInsert(insert: InsertClause): PostgresContext {
+  const tableName = insert.tableName
+  const returning = insert.returning
+
+  const insertMaterializer = (p: QueryParameters): [string, unknown[]] => {
+    const columns = Object.keys(p)
+
+    const queryString = `
+      INSERT INTO ${tableName}(${columns.join(",")}) 
+        VALUES(${columns.map((_, idx) => `$${idx + 1}`).join(",")})
+        ${returning ? ` RETURNING ${returning === "*" ? "*" : returning.join(",")}` : ""}`
+
+    return [queryString, columns.map((c) => p[c])]
+  }
+
+  return {
+    materializer: "dynamic",
+    queryMaterializer: insertMaterializer,
+  }
+}
+
+function translateCte(cte: CteClause, context: PostgresStaticContext): string {
   return `${cte.tableName} AS (${
     isTableQueryNode(cte.source)
       ? translateTableQuery(cte.source, context)
@@ -318,7 +363,7 @@ function translateCte(cte: CteClause, context: PostgresContext): string {
 
 function translateFilterGroup(
   filter: FilterGroup | FilterTypes,
-  context: PostgresContext,
+  context: PostgresStaticContext,
   table?: string,
 ): string {
   if (isFilterGroup(filter)) {
