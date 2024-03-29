@@ -5,6 +5,9 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
+    "compile": {
+      "outputs": ["dist/**"]
+    },
     "test": {
       "dependsOn": ["build"]
     },

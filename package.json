@@ -7,7 +7,7 @@
     "test:unit": "jest --coverage -c jest.unit.config.js",
     "test:integration": "jest --coverage -c jest.integration.config.js",
     "format": "npx prettier --write .",
-    "ci": "npm install && npm run compile --workspaces --if-present && npm run test:unit",
+    "ci": "npm install && turbo compile && npm run test:unit",
     "upgrade-all": "npx npm-check-updates -u && npm install && npm run upgrade --workspaces --if-present",
     "build": "turbo build",
     "lint": "npm run lint --workspaces --if-present"
@@ -28,6 +28,7 @@
     "ts-jest": "^29.1.2",
     "ts-node": "^10.9.2",
     "tsc-watch": "^6.0.4",
+    "turbo": "^1.13.0",
     "typescript": "^5.4.3"
   },
   "dependencies": {
