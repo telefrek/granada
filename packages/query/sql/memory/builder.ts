@@ -20,7 +20,7 @@ import {
 } from "../.."
 import { QueryError } from "../../error"
 import { getTreeRoot } from "../../sql/helpers"
-import { isSQLQueryNode } from "../ast"
+import { isSQLQueryNode } from "../ast/typeGuards"
 import { materializeNode } from "./astParser"
 
 /**

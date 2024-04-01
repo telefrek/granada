@@ -15,33 +15,38 @@ import {
   type SimpleQuery,
 } from "@telefrek/query/index"
 import {
+  type CteClause,
+  type InsertClause,
+  type JoinQueryNode,
+  type SQLNodeType,
+  type SQLQueryNode,
+  type SelectClause,
+  type SetClause,
+  type UpdateClause,
+} from "@telefrek/query/sql/ast"
+import {
+  type FilterGroup,
+  type FilterTypes,
+} from "@telefrek/query/sql/ast/filtering"
+import {
   IsArrayFilter,
   isColumnFilter,
   isCteClause,
   isFilterGroup,
   isInsertClause,
   isJoinQueryNode,
-  isParameterNode,
   isSQLQueryNode,
-  isTableQueryNode,
+  isSelectClause,
   isUpdateClause,
-  type CteClause,
-  type FilterGroup,
-  type FilterTypes,
-  type InsertClause,
-  type JoinQueryNode,
-  type SQLNodeType,
-  type SQLQueryNode,
-  type SetClause,
-  type TableQueryNode,
-  type UpdateClause,
-} from "@telefrek/query/sql/ast"
+} from "@telefrek/query/sql/ast/typeGuards"
 import type { SQLNodeBuilder } from "@telefrek/query/sql/builder/index"
 import { DefaultSQLNodeBuilder } from "@telefrek/query/sql/builder/internal"
 import {
   CteNodeManager,
+  InsertNodeManager,
   JoinNodeManager,
-  TableNodeManager,
+  SelectNodeManager,
+  UpdateNodeManager,
   getTreeRoot,
   hasProjections,
 } from "@telefrek/query/sql/helpers"
@@ -49,6 +54,7 @@ import type {
   RelationalQueryBuilder,
   SQLDataStore,
 } from "@telefrek/query/sql/index"
+import { getDebugInfo } from "../../core/index"
 
 export function createPostgresQueryContext<
   Database extends SQLDataStore,
@@ -168,12 +174,9 @@ function translateJoinQuery(
   const tables = manager.tables
 
   const select = tables
-    .map((t) => new TableNodeManager(t))
+    .map((t) => new SelectNodeManager(t as SelectClause))
     .map((tm) => {
-      const alias = tm.columnAlias.reduce(
-        (m, v) => m.set(v.column, v.alias),
-        new Map(),
-      )
+      const alias = tm.columnAlias
       const columns = tm.select.columns
 
       if (columns === "*") {
@@ -204,7 +207,7 @@ function translateJoinQuery(
   }
 
   const where = tables
-    .map((t) => new TableNodeManager(t))
+    .map((t) => new SelectNodeManager(t as SelectClause))
     .map((tm) => {
       const where = tm.where
       if (where) {
@@ -219,20 +222,15 @@ function translateJoinQuery(
   return `SELECT ${select} FROM ${from}${where ? ` WHERE ${where}` : ""}`
 }
 
-function translateTableQuery(
-  node: TableQueryNode,
+function translateSelectQuery(
+  node: SelectClause,
   context: PostgresStaticContext,
 ): string {
-  const manager = new TableNodeManager(node)
+  const manager = new SelectNodeManager(node)
 
   const select = manager.select
 
-  const aliasing: Map<string, string> = manager.columnAlias
-    ? manager.columnAlias.reduce(
-        (temp, alias) => temp.set(alias.column, alias.alias),
-        new Map<string, string>(),
-      )
-    : new Map<string, string>()
+  const aliasing = manager.columnAlias
 
   return `SELECT ${
     select
@@ -267,8 +265,8 @@ function translateNode(node: SQLQueryNode<SQLNodeType>): PostgresContext {
       .join(", ")}`
 
     context.queryString = `${CTE} ${
-      isTableQueryNode(info.queryNode)
-        ? translateTableQuery(info.queryNode, context)
+      isSelectClause(info.queryNode)
+        ? translateSelectQuery(info.queryNode, context)
         : isJoinQueryNode(info.queryNode)
           ? translateJoinQuery(info.queryNode, context)
           : "error"
@@ -279,8 +277,8 @@ function translateNode(node: SQLQueryNode<SQLNodeType>): PostgresContext {
     if (isInsertClause(node)) {
       return translateInsert(node)
     } else {
-      if (isTableQueryNode(node)) {
-        context.queryString = translateTableQuery(node, context)
+      if (isSelectClause(node)) {
+        context.queryString = translateSelectQuery(node, context)
       } else if (isJoinQueryNode(node)) {
         context.queryString = translateJoinQuery(node, context)
       } else if (isUpdateClause(node)) {
@@ -310,7 +308,7 @@ function extractProjections(root: SQLQueryNode<SQLNodeType>): ProjectionInfo {
   let current: SQLQueryNode<SQLNodeType> | undefined = root
   while (current) {
     // Terminal cases
-    if (isTableQueryNode(current) || isJoinQueryNode(current)) {
+    if (isSelectClause(current) || isJoinQueryNode(current)) {
       info.queryNode = current
       return info
     }
@@ -328,13 +326,17 @@ function translateUpdate(
   update: UpdateClause,
   context: PostgresStaticContext,
 ): string {
-  return `UPDATE ${update.tableName} SET ${update.setColumns.map((s) => translateSetColumns(s, context)).join(",")}${update.filter ? ` WHERE ${translateFilterGroup(update.filter, context)}` : ""}
-        ${update.returning ? ` RETURNING ${update.returning === "*" ? "*" : update.returning.join(",")}` : ""}`
+  const manager = new UpdateNodeManager(update)
+
+  return `UPDATE ${manager.tableName} SET ${manager.updates.map((s) => translateSetColumns(s, context)).join(",")}${manager.where ? ` WHERE ${translateFilterGroup(manager.where.filter, context)}` : ""}
+        ${manager.returning ? ` RETURNING ${manager.returning === "*" ? "*" : manager.returning.join(",")}` : ""}`
 }
 
 function translateInsert(insert: InsertClause): PostgresContext {
-  const tableName = insert.tableName
-  const returning = insert.returning
+  const manager = new InsertNodeManager(insert)
+
+  const tableName = manager.tableName
+  const returning = manager.returning
 
   const insertMaterializer = (p: QueryParameters): [string, unknown[]] => {
     const columns = Object.keys(p)
@@ -355,8 +357,8 @@ function translateInsert(insert: InsertClause): PostgresContext {
 
 function translateCte(cte: CteClause, context: PostgresStaticContext): string {
   return `${cte.tableName} AS (${
-    isTableQueryNode(cte.source)
-      ? translateTableQuery(cte.source, context)
+    isSelectClause(cte.source)
+      ? translateSelectQuery(cte.source, context)
       : isJoinQueryNode(cte.source)
         ? translateJoinQuery(cte.source, context)
         : "error"
@@ -367,18 +369,18 @@ function translateSetColumns(
   setClause: SetClause,
   context: PostgresStaticContext,
 ): string {
-  if (setClause.source === "parameter") {
-    if (!context.parameterMapping.has(setClause.value.name)) {
+  if (setClause.type === "parameter") {
+    if (!context.parameterMapping.has(setClause.name)) {
       context.parameterMapping.set(
-        setClause.value.name,
+        setClause.name,
         context.parameterMapping.size + 1,
       )
     }
 
-    return `${setClause.column} = $${context.parameterMapping.get(setClause.value.name)!.toString()}`
+    return `${setClause.column} = $${context.parameterMapping.get(setClause.name)!.toString()}`
   }
 
-  return `${setClause.column} = ${setClause.source === "null" ? "NULL" : wrap(setClause.value)}`
+  return `${setClause.column} = ${setClause.type === "null" ? "NULL" : wrap(setClause.value)}`
 }
 
 function translateFilterGroup(
@@ -392,35 +394,35 @@ function translateFilterGroup(
       .join(` ${filter.op} `)
       .trimEnd()
   } else if (isColumnFilter(filter)) {
-    if (filter.source === "null") {
+    if (filter.type === "null") {
       return `${table ? `${table}.` : ""}${filter.column} IS NULL`
     }
 
-    if (isParameterNode(filter.value)) {
-      if (!context.parameterMapping.has(filter.value.name)) {
+    if (filter.type === "parameter") {
+      if (!context.parameterMapping.has(filter.name)) {
         context.parameterMapping.set(
-          filter.value.name,
+          filter.name,
           context.parameterMapping.size + 1,
         )
       }
 
       return `${table ? `${table}.` : ""}${filter.column} ${
         filter.op
-      } $${context.parameterMapping.get(filter.value.name)!.toString()}`
+      } $${context.parameterMapping.get(filter.name)!.toString()}`
     }
 
     return `${table ? `${table}.` : ""}${filter.column} ${
       filter.op
     } ${wrap(filter.value)}`
   } else if (IsArrayFilter(filter)) {
-    if (isParameterNode(filter.value)) {
-      if (!context.parameterMapping.has(filter.value.name)) {
+    if (filter.type === "parameter") {
+      if (!context.parameterMapping.has(filter.name)) {
         context.parameterMapping.set(
-          filter.value.name,
+          filter.name,
           context.parameterMapping.size + 1,
         )
       }
-      return `$${context.parameterMapping.get(filter.value.name)!.toString()} && ${table ? `${table}.` : ""}${
+      return `$${context.parameterMapping.get(filter.name)!.toString()} && ${table ? `${table}.` : ""}${
         filter.column
       }`
     }
@@ -430,6 +432,7 @@ function translateFilterGroup(
     }`
   }
 
+  console.log(getDebugInfo(filter))
   throw new QueryError("Unsupported query filter type")
 }
 

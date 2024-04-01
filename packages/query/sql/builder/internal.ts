@@ -11,6 +11,7 @@ import {
   ExecutionMode,
   QueryParameters,
   QueryType,
+  makeChild,
   type BuildableQueryTypes,
   type ParameterizedQuery,
   type QueryBuilder,
@@ -18,27 +19,32 @@ import {
   type SimpleQuery,
 } from "../../index"
 import {
-  BooleanOperation,
-  ColumnFilteringOperation,
-  ColumnValueContainsOperation,
-  ContainmentObjectType,
   JoinType,
   SQLNodeType,
-  isFilter,
-  type ColumnAlias,
+  type ColumnAliasClause,
   type CteClause,
-  type FilterGroup,
-  type FilterTypes,
   type InsertClause,
   type JoinClauseQueryNode,
+  type ReturningClause,
   type SQLQueryNode,
   type SelectClause,
   type SetClause,
   type TableAlias,
-  type TableQueryNode,
+  type TableSQLQueryNode,
   type UpdateClause,
   type WhereClause,
 } from "../ast"
+import {
+  BooleanOperation,
+  ColumnFilteringOperation,
+  ColumnValueContainsOperation,
+  ContainmentObjectType,
+  type ColumnFilter,
+  type ContainmentFilter,
+  type FilterGroup,
+  type FilterTypes,
+} from "../ast/filtering"
+import { isFilter } from "../ast/typeGuards"
 import type {
   RelationalQueryBuilder,
   SQLDataStore,
@@ -277,22 +283,22 @@ class InternalUpdateBuilder<
   ): UpdateBuilder<D, T, Pick<D["tables"][T], C>, P, Q, U | C> {
     const setClauses = this.setClauses ?? []
 
-    setClauses.push({
-      column: column as string,
-      source:
-        this.builder.queryType === QueryType.PARAMETERIZED
-          ? "parameter"
-          : "value",
-      value: (this.builder.queryType === QueryType.PARAMETERIZED
+    setClauses.push(
+      this.builder.queryType === QueryType.PARAMETERIZED
         ? {
-            name: value,
-            nodeType: SQLNodeType.PARAMETER,
+            type: "parameter",
+            column: column as string,
+            name: value as string,
           }
-        : value) as never,
-    })
+        : {
+            type: "value",
+            column: column as string,
+            value,
+          },
+    )
 
     return new InternalUpdateBuilder<D, T, D["tables"][T], P, Q, U | C>(
-      this.tableName,
+      this.tableName as T,
       this.builder,
       setClauses,
       this.returningColumns,
@@ -359,13 +365,26 @@ class InternalUpdateBuilder<
   }
 
   asNode(): SQLQueryNode<SQLNodeType> {
-    return {
+    const update: UpdateClause = {
       nodeType: SQLNodeType.UPDATE,
-      tableName: this.tableName,
-      returning: this.returningColumns,
-      setColumns: this.setClauses,
-      filter: this.whereClause?.filter,
-    } as UpdateClause
+      tableName: this.tableName as string,
+      setColumns: this.setClauses ?? [],
+    }
+
+    if (this.returningColumns) {
+      const returning: ReturningClause = {
+        nodeType: SQLNodeType.RETURNING,
+        columns: this.returningColumns,
+      }
+
+      makeChild(update, returning)
+    }
+
+    if (this.whereClause) {
+      makeChild(update, this.whereClause)
+    }
+
+    return update
   }
 
   build(
@@ -432,11 +451,21 @@ class InternalInsertBuilder<
   }
 
   asNode(): SQLQueryNode<SQLNodeType> {
-    return {
+    const insert: InsertClause = {
       nodeType: SQLNodeType.INSERT,
-      tableName: this.tableName,
-      returning: this.returningColumns,
-    } as InsertClause
+      tableName: this.tableName as string,
+    }
+
+    if (this.returningColumns) {
+      const returning: ReturningClause = {
+        nodeType: SQLNodeType.RETURNING,
+        columns: this.returningColumns,
+      }
+
+      makeChild(insert, returning)
+    }
+
+    return insert
   }
 
   build(
@@ -463,13 +492,13 @@ class InternalJoinBuilder<
   tableName?: keyof D["tables"]
 
   builder: SQLNodeBuilderContext<D, Q, SQLDataTable, P, keyof D["tables"]>
-  tables: TableQueryNode[]
+  tables: TableSQLQueryNode<SQLNodeType>[]
   filters: JoinClauseQueryNode[]
   parent?: SQLQueryNode<SQLNodeType>
 
   constructor(
     builder: SQLNodeBuilderContext<D, Q, SQLDataTable, P, keyof D["tables"]>,
-    tables: TableQueryNode[],
+    tables: TableSQLQueryNode<SQLNodeType>[],
     filters: JoinClauseQueryNode[],
     parent?: SQLQueryNode<SQLNodeType>,
   ) {
@@ -507,7 +536,9 @@ class InternalJoinBuilder<
 
     const tables = this.tables
     tables.push(
-      tableGenerator(this.builder.select(joinTable)).asNode() as TableQueryNode,
+      tableGenerator(
+        this.builder.select(joinTable),
+      ).asNode() as TableSQLQueryNode<SQLNodeType>,
     )
 
     return new InternalJoinBuilder(this.builder, tables, filters, this.parent)
@@ -515,16 +546,11 @@ class InternalJoinBuilder<
 
   asNode(): SQLQueryNode<SQLNodeType> {
     const join: SQLQueryNode<SQLNodeType.JOIN> = {
-      parent: this.parent,
       nodeType: SQLNodeType.JOIN,
     }
 
-    if (join.parent) {
-      if (join.parent.children) {
-        join.parent.children?.push(join)
-      } else {
-        join.parent.children = [join]
-      }
+    if (this.parent) {
+      makeChild(this.parent, join)
     }
 
     for (const table of this.tables) {
@@ -564,7 +590,7 @@ class InternalTableBuilder<
 
   private selectClause?: SelectClause
   private whereClause?: WhereClause
-  private columnAlias?: ColumnAlias[]
+  private columnAlias?: Map<string, string>
   private parent?: SQLQueryNode<SQLNodeType>
 
   constructor(
@@ -573,7 +599,7 @@ class InternalTableBuilder<
     tableAlias?: keyof D["tables"],
     selectClause?: SelectClause,
     whereClause?: WhereClause,
-    columnAlias?: ColumnAlias[],
+    columnAlias?: Map<string, string>,
     parent?: SQLQueryNode<SQLNodeType>,
   ) {
     this.tableName = tableName
@@ -600,6 +626,8 @@ class InternalTableBuilder<
         this.tableAlias,
         {
           nodeType: SQLNodeType.SELECT,
+          tableName: this.tableName as string,
+          alias: this.tableAlias as string,
           columns: column as STAR,
         },
         this.whereClause,
@@ -614,6 +642,8 @@ class InternalTableBuilder<
       this.tableAlias,
       {
         nodeType: SQLNodeType.SELECT,
+        tableName: this.tableName as string,
+        alias: this.tableAlias as string,
         columns: [column as C].concat(rest as C[]),
       },
       this.whereClause,
@@ -638,10 +668,10 @@ class InternalTableBuilder<
     return new InternalJoinBuilder(
       this.builder,
       [
-        this.asNode() as TableQueryNode,
+        this.asNode() as TableSQLQueryNode<SQLNodeType>,
         tableGenerator(
           this.builder.select(joinTable),
-        ).asNode() as TableQueryNode,
+        ).asNode() as TableSQLQueryNode<SQLNodeType>,
       ],
       [
         {
@@ -667,8 +697,8 @@ class InternalTableBuilder<
     column: C,
     alias: Alias,
   ): SelectBuilder<D, T, AliasedType<R, C, Alias>, P, Q> {
-    const aliasing = this.columnAlias ?? []
-    aliasing.push({ nodeType: SQLNodeType.ALIAS, column, alias })
+    const aliasing = this.columnAlias ?? new Map()
+    aliasing.set(column as string, alias)
     return new InternalTableBuilder(
       this.tableName,
       this.builder,
@@ -707,51 +737,30 @@ class InternalTableBuilder<
 
   asNode(): SQLQueryNode<SQLNodeType> {
     const select = this.selectClause ?? {
+      tableName: this.tableName as string,
+      alias: this.tableAlias as string,
       nodeType: SQLNodeType.SELECT,
       columns: [],
     }
 
-    const where = this.whereClause
-    const aliasing = this.columnAlias
-
-    const node: TableQueryNode = {
-      nodeType: SQLNodeType.TABLE,
-      tableName: this.tableName as string,
-      alias: this.tableAlias as string,
+    if (this.whereClause) {
+      makeChild(select, this.whereClause)
     }
 
-    select.parent = node
-    node.children = [select]
-    if (where) {
-      where.parent = node
-      node.children.push(where)
-    }
-
-    if (aliasing) {
-      aliasing.forEach((a) => {
-        a.parent = node
-        node.children?.push(a)
-      })
-    }
-
-    if (node.parent) {
-      if (node.parent.children) {
-        node.parent.children.push(node)
-      } else {
-        node.parent.children = [node]
+    if (this.columnAlias) {
+      const aliasing: ColumnAliasClause = {
+        nodeType: SQLNodeType.ALIAS,
+        aliasing: this.columnAlias,
       }
+
+      makeChild(select, aliasing)
     }
 
     if (this.parent) {
-      node.parent = this.parent
-      if (this.parent.children) {
-        this.parent.children.push(node)
-      } else {
-        this.parent.children = [node]
-      }
+      makeChild(this.parent, select)
     }
 
-    return node
+    return select
   }
 
   build(
@@ -777,110 +786,106 @@ class InternalWhereClauseBuilder<
     column: C,
     value: [P] extends [never] ? T[C] : PropertyOfType<P, T[C]>,
   ): WhereClauseBuilder<T, Q, P> {
-    return new InternalWhereClauseBuilder(this.queryType, {
-      column: column as string,
-      op: ColumnFilteringOperation.EQ,
-      source:
-        this.queryType === QueryType.PARAMETERIZED ? "parameter" : "value",
-      value:
-        this.queryType === QueryType.PARAMETERIZED
-          ? { nodeType: SQLNodeType.PARAMETER, name: value as string }
-          : (value as T[C]),
-    })
+    return new InternalWhereClauseBuilder(
+      this.queryType,
+      this.#columnFilter(column as string, ColumnFilteringOperation.EQ, value),
+    )
   }
+
   gt<C extends keyof T>(
     column: C,
     value: [P] extends [never] ? T[C] : PropertyOfType<P, T[C]>,
   ): WhereClauseBuilder<T, Q, P> {
-    return new InternalWhereClauseBuilder(this.queryType, {
-      column: column as string,
-      op: ColumnFilteringOperation.GT,
-      source:
-        this.queryType === QueryType.PARAMETERIZED ? "parameter" : "value",
-      value:
-        this.queryType === QueryType.PARAMETERIZED
-          ? { nodeType: SQLNodeType.PARAMETER, name: value as string }
-          : (value as T[C]),
-    })
+    return new InternalWhereClauseBuilder(
+      this.queryType,
+      this.#columnFilter(column as string, ColumnFilteringOperation.GT, value),
+    )
   }
+
   gte<C extends keyof T>(
     column: C,
     value: [P] extends [never] ? T[C] : PropertyOfType<P, T[C]>,
   ): WhereClauseBuilder<T, Q, P> {
-    return new InternalWhereClauseBuilder(this.queryType, {
-      column: column as string,
-      op: ColumnFilteringOperation.GTE,
-      source:
-        this.queryType === QueryType.PARAMETERIZED ? "parameter" : "value",
-      value:
-        this.queryType === QueryType.PARAMETERIZED
-          ? { nodeType: SQLNodeType.PARAMETER, name: value as string }
-          : (value as T[C]),
-    })
+    return new InternalWhereClauseBuilder(
+      this.queryType,
+      this.#columnFilter(column as string, ColumnFilteringOperation.GTE, value),
+    )
   }
+
   lt<C extends keyof T>(
     column: C,
     value: [P] extends [never] ? T[C] : PropertyOfType<P, T[C]>,
   ): WhereClauseBuilder<T, Q, P> {
-    return new InternalWhereClauseBuilder(this.queryType, {
-      column: column as string,
-      op: ColumnFilteringOperation.LT,
-      source:
-        this.queryType === QueryType.PARAMETERIZED ? "parameter" : "value",
-      value:
-        this.queryType === QueryType.PARAMETERIZED
-          ? { nodeType: SQLNodeType.PARAMETER, name: value as string }
-          : (value as T[C]),
-    })
+    return new InternalWhereClauseBuilder(
+      this.queryType,
+      this.#columnFilter(column as string, ColumnFilteringOperation.LT, value),
+    )
   }
+
   lte<C extends keyof T>(
     column: C,
     value: [P] extends [never] ? T[C] : PropertyOfType<P, T[C]>,
   ): WhereClauseBuilder<T, Q, P> {
-    return new InternalWhereClauseBuilder(this.queryType, {
-      column: column as string,
-      op: ColumnFilteringOperation.LTE,
-      source:
-        this.queryType === QueryType.PARAMETERIZED ? "parameter" : "value",
-      value:
-        this.queryType === QueryType.PARAMETERIZED
-          ? { nodeType: SQLNodeType.PARAMETER, name: value as string }
-          : (value as T[C]),
-    })
+    return new InternalWhereClauseBuilder(
+      this.queryType,
+      this.#columnFilter(column as string, ColumnFilteringOperation.LTE, value),
+    )
   }
+
+  #columnFilter(
+    column: string,
+    op: ColumnFilteringOperation,
+    value: unknown,
+  ): ColumnFilter {
+    return this.queryType === QueryType.PARAMETERIZED
+      ? {
+          column,
+          op,
+          type: "parameter",
+          name: value as string,
+        }
+      : {
+          column,
+          op,
+          type: "value",
+          value,
+        }
+  }
+
   and(...clauses: WhereClauseBuilder<T, Q, P>[]): WhereClauseBuilder<T, Q, P> {
     return new InternalWhereClauseBuilder(this.queryType, {
       filters: clauses.map((c) => c.current).filter(isFilter),
       op: BooleanOperation.AND,
     })
   }
+
   or(...clauses: WhereClauseBuilder<T, Q, P>[]): WhereClauseBuilder<T, Q, P> {
     return new InternalWhereClauseBuilder(this.queryType, {
       filters: clauses.map((c) => c.current).filter(isFilter),
       op: BooleanOperation.OR,
     })
   }
+
   not(...clauses: WhereClauseBuilder<T, Q, P>[]): WhereClauseBuilder<T, Q, P> {
     return new InternalWhereClauseBuilder(this.queryType, {
       filters: clauses.map((c) => c.current).filter(isFilter),
       op: BooleanOperation.NOT,
     })
   }
+
   contains<C extends PropertyOfType<T, string>>(
     column: C,
     value: [P] extends [never] ? T[C] : PropertyOfType<P, T[C]>,
   ): WhereClauseBuilder<T, Q, P> {
-    return new InternalWhereClauseBuilder(this.queryType, {
-      column: column as string,
-      type: ContainmentObjectType.STRING,
-      op: ColumnValueContainsOperation.IN,
-      source:
-        this.queryType === QueryType.PARAMETERIZED ? "parameter" : "value",
-      value:
-        this.queryType === QueryType.PARAMETERIZED
-          ? { nodeType: SQLNodeType.PARAMETER, name: value as string }
-          : (value as T[C]),
-    })
+    return new InternalWhereClauseBuilder(
+      this.queryType,
+      this.#containmentFilter(
+        column as string,
+        ColumnValueContainsOperation.IN,
+        ContainmentObjectType.STRING,
+        value,
+      ),
+    )
   }
 
   containsItems<C extends ArrayProperty<T>>(
@@ -889,30 +894,42 @@ class InternalWhereClauseBuilder<
       ? T[C] | ArrayItemType<T, C>
       : PropertyOfType<P, T[C]>,
   ): WhereClauseBuilder<T, Q, P> {
-    if (this.queryType === QueryType.PARAMETERIZED) {
-      return new InternalWhereClauseBuilder(this.queryType, {
-        op: ColumnValueContainsOperation.IN,
-        type: ContainmentObjectType.ARRAY,
-        column: column as string,
-        source: "parameter",
-        value: {
-          nodeType: SQLNodeType.PARAMETER,
-          name: value as string,
-        },
-      })
-    }
+    return new InternalWhereClauseBuilder(
+      this.queryType,
+      this.#containmentFilter(
+        column as string,
+        ColumnValueContainsOperation.IN,
+        ContainmentObjectType.ARRAY,
+        Array.isArray(value)
+          ? value.length === 1
+            ? (value[0] as T[C])
+            : (value as T[C][])
+          : value,
+      ),
+    )
+  }
 
-    return new InternalWhereClauseBuilder(this.queryType, {
-      op: ColumnValueContainsOperation.IN,
-      type: ContainmentObjectType.ARRAY,
-      column: column as string,
-      source: "value",
-      value: Array.isArray(value)
-        ? value.length === 1
-          ? (value[0] as T[C])
-          : (value as T[C][])
-        : (value as T[C]),
-    })
+  #containmentFilter<T extends ContainmentObjectType>(
+    column: string,
+    op: ColumnValueContainsOperation,
+    columnType: T,
+    value: unknown,
+  ): ContainmentFilter<T> {
+    return this.queryType === QueryType.PARAMETERIZED
+      ? {
+          column,
+          columnType,
+          op,
+          type: "parameter",
+          name: value as string,
+        }
+      : {
+          column,
+          columnType,
+          op,
+          type: "value",
+          value,
+        }
   }
 
   current?: FilterGroup | FilterTypes

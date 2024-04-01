@@ -42,6 +42,29 @@ export interface QueryNode {
 export type RowType = Record<string, any>
 
 /**
+ * Assign the child to the parent and return any existing parent from the child
+ *
+ * @param parent The {@link QueryNode} to make the parent of the child
+ * @param child The {@link QueryNode} to make a child of the parent
+ * @returns The existing child parent {@link QueryNode} or undefined
+ */
+export function makeChild(
+  parent: QueryNode,
+  child: QueryNode,
+): QueryNode | undefined {
+  const previous = child.parent
+
+  child.parent = parent
+  if (parent.children) {
+    parent.children.push(child)
+  } else {
+    parent.children = [child]
+  }
+
+  return previous
+}
+
+/**
  * The set of supported execution modes
  */
 export enum ExecutionMode {

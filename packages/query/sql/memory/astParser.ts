@@ -5,38 +5,44 @@
 import { QueryError } from "../../error"
 import type { QueryParameters } from "../../index"
 import {
+  SQLNodeType,
+  type CteClause,
+  type InsertClause,
+  type JoinQueryNode,
+  type SQLQueryNode,
+  type SelectClause,
+  type TableSQLQueryNode,
+} from "../../sql/ast"
+import {
+  InsertNodeManager,
+  JoinNodeManager,
+  SelectNodeManager,
+  hasProjections,
+} from "../../sql/helpers"
+import type { SQLDataStore, SQLDataTable } from "../../sql/index"
+import {
   BooleanOperation,
   ColumnFilteringOperation,
   ColumnValueContainsOperation,
+  type ArrayFilter,
+  type ColumnFilter,
+  type FilterGroup,
+  type FilterTypes,
+  type JoinColumnFilter,
+  type StringFilter,
+} from "../ast/filtering"
+import {
   IsArrayFilter,
   isColumnFilter,
   isCteClause,
   isFilterGroup,
   isInsertClause,
   isJoinQueryNode,
-  isParameterNode,
+  isNamedSQLQueryNode,
   isSQLQueryNode,
+  isSelectClause,
   isStringFilter,
-  isTableQueryNode,
-  type ArrayFilter,
-  type ColumnFilter,
-  type CteClause,
-  type FilterGroup,
-  type FilterTypes,
-  type InsertClause,
-  type JoinColumnFilter,
-  type JoinQueryNode,
-  type SQLNodeType,
-  type SQLQueryNode,
-  type StringFilter,
-  type TableQueryNode,
-} from "../../sql/ast"
-import {
-  JoinNodeManager,
-  TableNodeManager,
-  hasProjections,
-} from "../../sql/helpers"
-import type { SQLDataStore, SQLDataTable } from "../../sql/index"
+} from "../ast/typeGuards"
 import type { InMemoryRelationalDataStore } from "./builder"
 
 export function materializeNode<RowType extends SQLDataTable>(
@@ -50,8 +56,8 @@ export function materializeNode<RowType extends SQLDataTable>(
     ? materializeProjections(root, context, parameters)
     : root
 
-  if (isTableQueryNode(current)) {
-    return materializeTable(current, context, parameters) as RowType[]
+  if (isSelectClause(current)) {
+    return materializeSelect(current, context, parameters) as RowType[]
   } else if (isJoinQueryNode(current)) {
     return materializeJoin(current, context, parameters) as RowType[]
   } else if (isInsertClause(current)) {
@@ -112,16 +118,18 @@ function materializeInsert(
   context: MaterializerContext,
   parameters: QueryParameters,
 ): SQLDataTable[] | undefined {
-  context.store[insert.tableName].push(parameters)
+  const manager = new InsertNodeManager(insert)
 
-  if (insert.returning) {
-    if (insert.returning === "*") {
+  context.store[manager.tableName].push(parameters)
+
+  if (manager.returning) {
+    if (manager.returning === "*") {
       return [parameters]
     }
 
     return [
       Object.fromEntries(
-        insert.returning.map((r) => [r as PropertyKey, parameters[r]]),
+        manager.returning.map((r) => [r as PropertyKey, parameters[r]]),
       ) as SQLDataTable,
     ]
   }
@@ -130,14 +138,27 @@ function materializeInsert(
 }
 
 function materializeTable(
-  table: TableQueryNode,
+  table: TableSQLQueryNode<SQLNodeType>,
+  context: MaterializerContext,
+  parameters?: QueryParameters,
+): SQLDataTable[] {
+  switch (table.nodeType) {
+    case SQLNodeType.SELECT:
+      return materializeSelect(table as SelectClause, context, parameters)
+  }
+
+  return []
+}
+
+function materializeSelect(
+  table: SelectClause,
   context: MaterializerContext,
   parameters?: QueryParameters,
 ): SQLDataTable[] {
   let ret: SQLDataTable[] = []
   let rows = context.get(table.tableName)
 
-  const manager = new TableNodeManager(table)
+  const manager = new SelectNodeManager(table)
 
   // Check for any filters to apply
   if (manager.where !== undefined) {
@@ -149,17 +170,14 @@ function materializeTable(
     ret = rows.map((r) => {
       const entries: (readonly [PropertyKey, object])[] = []
 
-      const transform = new Map<string, string>()
-      for (const alias of manager.columnAlias ?? []) {
-        transform.set(alias.column, alias.alias)
-      }
+      const transform = manager.columnAlias
 
       if (manager.select.columns === "*") {
         Object.keys(r).map((c) =>
           entries.push([transform.has(c) ? transform.get(c)! : c, r[c]]),
         )
       } else {
-        manager.select.columns.map((c) =>
+        manager.select.columns.map((c: string) =>
           entries.push([transform.has(c) ? transform.get(c)! : c, r[c]]),
         )
       }
@@ -254,10 +272,10 @@ function materializeCte(
   context: MaterializerContext,
   parameters?: QueryParameters,
 ): SQLQueryNode<SQLNodeType> | undefined {
-  if (isTableQueryNode(cte.source)) {
+  if (isSelectClause(cte.source)) {
     context.set(
       cte.tableName,
-      materializeTable(cte.source, context, parameters),
+      materializeSelect(cte.source, context, parameters),
     )
   } else if (isJoinQueryNode(cte.source)) {
     context.set(cte.tableName, materializeJoin(cte.source, context, parameters))
@@ -282,7 +300,7 @@ function materializeTableAlias(
     const next = nodes.shift()!
 
     // Any tables that are pulling from an alias need to have that alias created
-    if (isTableQueryNode(next) && next.alias) {
+    if (isNamedSQLQueryNode(next) && next.alias) {
       context.set(next.tableName, context.get(next.alias))
     }
 
@@ -300,7 +318,7 @@ function materializeProjections(
 
   let current = root
   while (current) {
-    if (isTableQueryNode(current) || isJoinQueryNode(current)) {
+    if (isSelectClause(current) || isJoinQueryNode(current)) {
       return current
     }
 
@@ -360,9 +378,10 @@ function buildArrayFilter<ParameterType extends QueryParameters = never>(
   parameters?: ParameterType,
 ): (input: SQLDataTable) => boolean {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
-  const value: any = isParameterNode(columnFilter.value)
-    ? parameters![columnFilter.value.name]
-    : columnFilter.value
+  const value: any =
+    columnFilter.type === "parameter"
+      ? parameters![columnFilter.name]
+      : columnFilter.value
 
   switch (columnFilter.op) {
     case ColumnValueContainsOperation.IN:
@@ -382,9 +401,10 @@ function buildStringFilter<ParameterType extends QueryParameters = never>(
   columnFilter: StringFilter,
   parameters?: ParameterType,
 ): (input: SQLDataTable) => boolean {
-  const value = isParameterNode(columnFilter.value)
-    ? (parameters![columnFilter.value.name] as string)
-    : columnFilter.value
+  const value =
+    columnFilter.type === "parameter"
+      ? (parameters![columnFilter.name] as string)
+      : columnFilter.value
 
   switch (columnFilter.op) {
     case ColumnValueContainsOperation.IN:
@@ -399,14 +419,15 @@ function buildColumnFilter<ParameterType extends QueryParameters = never>(
   columnFilter: ColumnFilter,
   parameters?: ParameterType,
 ): (input: SQLDataTable) => boolean {
-  if (columnFilter.source === "null") {
+  if (columnFilter.type === "null") {
     return (row) => row[columnFilter.column] === null
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
-  const value: any = isParameterNode(columnFilter.value)
-    ? parameters![columnFilter.value.name]
-    : columnFilter.value
+  const value: any =
+    columnFilter.type === "parameter"
+      ? parameters![columnFilter.name]
+      : columnFilter.value
 
   switch (columnFilter.op) {
     case ColumnFilteringOperation.EQ:

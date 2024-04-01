@@ -24,12 +24,8 @@ import {
   type ParameterizedQuery,
   type SimpleQuery,
 } from "../../index"
-import {
-  SQLNodeType,
-  type FilterGroup,
-  type FilterTypes,
-  type SQLQueryNode,
-} from "../ast"
+import { SQLNodeType, type SQLQueryNode } from "../ast"
+import type { FilterGroup, FilterTypes } from "../ast/filtering"
 import type { ParameterOrValue } from "../types"
 import { DefaultSQLNodeBuilder } from "./internal"
 

@@ -5,22 +5,27 @@
 import { getDebugInfo } from "@telefrek/core"
 import {
   SQLNodeType,
-  isColumnAlias,
-  isGenerator,
-  isJoinClauseNode,
-  isSQLQueryNode,
-  isSelectClause,
-  isTableQueryNode,
-  isWhereClause,
-  type ColumnAlias,
   type CteClause,
+  type InsertClause,
   type JoinClauseQueryNode,
   type JoinQueryNode,
   type SQLQueryNode,
   type SelectClause,
-  type TableQueryNode,
+  type SetClause,
+  type TableSQLQueryNode,
+  type UpdateClause,
   type WhereClause,
 } from "./ast"
+import {
+  isColumnAliasClause,
+  isGenerator,
+  isJoinClauseNode,
+  isNamedSQLQueryNode,
+  isReturningClause,
+  isSQLQueryNode,
+  isWhereClause,
+} from "./ast/typeGuards"
+import type { STAR } from "./index"
 
 type RNode = SQLQueryNode<SQLNodeType>
 
@@ -60,8 +65,8 @@ export function hasProjections(node: RNode): boolean {
     switch (next.nodeType) {
       case SQLNodeType.CTE:
         return true
-      case SQLNodeType.TABLE:
-        if (isTableQueryNode(next) && next.alias) {
+      default:
+        if (isNamedSQLQueryNode(next) && next.alias) {
           return true
         }
         break
@@ -94,10 +99,9 @@ abstract class RelationalASTNodeManager<NodeType extends RNode> {
   public toString = (): string => getDebugInfo(this.node)
 }
 
-/**
- * Helper class for manipulating {@link TableQueryNode}
- */
-export class TableNodeManager extends RelationalASTNodeManager<TableQueryNode> {
+abstract class TableNodeManager<
+  NodeType extends TableSQLQueryNode<SQLNodeType>,
+> extends RelationalASTNodeManager<NodeType> {
   get tableName(): string {
     return this.node.tableName
   }
@@ -105,16 +109,51 @@ export class TableNodeManager extends RelationalASTNodeManager<TableQueryNode> {
   get tableAlias(): string | undefined {
     return this.node.alias
   }
+}
 
-  get columnAlias(): ColumnAlias[] {
-    return this.node.children?.filter(isColumnAlias) ?? []
+export class InsertNodeManager extends TableNodeManager<InsertClause> {
+  get columns(): string[] | undefined {
+    return this.node.columns
+  }
+
+  get returning(): string[] | STAR | undefined {
+    return this.node.children?.filter(isReturningClause).at(0)?.columns
+  }
+}
+
+export class UpdateNodeManager extends TableNodeManager<UpdateClause> {
+  get updates(): SetClause[] {
+    return this.node.setColumns
+  }
+
+  get returning(): string[] | STAR | undefined {
+    return this.node.children?.filter(isReturningClause).at(0)?.columns
+  }
+
+  /**
+   * Get the {@link WhereClause} if present
+   */
+  get where(): WhereClause | undefined {
+    return this.node.children?.filter(isWhereClause).at(0)
+  }
+}
+
+/**
+ * Helper class for manipulating {@link TableQueryNode}
+ */
+export class SelectNodeManager extends TableNodeManager<SelectClause> {
+  get columnAlias(): Map<string, string> {
+    return (
+      this.node.children?.filter(isColumnAliasClause).at(0)?.aliasing ??
+      new Map()
+    )
   }
 
   /**
    * Get the {@link SelectClause} if present
    */
   get select(): SelectClause {
-    return this.node.children!.filter(isSelectClause).at(0)!
+    return this.node
   }
 
   /**
@@ -135,10 +174,10 @@ export class CteNodeManager extends RelationalASTNodeManager<CteClause> {
 }
 
 export class JoinNodeManager extends RelationalASTNodeManager<JoinQueryNode> {
-  get tables(): TableQueryNode[] {
+  get tables(): TableSQLQueryNode<SQLNodeType>[] {
     return (
       this.node.children
-        ?.filter(isTableQueryNode)
+        ?.filter(isNamedSQLQueryNode)
         .sort((l, r) => l.tableName.localeCompare(r.tableName)) ?? []
     )
   }

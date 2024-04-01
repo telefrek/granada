@@ -1,255 +1,32 @@
-/**
- * Extensions to the base query AST specific for sql data sources
- */
-
-import type { SQLDataStore, STAR } from "."
-import type { QueryNode } from "../"
-
-/**
- * The valid set of join types supported
- */
-export enum JoinType {
-  INNER = "inner",
-  LEFT = "left",
-  RIGHT = "right",
-  FULL = "full",
-}
-
-/**
- * Represents different types of column ifltring operations
- */
-export enum ColumnFilteringOperation {
-  EQ = "=",
-  LT = "<",
-  GT = ">",
-  LTE = "<=",
-  GTE = ">=",
-}
-
-/**
- * Represents differernt type of column containment operations
- */
-export enum ColumnValueContainsOperation {
-  IN = "in",
-}
-
-/**
- * Represents different boolean operations available
- */
-export enum BooleanOperation {
-  AND = "and",
-  OR = "or",
-  NOT = "not",
-}
-
-/**
- * Custom type to map records of {@link SQLDataStore} keys
- */
-export type TableAlias = Record<
-  keyof SQLDataStore["tables"],
-  keyof SQLDataStore["tables"]
->
-
-/**
- * The supported types a {@link SQLQueryNode} can have
- */
-export enum SQLNodeType {
-  TABLE = "table",
-  WHERE = "where",
-  CTE = "cte",
-  JOIN = "join",
-  ON = "on",
-  ALIAS = "alias",
-  PARAMETER = "parameter",
-  RETURNING = "returning",
-  SELECT = "select",
-  INSERT = "insert",
-  UPDATE = "update",
-  MERGE = "merge",
-  DELETE = "delete",
-}
-
-/**
- * Represents an internal {@link QueryNode} use for building sql queries
- */
-export type SQLQueryNode<NodeType extends SQLNodeType> = QueryNode & {
-  nodeType: NodeType
-}
-
-type ParameterFilter = {
-  source: "parameter"
-  value: ParameterNode
-}
-
-type ValueFilter = {
-  source: "value"
-  value: unknown
-}
-
-type NullFilter = {
-  source: "null"
-}
-
-/**
- * Represents a filter on a given column like:`table.column {op} value`
- */
-export type ColumnFilter = {
-  column: string
-  op: ColumnFilteringOperation
-} & (ParameterFilter | ValueFilter | NullFilter)
-
-/**
- * The type of containment object being examined (strings and arrays are different)
- */
-export enum ContainmentObjectType {
-  ARRAY,
-  STRING,
-}
-
-/**
- * Defines a simple containment filter with the type of object the containment references
- */
-export type ContainmentFilter<ContainmentObjectType> = {
-  type: ContainmentObjectType
-}
-
-/**
- * A containment filter specific to array operations
- */
-export type ArrayFilter = ContainmentFilter<ContainmentObjectType.ARRAY> & {
-  column: string
-  op: ColumnValueContainsOperation.IN
-} & (ParameterFilter | ValueFilter)
-
-/**
- * A containment filter specific to string objects
- */
-export type StringFilter = ContainmentFilter<ContainmentObjectType.STRING> & {
-  column: string
-  op: ColumnValueContainsOperation
-} & (ParameterFilter | ValueFilter)
-
-/**
- * Map of valid filter types for grouping
- */
-export type FilterTypes = ColumnFilter | ArrayFilter | StringFilter
-
-/**
- * Represents a group of filters that are bound by a {@link BooleanOperation}
- */
-export interface FilterGroup {
-  filters: (FilterTypes | FilterGroup)[]
-  op: BooleanOperation
-}
-
-/**
- * A type of {@link SQLQueryNode} that produces rows with a named table (either alias or existing)
- */
-export interface NamedSQLQueryNode extends SQLQueryNode<SQLNodeType> {
-  tableName: string
-}
-
-type ReturningClause = {
-  returning?: string[] | STAR
-}
-
-type FilteredClause = {
-  filter: FilterGroup | FilterTypes
-}
-
-export type SetClause = {
-  column: string
-} & (ParameterFilter | ValueFilter | NullFilter)
-
-export type InsertClause = SQLQueryNode<SQLNodeType.INSERT> &
-  NamedSQLQueryNode &
-  ReturningClause & {
-    columns?: string[]
-  }
-
-export type UpdateClause = SQLQueryNode<SQLNodeType.UPDATE> &
-  NamedSQLQueryNode &
-  ReturningClause &
-  FilteredClause & {
-    setColumns: SetClause[]
-  }
-
-export type MergeClause = SQLQueryNode<SQLNodeType.MERGE> &
-  NamedSQLQueryNode &
-  ReturningClause &
-  FilteredClause
-
-export type DeleteClause = SQLQueryNode<SQLNodeType.DELETE> &
-  NamedSQLQueryNode &
-  ReturningClause &
-  FilteredClause
-
-/**
- * A {@link SQLQueryNode} that represents a common table expression
- */
-export type CteClause = SQLQueryNode<SQLNodeType.CTE> &
-  NamedSQLQueryNode & {
-    source: SQLQueryNode<SQLNodeType>
-  }
-
-/**
- * A {@link SQLQueryNode} that indicates a table query
- */
-export type TableQueryNode = SQLQueryNode<SQLNodeType.TABLE> &
-  NamedSQLQueryNode & {
-    alias?: string
-  }
-
-/**
- * A {@link SQLQueryNode} that indicates a select clause
- */
-export type SelectClause = SQLQueryNode<SQLNodeType.SELECT> & {
-  columns: string[] | STAR
-}
-
-/**
- * An alias for a column in a {@link SelectClause}
- */
-export type ColumnAlias = SQLQueryNode<SQLNodeType.ALIAS> & {
-  column: string
-  alias: string
-}
-
-/**
- * Represents a where clause
- */
-export type WhereClause = SQLQueryNode<SQLNodeType.WHERE> & FilteredClause
-
-/**
- * A type of {@link SQLQueryNode} that represents a join operation
- */
-export type JoinQueryNode = SQLQueryNode<SQLNodeType.JOIN>
-
-/**
- * A type of {@link SQLQueryNode} that represents a join clause
- */
-export type JoinClauseQueryNode = SQLQueryNode<SQLNodeType.ON> & {
-  left: string
-  right: string
-  filter: JoinColumnFilter
-  type: JoinType
-}
-
-/**
- * A filter on a {@link JoinClauseQueryNode}
- */
-export interface JoinColumnFilter {
-  leftColumn: string
-  rightColumn: string
-  op: ColumnFilteringOperation
-}
-
-/**
- * A type of {@link SQLQueryNode} that indicates a parameter reference
- */
-export type ParameterNode = SQLQueryNode<SQLNodeType.PARAMETER> & {
-  name: string
-}
+import type { QueryNode } from "../../index"
+import {
+  BooleanOperation,
+  ColumnFilteringOperation,
+  ContainmentObjectType,
+  type ArrayFilter,
+  type ColumnFilter,
+  type FilterGroup,
+  type FilterTypes,
+  type JoinColumnFilter,
+  type StringFilter,
+} from "./filtering"
+import {
+  SQLNodeType,
+  type ColumnAliasClause,
+  type CteClause,
+  type DeleteClause,
+  type InsertClause,
+  type JoinClauseQueryNode,
+  type JoinQueryNode,
+  type MergeClause,
+  type ParameterClause,
+  type ReturningClause,
+  type SQLQueryNode,
+  type SelectClause,
+  type TableSQLQueryNode,
+  type UpdateClause,
+  type WhereClause,
+} from "./index"
 
 /**
  * Type guard for {@link SQLQueryNode}
@@ -268,12 +45,12 @@ export function isSQLQueryNode(
   )
 }
 /**
- * Type guard for {@link ParameterNode} instances
+ * Type guard for {@link ParameterClause} instances
  *
  * @param node The {@link Querynode} to check
- * @returns True if the node is a {@link ParameterNode}
+ * @returns True if the node is a {@link ParameterClause}
  */
-export function isParameterNode(node: unknown): node is ParameterNode {
+export function isParameterNode(node: unknown): node is ParameterClause {
   return isSQLQueryNode(node) && node.nodeType === SQLNodeType.PARAMETER
 }
 
@@ -309,7 +86,6 @@ export function isColumnFilter(
     typeof filter === "object" &&
     filter !== null &&
     "column" in filter &&
-    "value" in filter &&
     "op" in filter &&
     typeof filter.op === "string" &&
     Object.values(ColumnFilteringOperation).includes(
@@ -329,16 +105,10 @@ export function IsArrayFilter(
 ): filter is ArrayFilter {
   return (
     typeof filter === "object" &&
-      filter !== null &&
-      "column" in filter &&
-      "value" in filter &&
-      "type" in filter &&
-      filter.type === ContainmentObjectType.ARRAY,
-    "op" in filter &&
-      typeof filter.op === "string" &&
-      Object.values(ColumnValueContainsOperation).includes(
-        filter.op as ColumnValueContainsOperation,
-      )
+    filter !== null &&
+    "column" in filter &&
+    "columnType" in filter &&
+    filter.columnType === ContainmentObjectType.ARRAY
   )
 }
 
@@ -353,16 +123,10 @@ export function isStringFilter(
 ): filter is StringFilter {
   return (
     typeof filter === "object" &&
-      filter !== null &&
-      "column" in filter &&
-      "value" in filter &&
-      "type" in filter &&
-      filter.type === ContainmentObjectType.STRING,
-    "op" in filter &&
-      typeof filter.op === "string" &&
-      Object.values(ColumnValueContainsOperation).includes(
-        filter.op as ColumnValueContainsOperation,
-      )
+    filter !== null &&
+    "column" in filter &&
+    "columnType" in filter &&
+    filter.columnType === ContainmentObjectType.STRING
   )
 }
 
@@ -377,7 +141,7 @@ export function isGenerator(
 ): node is SQLQueryNode<SQLNodeType> {
   return (
     isSQLQueryNode(node) &&
-    (node.nodeType === SQLNodeType.TABLE ||
+    (node.nodeType === SQLNodeType.SELECT ||
       node.nodeType === SQLNodeType.JOIN ||
       node.nodeType === SQLNodeType.CTE ||
       node.nodeType === SQLNodeType.ALIAS)
@@ -385,14 +149,14 @@ export function isGenerator(
 }
 
 /**
- * Type guard for {@link NamedSQLQueryNode} objects
+ * Type guard for {@link TableSQLQueryNode} objects
  *
  * @param node The {@link QueryNode} to check
- * @returns True if the node is a {@link NamedSQLQueryNode}
+ * @returns True if the node is a {@link TableSQLQueryNode}
  */
 export function isNamedSQLQueryNode(
   node: QueryNode,
-): node is NamedSQLQueryNode {
+): node is TableSQLQueryNode<SQLNodeType> {
   return "tableName" in node && typeof node.tableName === "string"
 }
 
@@ -487,27 +251,19 @@ export function isSelectClause(node: QueryNode): node is SelectClause {
 }
 
 /**
- * Type guard for {@link ColumnAlias} identification
+ * Type guard for {@link ColumnAliasClause} identification
  *
  * @param node The {@link QueryNode} to inspect
- * @returns True if the node is a {@link ColumnAlias}
+ * @returns True if the node is a {@link ColumnAliasClause}
  */
-export function isColumnAlias(node: QueryNode): node is ColumnAlias {
+export function isColumnAliasClause(
+  node: QueryNode,
+): node is ColumnAliasClause {
   return isSQLQueryNode(node) && node.nodeType === SQLNodeType.ALIAS
 }
 
-/**
- * Type guard for {@link TableQueryNode} identification
- *
- * @param node The {@link QueryNode} to inspect
- * @returns True if the node is a {@link TableQueryNode}
- */
-export function isTableQueryNode(node: QueryNode): node is TableQueryNode {
-  return (
-    isSQLQueryNode(node) &&
-    node.nodeType === SQLNodeType.TABLE &&
-    isNamedSQLQueryNode(node)
-  )
+export function isReturningClause(node: QueryNode): node is ReturningClause {
+  return isSQLQueryNode(node) && node.nodeType === SQLNodeType.RETURNING
 }
 
 /**
