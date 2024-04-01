@@ -61,6 +61,7 @@ export enum SQLNodeType {
   ON = "on",
   ALIAS = "alias",
   PARAMETER = "parameter",
+  RETURNING = "returning",
   SELECT = "select",
   INSERT = "insert",
   UPDATE = "update",
@@ -75,14 +76,27 @@ export type SQLQueryNode<NodeType extends SQLNodeType> = QueryNode & {
   nodeType: NodeType
 }
 
+type ParameterFilter = {
+  source: "parameter"
+  value: ParameterNode
+}
+
+type ValueFilter = {
+  source: "value"
+  value: unknown
+}
+
+type NullFilter = {
+  source: "null"
+}
+
 /**
  * Represents a filter on a given column like:`table.column {op} value`
  */
-export interface ColumnFilter {
+export type ColumnFilter = {
   column: string
   op: ColumnFilteringOperation
-  value: unknown
-}
+} & (ParameterFilter | ValueFilter | NullFilter)
 
 /**
  * The type of containment object being examined (strings and arrays are different)
@@ -95,7 +109,7 @@ export enum ContainmentObjectType {
 /**
  * Defines a simple containment filter with the type of object the containment references
  */
-export interface ContainmentFilter<ContainmentObjectType> {
+export type ContainmentFilter<ContainmentObjectType> = {
   type: ContainmentObjectType
 }
 
@@ -105,8 +119,7 @@ export interface ContainmentFilter<ContainmentObjectType> {
 export type ArrayFilter = ContainmentFilter<ContainmentObjectType.ARRAY> & {
   column: string
   op: ColumnValueContainsOperation.IN
-  value: unknown
-}
+} & (ParameterFilter | ValueFilter)
 
 /**
  * A containment filter specific to string objects
@@ -114,24 +127,12 @@ export type ArrayFilter = ContainmentFilter<ContainmentObjectType.ARRAY> & {
 export type StringFilter = ContainmentFilter<ContainmentObjectType.STRING> & {
   column: string
   op: ColumnValueContainsOperation
-  value: string | ParameterNode
-}
-
-/**
- * Filter for columns that are nullable
- */
-export interface NullColumnFilter {
-  column: string
-}
+} & (ParameterFilter | ValueFilter)
 
 /**
  * Map of valid filter types for grouping
  */
-export type FilterTypes =
-  | ColumnFilter
-  | NullColumnFilter
-  | ArrayFilter
-  | StringFilter
+export type FilterTypes = ColumnFilter | ArrayFilter | StringFilter
 
 /**
  * Represents a group of filters that are bound by a {@link BooleanOperation}
@@ -156,10 +157,9 @@ type FilteredClause = {
   filter: FilterGroup | FilterTypes
 }
 
-type SetClause = {
+export type SetClause = {
   column: string
-  value: unknown
-}
+} & (ParameterFilter | ValueFilter | NullFilter)
 
 export type InsertClause = SQLQueryNode<SQLNodeType.INSERT> &
   NamedSQLQueryNode &
@@ -267,7 +267,6 @@ export function isSQLQueryNode(
     Object.values(SQLNodeType).includes(node.nodeType as SQLNodeType)
   )
 }
-
 /**
  * Type guard for {@link ParameterNode} instances
  *

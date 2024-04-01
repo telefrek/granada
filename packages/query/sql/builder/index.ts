@@ -30,6 +30,7 @@ import {
   type FilterTypes,
   type SQLQueryNode,
 } from "../ast"
+import type { ParameterOrValue } from "../types"
 import { DefaultSQLNodeBuilder } from "./internal"
 
 /**
@@ -101,12 +102,40 @@ export interface SQLNodeBuilder<
 
   select<T extends keyof D["tables"]>(
     tableName: T,
-  ): TableNodeBuilder<D, T, D["tables"][T], P, Q>
+  ): SelectBuilder<D, T, D["tables"][T], P, Q>
 
-  insert<T extends keyof D["tables"], C extends keyof D["tables"][T]>(
+  insert<T extends keyof D["tables"]>(
     tableName: T,
-    columns: C[],
-  ): InsertBuilder<D, T, never, Pick<D["tables"][T], C>>
+  ): InsertBuilder<D, T, never, D["tables"][T]>
+
+  update<T extends keyof D["tables"]>(
+    tableName: T,
+  ): UpdateBuilder<D, T, never, P, Q, never>
+}
+
+export interface UpdateBuilder<
+  D extends SQLDataStore,
+  T extends keyof D["tables"],
+  R extends SQLDataTable,
+  P extends SQLDataTable,
+  Q extends BuildableQueryTypes,
+  U extends keyof D["tables"][T],
+> extends SQLNodeProcessor<D, R, P> {
+  returning(columns: STAR): UpdateBuilder<D, T, D["tables"][T], P, Q, U>
+  returning<C extends keyof D["tables"][T]>(
+    ...columns: C[]
+  ): UpdateBuilder<D, T, Pick<D["tables"][T], C>, P, Q, U>
+
+  set<C extends keyof Omit<D["tables"][T], U>>(
+    column: C,
+    value: ParameterOrValue<D["tables"][T], C, P>,
+  ): UpdateBuilder<D, T, Pick<D["tables"][T], C>, P, Q, U | C>
+
+  where(
+    clause: (
+      builder: WhereClauseBuilder<D["tables"][T], Q, P>,
+    ) => WhereClauseBuilder<D["tables"][T], Q, P>,
+  ): Omit<UpdateBuilder<D, T, R, P, Q, U>, "where">
 }
 
 export interface InsertBuilder<
@@ -130,12 +159,6 @@ export type SQLProcessorBuilder<
   TT extends SQLDataTable,
 > = (builder: SQLNodeBuilder<D, Q, T, P, A>) => SQLNodeProcessor<D, TT, P>
 
-type ParameterOrValue<
-  T extends SQLDataTable,
-  C extends keyof T,
-  P extends QueryParameters,
-> = [P] extends [never] ? T[C] : PropertyOfType<P, T[C]>
-
 export type TableGenerator<
   D extends SQLDataStore,
   T extends keyof D["tables"],
@@ -143,7 +166,7 @@ export type TableGenerator<
   P extends QueryParameters,
   Q extends BuildableQueryTypes,
   TR extends SQLDataTable = D["tables"][T],
-> = (from: TableNodeBuilder<D, T, TR, P, Q>) => SQLNodeProcessor<D, R, P>
+> = (from: SelectBuilder<D, T, TR, P, Q>) => SQLNodeProcessor<D, R, P>
 
 export interface JoinNodeBuilder<
   D extends SQLDataStore,
@@ -167,7 +190,7 @@ export interface JoinNodeBuilder<
   ): JoinNodeBuilder<D, T | JTB, MergedNonOverlappingType<R, TT>, P, Q>
 }
 
-export interface TableNodeBuilder<
+export interface SelectBuilder<
   D extends SQLDataStore,
   T extends keyof D["tables"],
   R extends SQLDataTable,
@@ -178,10 +201,10 @@ export interface TableNodeBuilder<
   builder: SQLNodeBuilder<D, Q, SQLDataTable, P, keyof D["tables"]>
   tableAlias?: keyof D["tables"]
 
-  columns(column: STAR): Omit<TableNodeBuilder<D, T, R, P, Q>, "columns">
+  columns(column: STAR): Omit<SelectBuilder<D, T, R, P, Q>, "columns">
   columns<C extends Extract<keyof D["tables"][T], string>>(
     ...columns: C[]
-  ): Omit<TableNodeBuilder<D, T, R, P, Q>, "columns">
+  ): Omit<SelectBuilder<D, T, R, P, Q>, "columns">
 
   join<
     JT extends keyof D["tables"],
@@ -200,13 +223,13 @@ export interface TableNodeBuilder<
   >(
     column: C,
     alias: Alias,
-  ): TableNodeBuilder<D, T, AliasedType<R, C, Alias>, P, Q>
+  ): SelectBuilder<D, T, AliasedType<R, C, Alias>, P, Q>
 
   where(
     clause: (
       builder: WhereClauseBuilder<D["tables"][T], Q, P>,
     ) => WhereClauseBuilder<D["tables"][T], Q, P>,
-  ): Omit<TableNodeBuilder<D, T, R, P, Q>, "where">
+  ): Omit<SelectBuilder<D, T, R, P, Q>, "where">
 }
 
 export interface WhereClauseBuilder<

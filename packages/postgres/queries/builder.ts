@@ -32,6 +32,7 @@ import {
   type JoinQueryNode,
   type SQLNodeType,
   type SQLQueryNode,
+  type SetClause,
   type TableQueryNode,
   type UpdateClause,
 } from "@telefrek/query/sql/ast"
@@ -327,7 +328,8 @@ function translateUpdate(
   update: UpdateClause,
   context: PostgresStaticContext,
 ): string {
-  return `UPDATE ${update.tableName} SET ${update.setColumns.map((s) => `${s.column} = ${wrap(s.value)}`).join(",")}${update.filter ? ` WHERE ${translateFilterGroup(update.filter, context)}` : ""}`
+  return `UPDATE ${update.tableName} SET ${update.setColumns.map((s) => translateSetColumns(s, context)).join(",")}${update.filter ? ` WHERE ${translateFilterGroup(update.filter, context)}` : ""}
+        ${update.returning ? ` RETURNING ${update.returning === "*" ? "*" : update.returning.join(",")}` : ""}`
 }
 
 function translateInsert(insert: InsertClause): PostgresContext {
@@ -361,6 +363,24 @@ function translateCte(cte: CteClause, context: PostgresStaticContext): string {
   })`
 }
 
+function translateSetColumns(
+  setClause: SetClause,
+  context: PostgresStaticContext,
+): string {
+  if (setClause.source === "parameter") {
+    if (!context.parameterMapping.has(setClause.value.name)) {
+      context.parameterMapping.set(
+        setClause.value.name,
+        context.parameterMapping.size + 1,
+      )
+    }
+
+    return `${setClause.column} = $${context.parameterMapping.get(setClause.value.name)!.toString()}`
+  }
+
+  return `${setClause.column} = ${setClause.source === "null" ? "NULL" : wrap(setClause.value)}`
+}
+
 function translateFilterGroup(
   filter: FilterGroup | FilterTypes,
   context: PostgresStaticContext,
@@ -372,6 +392,10 @@ function translateFilterGroup(
       .join(` ${filter.op} `)
       .trimEnd()
   } else if (isColumnFilter(filter)) {
+    if (filter.source === "null") {
+      return `${table ? `${table}.` : ""}${filter.column} IS NULL`
+    }
+
     if (isParameterNode(filter.value)) {
       if (!context.parameterMapping.has(filter.value.name)) {
         context.parameterMapping.set(

@@ -33,8 +33,10 @@ import {
   type JoinClauseQueryNode,
   type SQLQueryNode,
   type SelectClause,
+  type SetClause,
   type TableAlias,
   type TableQueryNode,
+  type UpdateClause,
   type WhereClause,
 } from "../ast"
 import type {
@@ -49,8 +51,9 @@ import {
   type ModifiedStore,
   type SQLNodeBuilder,
   type SQLProcessorBuilder,
+  type SelectBuilder,
   type TableGenerator,
-  type TableNodeBuilder,
+  type UpdateBuilder,
   type WhereClauseBuilder,
 } from "./index"
 
@@ -110,10 +113,23 @@ export class DefaultSQLNodeBuilder<
     this.#tableAlias = tableAlias
   }
 
-  insert<T extends keyof D["tables"], C extends keyof D["tables"][T]>(
+  update<T extends keyof D["tables"]>(
     tableName: T,
-    columns: C[],
-  ): InsertBuilder<D, T, never, Pick<D["tables"][T], C>> {
+  ): UpdateBuilder<D, T, never, P, Q, never> {
+    return new InternalUpdateBuilder(
+      tableName,
+      new DefaultSQLNodeBuilder(
+        this.queryType,
+        this.queryBuilder,
+        this.#context,
+        this.tableAlias,
+      ),
+    )
+  }
+
+  insert<T extends keyof D["tables"]>(
+    tableName: T,
+  ): InsertBuilder<D, T, never, D["tables"][T]> {
     return new InternalInsertBuilder(
       tableName,
       new DefaultSQLNodeBuilder(
@@ -122,7 +138,6 @@ export class DefaultSQLNodeBuilder<
         this.#context,
         this.tableAlias,
       ),
-      columns,
     )
   }
 
@@ -208,7 +223,7 @@ export class DefaultSQLNodeBuilder<
 
   select<T extends keyof D["tables"]>(
     tableName: T,
-  ): TableNodeBuilder<D, T, D["tables"][T], P, Q> {
+  ): SelectBuilder<D, T, D["tables"][T], P, Q> {
     const alias: keyof D["tables"] | undefined =
       tableName in this.#tableAlias
         ? this.#tableAlias[tableName as string]
@@ -225,28 +240,165 @@ export class DefaultSQLNodeBuilder<
   }
 }
 
+class InternalUpdateBuilder<
+  D extends SQLDataStore,
+  T extends keyof D["tables"],
+  R extends SQLDataTable,
+  P extends SQLDataTable,
+  Q extends BuildableQueryTypes,
+  U extends keyof D["tables"][T],
+> implements UpdateBuilder<D, T, R, P, Q, U>
+{
+  tableName: T
+  returningColumns?: string[] | STAR
+  setClauses?: SetClause[]
+  builder: SQLNodeBuilderContext<D, Q, R>
+  whereClause?: WhereClause
+
+  constructor(
+    tableName: T,
+    builder: SQLNodeBuilderContext<D, Q, R>,
+    setClauses?: SetClause[],
+    returningColumns?: string[] | STAR,
+    whereClause?: WhereClause,
+  ) {
+    this.tableName = tableName
+    this.builder = builder
+    this.setClauses = setClauses
+    this.returningColumns = returningColumns
+    this.whereClause = whereClause
+  }
+
+  set<C extends Exclude<keyof D["tables"][T], U>>(
+    column: C,
+    value: [P] extends [never]
+      ? D["tables"][T][C]
+      : PropertyOfType<P, D["tables"][T][C]>,
+  ): UpdateBuilder<D, T, Pick<D["tables"][T], C>, P, Q, U | C> {
+    const setClauses = this.setClauses ?? []
+
+    setClauses.push({
+      column: column as string,
+      source:
+        this.builder.queryType === QueryType.PARAMETERIZED
+          ? "parameter"
+          : "value",
+      value: (this.builder.queryType === QueryType.PARAMETERIZED
+        ? {
+            name: value,
+            nodeType: SQLNodeType.PARAMETER,
+          }
+        : value) as never,
+    })
+
+    return new InternalUpdateBuilder<D, T, D["tables"][T], P, Q, U | C>(
+      this.tableName,
+      this.builder,
+      setClauses,
+      this.returningColumns,
+      this.whereClause,
+    )
+  }
+
+  returning(columns: "*"): UpdateBuilder<D, T, D["tables"][T], P, Q, U>
+  returning<C extends keyof D["tables"][T]>(
+    ...columns: C[]
+  ): UpdateBuilder<D, T, Pick<D["tables"][T], C>, P, Q, U>
+  returning<C extends keyof D["tables"][T]>(
+    columns?: C | STAR,
+    ...rest: C[]
+  ):
+    | UpdateBuilder<D, T, D["tables"][T], P, Q, U>
+    | UpdateBuilder<D, T, Pick<D["tables"][T], C>, P, Q, U> {
+    if (columns === "*") {
+      return new InternalUpdateBuilder<D, T, D["tables"][T], P, Q, U>(
+        this.tableName,
+        this.builder,
+        this.setClauses,
+        columns,
+        this.whereClause,
+      )
+    }
+
+    return new InternalUpdateBuilder<D, T, Pick<D["tables"][T], C>, P, Q, U>(
+      this.tableName,
+      this.builder,
+      this.setClauses,
+      rest
+        ? [columns as string].concat(rest.map((r: C) => r as string))
+        : columns
+          ? [columns as string]
+          : undefined,
+      this.whereClause,
+    )
+  }
+
+  where(
+    clause: (
+      builder: WhereClauseBuilder<D["tables"][T], Q, P>,
+    ) => WhereClauseBuilder<D["tables"][T], Q, P>,
+  ): Omit<UpdateBuilder<D, T, R, P, Q, U>, "where"> {
+    const filter = clause(
+      new InternalWhereClauseBuilder<D["tables"][T], Q, P>(
+        this.builder.queryType,
+      ),
+    ).current
+
+    return new InternalUpdateBuilder(
+      this.tableName,
+      this.builder,
+      this.setClauses,
+      this.returningColumns,
+      filter
+        ? {
+            filter,
+            nodeType: SQLNodeType.WHERE,
+          }
+        : undefined,
+    )
+  }
+
+  asNode(): SQLQueryNode<SQLNodeType> {
+    return {
+      nodeType: SQLNodeType.UPDATE,
+      tableName: this.tableName,
+      returning: this.returningColumns,
+      setColumns: this.setClauses,
+      filter: this.whereClause?.filter,
+    } as UpdateClause
+  }
+
+  build(
+    name: string,
+    mode: ExecutionMode = ExecutionMode.Normal,
+  ): [P] extends [never] ? SimpleQuery<R> : ParameterizedQuery<R, P> {
+    return this.builder.queryBuilder.build(
+      this.asNode(),
+      QueryType.PARAMETERIZED,
+      name,
+      mode,
+    )
+  }
+}
+
 class InternalInsertBuilder<
   D extends SQLDataStore,
   T extends keyof D["tables"],
-  IC extends keyof D["tables"][T],
   R extends SQLDataTable = never,
-  P extends RowType = Pick<D["tables"][T], IC>,
+  P extends RowType = D["tables"][T],
 > implements InsertBuilder<D, T, R, P>
 {
   tableName: T
   returningColumns?: string[] | STAR
-  columns: IC[]
   builder: SQLNodeBuilderContext<D, QueryType.PARAMETERIZED, R>
 
   constructor(
     tableName: T,
     builder: SQLNodeBuilderContext<D, QueryType.PARAMETERIZED, R>,
-    columns: IC[],
     returningColumns?: string[] | STAR,
   ) {
     this.tableName = tableName
     this.builder = builder
-    this.columns = columns
     this.returningColumns = returningColumns
   }
 
@@ -261,18 +413,16 @@ class InternalInsertBuilder<
     | InsertBuilder<D, T, D["tables"][T], P>
     | InsertBuilder<D, T, Pick<D["tables"][T], C>, P> {
     if (columns === "*") {
-      return new InternalInsertBuilder<D, T, IC, D["tables"][T], P>(
+      return new InternalInsertBuilder<D, T, D["tables"][T], P>(
         this.tableName,
         this.builder,
-        this.columns,
         columns,
       )
     }
 
-    return new InternalInsertBuilder<D, T, IC, Pick<D["tables"][T], C>, P>(
+    return new InternalInsertBuilder<D, T, Pick<D["tables"][T], C>, P>(
       this.tableName,
       this.builder,
-      this.columns,
       rest
         ? [columns as string].concat(rest.map((r: C) => r as string))
         : columns
@@ -406,7 +556,7 @@ class InternalTableBuilder<
   R extends SQLDataTable,
   P extends QueryParameters,
   Q extends BuildableQueryTypes,
-> implements TableNodeBuilder<D, T, R, P, Q>
+> implements SelectBuilder<D, T, R, P, Q>
 {
   tableName: T
   builder: SQLNodeBuilderContext<D, Q, SQLDataTable, P, keyof D["tables"]>
@@ -435,14 +585,14 @@ class InternalTableBuilder<
     this.parent = parent
   }
 
-  columns(column: "*"): Omit<TableNodeBuilder<D, T, R, P, Q>, "columns">
+  columns(column: "*"): Omit<SelectBuilder<D, T, R, P, Q>, "columns">
   columns<C extends Extract<keyof D["tables"][T], string>>(
     ...columns: C[]
-  ): Omit<TableNodeBuilder<D, T, R, P, Q>, "columns">
+  ): Omit<SelectBuilder<D, T, R, P, Q>, "columns">
   columns<C extends Extract<keyof D["tables"][T], string>>(
     column?: STAR | C,
     ...rest: C[]
-  ): Omit<TableNodeBuilder<D, T, R, P, Q>, "columns"> {
+  ): Omit<SelectBuilder<D, T, R, P, Q>, "columns"> {
     if (column === "*") {
       return new InternalTableBuilder(
         this.tableName,
@@ -516,7 +666,7 @@ class InternalTableBuilder<
   >(
     column: C,
     alias: Alias,
-  ): TableNodeBuilder<D, T, AliasedType<R, C, Alias>, P, Q> {
+  ): SelectBuilder<D, T, AliasedType<R, C, Alias>, P, Q> {
     const aliasing = this.columnAlias ?? []
     aliasing.push({ nodeType: SQLNodeType.ALIAS, column, alias })
     return new InternalTableBuilder(
@@ -534,7 +684,7 @@ class InternalTableBuilder<
     clause: (
       builder: WhereClauseBuilder<D["tables"][T], Q, P>,
     ) => WhereClauseBuilder<D["tables"][T], Q, P>,
-  ): Omit<TableNodeBuilder<D, T, R, P, Q>, "where"> {
+  ): Omit<SelectBuilder<D, T, R, P, Q>, "where"> {
     const filter = clause(
       new InternalWhereClauseBuilder(this.builder.queryType),
     ).current
@@ -630,6 +780,8 @@ class InternalWhereClauseBuilder<
     return new InternalWhereClauseBuilder(this.queryType, {
       column: column as string,
       op: ColumnFilteringOperation.EQ,
+      source:
+        this.queryType === QueryType.PARAMETERIZED ? "parameter" : "value",
       value:
         this.queryType === QueryType.PARAMETERIZED
           ? { nodeType: SQLNodeType.PARAMETER, name: value as string }
@@ -643,6 +795,8 @@ class InternalWhereClauseBuilder<
     return new InternalWhereClauseBuilder(this.queryType, {
       column: column as string,
       op: ColumnFilteringOperation.GT,
+      source:
+        this.queryType === QueryType.PARAMETERIZED ? "parameter" : "value",
       value:
         this.queryType === QueryType.PARAMETERIZED
           ? { nodeType: SQLNodeType.PARAMETER, name: value as string }
@@ -656,6 +810,8 @@ class InternalWhereClauseBuilder<
     return new InternalWhereClauseBuilder(this.queryType, {
       column: column as string,
       op: ColumnFilteringOperation.GTE,
+      source:
+        this.queryType === QueryType.PARAMETERIZED ? "parameter" : "value",
       value:
         this.queryType === QueryType.PARAMETERIZED
           ? { nodeType: SQLNodeType.PARAMETER, name: value as string }
@@ -669,6 +825,8 @@ class InternalWhereClauseBuilder<
     return new InternalWhereClauseBuilder(this.queryType, {
       column: column as string,
       op: ColumnFilteringOperation.LT,
+      source:
+        this.queryType === QueryType.PARAMETERIZED ? "parameter" : "value",
       value:
         this.queryType === QueryType.PARAMETERIZED
           ? { nodeType: SQLNodeType.PARAMETER, name: value as string }
@@ -682,6 +840,8 @@ class InternalWhereClauseBuilder<
     return new InternalWhereClauseBuilder(this.queryType, {
       column: column as string,
       op: ColumnFilteringOperation.LTE,
+      source:
+        this.queryType === QueryType.PARAMETERIZED ? "parameter" : "value",
       value:
         this.queryType === QueryType.PARAMETERIZED
           ? { nodeType: SQLNodeType.PARAMETER, name: value as string }
@@ -714,6 +874,8 @@ class InternalWhereClauseBuilder<
       column: column as string,
       type: ContainmentObjectType.STRING,
       op: ColumnValueContainsOperation.IN,
+      source:
+        this.queryType === QueryType.PARAMETERIZED ? "parameter" : "value",
       value:
         this.queryType === QueryType.PARAMETERIZED
           ? { nodeType: SQLNodeType.PARAMETER, name: value as string }
@@ -727,18 +889,29 @@ class InternalWhereClauseBuilder<
       ? T[C] | ArrayItemType<T, C>
       : PropertyOfType<P, T[C]>,
   ): WhereClauseBuilder<T, Q, P> {
+    if (this.queryType === QueryType.PARAMETERIZED) {
+      return new InternalWhereClauseBuilder(this.queryType, {
+        op: ColumnValueContainsOperation.IN,
+        type: ContainmentObjectType.ARRAY,
+        column: column as string,
+        source: "parameter",
+        value: {
+          nodeType: SQLNodeType.PARAMETER,
+          name: value as string,
+        },
+      })
+    }
+
     return new InternalWhereClauseBuilder(this.queryType, {
       op: ColumnValueContainsOperation.IN,
       type: ContainmentObjectType.ARRAY,
       column: column as string,
-      value:
-        this.queryType === QueryType.PARAMETERIZED
-          ? { nodeType: SQLNodeType.PARAMETER, name: value as string }
-          : Array.isArray(value)
-            ? value.length === 1
-              ? (value[0] as T[C])
-              : (value as T[C][])
-            : (value as T[C]),
+      source: "value",
+      value: Array.isArray(value)
+        ? value.length === 1
+          ? (value[0] as T[C])
+          : (value as T[C][])
+        : (value as T[C]),
     })
   }
 

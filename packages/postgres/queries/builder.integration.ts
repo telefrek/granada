@@ -50,13 +50,7 @@ describe("Postgres should be able to execute queries", () => {
 
   it("Should be able to issue a simple query", async () => {
     const insertUserQuery = createPostgresQueryContext<TestDatabaseType>()
-      .insert("customers", [
-        "id",
-        "firstName",
-        "lastName",
-        "createdAt",
-        "updatedAt",
-      ])
+      .insert("customers")
       .returning("*")
       .build("insertCustomer")
 
@@ -70,22 +64,34 @@ describe("Postgres should be able to execute queries", () => {
       }),
     )
 
+    const updateUserQuery = createPostgresQueryContext<TestDatabaseType>()
+      .withParameters<{ id: bigint | number; updatedAt: bigint | number }>()
+      .update("customers")
+      .set("updatedAt", "updatedAt")
+      .where((builder) => builder.eq("id", "id"))
+      .returning("updatedAt", "lastName")
+      .build("updateCustomer")
+      .bind({ id: 1, updatedAt: 2 })
+
+    let updateResult = await executor?.run(updateUserQuery)
+
+    const updateRows = Array.isArray(updateResult?.rows)
+      ? updateResult.rows
+      : []
+    expect(updateRows.length).toBe(1)
+    expect(updateRows[0].lastName).toBe("customer1")
+    expect(updateRows[0].updatedAt).toBe(2n)
+
     await executor?.run(
       createPostgresQueryContext<TestDatabaseType>()
-        .insert("orders", [
-          "id",
-          "amount",
-          "categories",
-          "customerId",
-          "createdAt",
-          "updatedAt",
-        ])
+        .insert("orders")
         .build("insertCustomer")
         .bind({
           id: 1,
           amount: 10,
           categories: ["purchase"],
           customerId: 1,
+          name: "testOrder",
           createdAt: Date.now(),
           updatedAt: Date.now(),
         }),

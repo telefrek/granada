@@ -2,6 +2,10 @@
  * Types that are supported by SQL and their meanings for this library
  */
 
+import type { PropertyOfType } from "@telefrek/core/type/utils"
+import type { QueryParameters } from "../index"
+import type { SQLDataTable } from "./index"
+
 export enum SQLColumnType {
   BIT = "bit",
   TINYINT = "tinyint",
@@ -52,9 +56,17 @@ export type SQLType<S extends ValidSQLTypes> = S extends SQLColumnType
     : never
 
 export type ColumnDefinition<ColumnType extends ValidSQLTypes> =
-  | SimpleColumnDefinition<ColumnType>
-  | VariableColumnDefinition<ColumnType>
-  | IncrementalColumnDefinition<ColumnType>
+  ColumnType extends IncrementalSQLTypes
+    ? IncrementalColumnDefinition<ColumnType>
+    : ColumnType extends VariableSQLTypes
+      ? VariableColumnDefinition<ColumnType>
+      : SimpleColumnDefinition<ColumnType>
+
+export type ParameterOrValue<
+  T extends SQLDataTable,
+  C extends keyof T,
+  P extends QueryParameters,
+> = [P] extends [never] ? T[C] : PropertyOfType<P, T[C]>
 
 type BigIntSQLTypes = SQLColumnType.BIGINT | SQLColumnType.TIMESTAMP
 
@@ -101,22 +113,18 @@ type IncrementalSQLTypes =
   | SQLColumnType.FLOAT
   | SQLColumnType.DECIMAL
 
-export type SimpleColumnDefinition<ColumnType extends ValidSQLTypes> = {
+type SimpleColumnDefinition<ColumnType extends ValidSQLTypes> = {
   type: ColumnType
   nullable?: boolean
   isArray?: boolean
 }
 
-type IncrementalColumnDefinition<ColumnType extends ValidSQLTypes> =
-  ColumnType extends IncrementalSQLTypes
-    ? SimpleColumnDefinition<ColumnType> & {
-        autoIncrement?: boolean
-      }
-    : object
+type IncrementalColumnDefinition<ColumnType extends IncrementalSQLTypes> =
+  SimpleColumnDefinition<ColumnType> & {
+    autoIncrement?: boolean
+  }
 
-type VariableColumnDefinition<ColumnType extends ValidSQLTypes> =
-  ColumnType extends VariableSQLTypes
-    ? SimpleColumnDefinition<ColumnType> & {
-        size: number
-      }
-    : object
+type VariableColumnDefinition<ColumnType extends VariableSQLTypes> =
+  SimpleColumnDefinition<ColumnType> & {
+    size: number
+  }

@@ -1,4 +1,4 @@
-import type { ColumnType, SimpleColumnDefinition } from "../types"
+import type { ColumnDefinition, ColumnType } from "../types"
 
 export type SQLDatabase<Tables extends DatabaseTables> = {
   tables: Tables
@@ -17,7 +17,7 @@ export interface SQLTableDefinition<Schema extends ColumnSchema> {
 
 export type ColumnSchema = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [key: string]: SimpleColumnDefinition<any>
+  [key: string]: ColumnDefinition<any>
 }
 
 export interface PrimaryKey<Schema extends ColumnSchema> {

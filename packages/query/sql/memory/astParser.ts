@@ -390,7 +390,7 @@ function buildStringFilter<ParameterType extends QueryParameters = never>(
     case ColumnValueContainsOperation.IN:
       return (row) => {
         const v = row[columnFilter.column] as string
-        return v.indexOf(value) >= 0
+        return v.indexOf(value as string) >= 0
       }
   }
 }
@@ -399,6 +399,10 @@ function buildColumnFilter<ParameterType extends QueryParameters = never>(
   columnFilter: ColumnFilter,
   parameters?: ParameterType,
 ): (input: SQLDataTable) => boolean {
+  if (columnFilter.source === "null") {
+    return (row) => row[columnFilter.column] === null
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
   const value: any = isParameterNode(columnFilter.value)
     ? parameters![columnFilter.value.name]

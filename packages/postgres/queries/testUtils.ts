@@ -82,6 +82,7 @@ export async function createTestDatabase(client: pg.Client): Promise<void> {
             id serial PRIMARY KEY,
             createdAt bigint NOT NULL,
             updatedAt bigint NOT NULL,
+            name text NOT NULL,
             categories Category[] NOT NULL,
             amount real NOT NULL,
             customerId integer NOT NULL
