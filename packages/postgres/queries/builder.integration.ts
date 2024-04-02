@@ -179,5 +179,25 @@ describe("Postgres should be able to execute queries", () => {
     rows = result?.mode === ExecutionMode.Normal ? result.rows : []
 
     expect(rows.length).toBe(0)
+
+    // Test delete
+    const delRes = await executor?.run(
+      createPostgresQueryBuilder<TestDatabaseType>()
+        .delete("customers")
+        .returning("id")
+        .where((builder) => builder.eq("id", 1))
+        .build("deleteCustomer"),
+    )
+
+    const delRows = delRes?.mode === ExecutionMode.Normal ? delRes.rows : []
+    expect(delRows.length).toBe(1)
+    expect(delRows[0].id).toBe(1)
+
+    result = await executor?.run(
+      query.bind({ amount: 1, categories: [Category.PURCHASE] }),
+    )
+
+    rows = result?.mode === ExecutionMode.Normal ? result.rows : []
+    expect(rows.length).toBe(0)
   }, 180_000)
 })
