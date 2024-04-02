@@ -1,4 +1,4 @@
-import { Semaphore } from "../"
+import { Semaphore } from "../../concurrency"
 import { Timer } from "../../time/"
 import { LimitAlgorithm, LimitedOperation, Limiter } from "./"
 

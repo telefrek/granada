@@ -3,7 +3,7 @@
  */
 
 import { Timer } from "@telefrek/core/time/index"
-import { makeCaseInsensitive } from "@telefrek/core/type/utils"
+import { makeCaseInsensitive } from "@telefrek/core/type/proxies"
 import { QueryError } from "@telefrek/query/error"
 import {
   ExecutionMode,
