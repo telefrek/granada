@@ -16,6 +16,7 @@ import {
 } from "@telefrek/query/index"
 import {
   type CteClause,
+  type DeleteClause,
   type InsertClause,
   type JoinQueryNode,
   type SQLNodeType,
@@ -30,8 +31,10 @@ import {
 } from "@telefrek/query/sql/ast/filtering"
 import {
   IsArrayFilter,
+  isBranchNode,
   isColumnFilter,
   isCteClause,
+  isDeleteClause,
   isFilterGroup,
   isInsertClause,
   isJoinQueryNode,
@@ -43,6 +46,7 @@ import type { SQLNodeBuilder } from "@telefrek/query/sql/builder/index"
 import { DefaultSQLNodeBuilder } from "@telefrek/query/sql/builder/internal"
 import {
   CteNodeManager,
+  DeleteNodeManager,
   InsertNodeManager,
   JoinNodeManager,
   SelectNodeManager,
@@ -54,9 +58,8 @@ import type {
   RelationalQueryBuilder,
   SQLDataStore,
 } from "@telefrek/query/sql/index"
-import { getDebugInfo } from "../../core/index"
 
-export function createPostgresQueryContext<
+export function createPostgresQueryBuilder<
   Database extends SQLDataStore,
 >(): SQLNodeBuilder<Database, QueryType.SIMPLE> {
   return new DefaultSQLNodeBuilder<Database, QueryType.SIMPLE>(
@@ -82,6 +85,17 @@ type PostgresQuery = {
   context: PostgresContext
 }
 
+export function isPostgresQuery(query: unknown): query is PostgresQuery {
+  return (
+    typeof query === "object" &&
+    query !== null &&
+    "context" in query &&
+    typeof query.context === "object" &&
+    query.context !== null &&
+    isPostgresContext(query.context)
+  )
+}
+
 type SimplePostgresQuery<R extends RowType> = PostgresQuery & SimpleQuery<R>
 
 type ParametizedPostgresQuery<
@@ -99,17 +113,6 @@ function isPostgresContext(context: object): context is PostgresContext {
     "materializer" in context &&
     typeof context.materializer === "string" &&
     (context.materializer === "static" || context.materializer === "dynamic")
-  )
-}
-
-export function isPostgresQuery(query: unknown): query is PostgresQuery {
-  return (
-    typeof query === "object" &&
-    query !== null &&
-    "context" in query &&
-    typeof query.context === "object" &&
-    query.context !== null &&
-    isPostgresContext(query.context)
   )
 }
 
@@ -283,6 +286,8 @@ function translateNode(node: SQLQueryNode<SQLNodeType>): PostgresContext {
         context.queryString = translateJoinQuery(node, context)
       } else if (isUpdateClause(node)) {
         context.queryString = translateUpdate(node, context)
+      } else if (isDeleteClause(node)) {
+        context.queryString = translateDelete(node, context)
       } else {
         throw new QueryError("Unsupported type!")
       }
@@ -307,15 +312,14 @@ function extractProjections(root: SQLQueryNode<SQLNodeType>): ProjectionInfo {
 
   let current: SQLQueryNode<SQLNodeType> | undefined = root
   while (current) {
-    // Terminal cases
-    if (isSelectClause(current) || isJoinQueryNode(current)) {
-      info.queryNode = current
-      return info
-    }
-
     if (isCteClause(current)) {
       info.projections.push(current)
-      current = new CteNodeManager(current).child
+      current = new CteNodeManager(current).children?.at(0)
+    } else if (isBranchNode(current)) {
+      info.queryNode = current
+      break
+    } else {
+      break
     }
   }
 
@@ -328,7 +332,18 @@ function translateUpdate(
 ): string {
   const manager = new UpdateNodeManager(update)
 
-  return `UPDATE ${manager.tableName} SET ${manager.updates.map((s) => translateSetColumns(s, context)).join(",")}${manager.where ? ` WHERE ${translateFilterGroup(manager.where.filter, context)}` : ""}
+  return `UPDATE ${manager.tableName} SET ${manager.updates.map((s) => translateSetColumns(s, context)).join(",")}
+        ${manager.where ? ` WHERE ${translateFilterGroup(manager.where.filter, context)}` : ""}
+        ${manager.returning ? ` RETURNING ${manager.returning === "*" ? "*" : manager.returning.join(",")}` : ""}`
+}
+
+function translateDelete(
+  clause: DeleteClause,
+  context: PostgresStaticContext,
+): string {
+  const manager = new DeleteNodeManager(clause)
+
+  return `DELETE FROM ${manager.tableName}${manager.where ? ` WHERE ${translateFilterGroup(manager.where.filter, context)}` : ""}
         ${manager.returning ? ` RETURNING ${manager.returning === "*" ? "*" : manager.returning.join(",")}` : ""}`
 }
 
@@ -432,7 +447,6 @@ function translateFilterGroup(
     }`
   }
 
-  console.log(getDebugInfo(filter))
   throw new QueryError("Unsupported query filter type")
 }
 

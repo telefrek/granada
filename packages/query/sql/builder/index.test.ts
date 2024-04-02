@@ -1,4 +1,12 @@
-import { QueryType } from "../../index"
+import {
+  ExecutionMode,
+  QueryType,
+  type BoundQuery,
+  type QueryExecutor,
+  type QueryParameters,
+  type RowType,
+  type SimpleQuery,
+} from "../../index"
 import {
   InMemoryQueryBuilder,
   InMemoryQueryExecutor,
@@ -13,7 +21,25 @@ describe("Relational query builder should support basic select functionality", (
     customers: [],
   }
 
-  const executor = new InMemoryQueryExecutor<TestDatabaseType>(STORE)
+  const EX = new InMemoryQueryExecutor<TestDatabaseType>(STORE)
+
+  async function runQuery<T extends RowType>(
+    query: SimpleQuery<T> | BoundQuery<T, QueryParameters>,
+    executor: QueryExecutor = EX,
+  ): Promise<T[]> {
+    const result = await executor?.run(query)
+
+    if (result.mode === ExecutionMode.Normal) {
+      return result.rows
+    }
+
+    const rows: T[] = []
+    for await (const r of result.stream) {
+      rows.push(r)
+    }
+
+    return rows
+  }
 
   // Ensure that we reset the local store to the same state for all tests
   beforeEach(() => {
@@ -65,20 +91,18 @@ describe("Relational query builder should support basic select functionality", (
 
   it("should support a simple select * style query", async () => {
     // This should get the full row back
-    const result = await executor.run(
+    const result = await runQuery(
       useDataStore<TestDatabaseType>(InMemoryQueryBuilder)
         .select("orders")
         .columns("*")
         .build("testQuery"),
     )
     expect(result).not.toBeUndefined()
-    if (Array.isArray(result.rows)) {
-      expect(result.rows.length).toBe(STORE.orders.length)
-    }
+    expect(result.length).toBe(STORE.orders.length)
   })
 
   it("should allow filtering rows via a simple where clause", async () => {
-    let result = await executor.run(
+    let result = await runQuery(
       useDataStore<TestDatabaseType>(InMemoryQueryBuilder)
         .select("orders")
         .columns("*")
@@ -86,11 +110,9 @@ describe("Relational query builder should support basic select functionality", (
         .build("testQuery"),
     )
 
-    if (Array.isArray(result.rows)) {
-      expect(result.rows.length).toBe(1)
-    }
+    expect(result.length).toBe(1)
 
-    result = await executor.run(
+    result = await runQuery(
       useDataStore<TestDatabaseType>(InMemoryQueryBuilder)
         .select("orders")
         .columns("*")
@@ -98,14 +120,12 @@ describe("Relational query builder should support basic select functionality", (
         .build("testQuery"),
     )
 
-    if (Array.isArray(result.rows)) {
-      expect(result.rows.length).toBe(2)
-    }
+    expect(result.length).toBe(2)
   })
 
   it("should allow filtering via containment where clauses", async () => {
     // This should get the projected row with only 2 columns back
-    let result = await executor.run(
+    let result = await runQuery(
       useDataStore<TestDatabaseType>(InMemoryQueryBuilder)
         .select("orders")
         .columns("*")
@@ -113,11 +133,9 @@ describe("Relational query builder should support basic select functionality", (
         .build("testQuery"),
     )
 
-    if (Array.isArray(result.rows)) {
-      expect(result.rows.length).toBe(1)
-    }
+    expect(result.length).toBe(1)
 
-    result = await executor.run(
+    result = await runQuery(
       useDataStore<TestDatabaseType>(InMemoryQueryBuilder)
         .select("orders")
         .where((clause) => clause.containsItems("categories", Category.TEST))
@@ -125,11 +143,9 @@ describe("Relational query builder should support basic select functionality", (
         .build("testQuery"),
     )
 
-    if (Array.isArray(result.rows)) {
-      expect(result.rows.length).toBe(1)
-    }
+    expect(result.length).toBe(1)
 
-    result = await executor.run(
+    result = await runQuery(
       useDataStore<TestDatabaseType>(InMemoryQueryBuilder)
         .select("orders")
         .columns("*")
@@ -139,23 +155,19 @@ describe("Relational query builder should support basic select functionality", (
         .build("testQuery"),
     )
 
-    if (Array.isArray(result.rows)) {
-      expect(result.rows.length).toBe(2)
-    }
+    expect(result.length).toBe(2)
   })
 
   it("should allow for projections of rows via a simple select clause", async () => {
     // This should get the projected row with only 2 columns back
-    const result = await executor.run(
+    const result = await runQuery(
       useDataStore<TestDatabaseType>(InMemoryQueryBuilder)
         .select("orders")
         .columns("name", "createdAt")
         .build("testQuery"),
     )
-    expect(result).not.toBeUndefined()
-    if (Array.isArray(result.rows)) {
-      expect(result.rows.length).toBe(STORE.orders.length)
-    }
+
+    expect(result.length).toBe(STORE.orders.length)
   })
 
   it("should allow for projections of rows via a simple select clause in addition to row filtering via where clause", async () => {
@@ -174,17 +186,15 @@ describe("Relational query builder should support basic select functionality", (
 
     // This should get the projected row with only 2 columns back
     for (const query of [query1, query2]) {
-      const result = await executor.run(query)
+      const result = await runQuery(query)
       expect(result).not.toBeUndefined()
-      if (Array.isArray(result.rows)) {
-        expect(result.rows.length).toBe(1)
-      }
+      expect(result.length).toBe(1)
     }
   })
 
   it("should allow complex grouped where clauses", async () => {
     // This should get the projected row with only 1 columns back
-    const result = await executor.run(
+    const result = await runQuery(
       useDataStore<TestDatabaseType>(InMemoryQueryBuilder)
         .select("orders")
         .columns("name")
@@ -196,16 +206,14 @@ describe("Relational query builder should support basic select functionality", (
         )
         .build("testQuery"),
     )
-    expect(result).not.toBeUndefined()
-    if (Array.isArray(result.rows)) {
-      expect(result.rows.length).toBe(1)
-      expect(result.rows[0].name).toBe("record3")
-    }
+
+    expect(result.length).toBe(1)
+    expect(result[0].name).toBe("record3")
   })
 
   it("should allow columns to be aliased", async () => {
     // This should get the projected row with only 2 columns back
-    const result = await executor.run(
+    const result = await runQuery(
       useDataStore<TestDatabaseType>(InMemoryQueryBuilder)
         .select("orders")
         .columns("name", "createdAt")
@@ -214,36 +222,30 @@ describe("Relational query builder should support basic select functionality", (
         .build("testQuery"),
     )
 
-    if (Array.isArray(result.rows)) {
-      expect(result.rows.length).toBe(STORE.orders.length)
+    expect(result.length).toBe(STORE.orders.length)
 
-      // Ensure aliasing works in intellisense and value is not mangled
-      expect(result.rows[0].foo).toBe(STORE.orders[0].name)
-      expect(result.rows[0].date).toBe(STORE.orders[0].createdAt)
-    }
+    // Ensure aliasing works in intellisense and value is not mangled
+    expect(result[0].foo).toBe(STORE.orders[0].name)
+    expect(result[0].date).toBe(STORE.orders[0].createdAt)
   })
 
   it("should allow tables to be aliased", async () => {
     // Note this more more useful for joins but need to verify this weird
     // signature still works...
-    const result = await executor.run(
+    const result = await runQuery(
       useDataStore<TestDatabaseType>(InMemoryQueryBuilder)
         .withTableAlias("orders", "newOrders")
         .select("newOrders")
-        .columns("name", "createdAt")
+        .columns("*")
         .build("testQuery"),
     )
 
     // This should get the projected row with only 2 columns back
-    expect(result).not.toBeUndefined()
-    if (Array.isArray(result.rows)) {
-      expect(result.rows.length).toBe(STORE.orders.length)
-      expect(Object.keys(result.rows[0]).length).toEqual(2)
-    }
+    expect(result.length).toBe(STORE.orders.length)
   })
 
   it("should allow cte clauses", async () => {
-    const result = await executor.run(
+    const result = await runQuery(
       useDataStore<TestDatabaseType>(InMemoryQueryBuilder)
         .withCte("foo", (builder) =>
           builder
@@ -259,14 +261,12 @@ describe("Relational query builder should support basic select functionality", (
         .build("testQuery"),
     )
 
-    if (Array.isArray(result.rows)) {
-      expect(result.rows.length).toBe(1)
-      expect(result.rows[0].name).toBe(STORE.orders[2].name)
-    }
+    expect(result.length).toBe(1)
+    expect(result[0].name).toBe(STORE.orders[2].name)
   })
 
   it("should allow multiple cte clauses", async () => {
-    const result = await executor.run(
+    const result = await runQuery(
       useDataStore<TestDatabaseType>(InMemoryQueryBuilder)
         .withCte("foo", (builder) =>
           builder
@@ -287,16 +287,14 @@ describe("Relational query builder should support basic select functionality", (
         .build("testQuery"),
     )
 
-    if (Array.isArray(result.rows)) {
-      expect(result.rows.length).toBe(1)
-      expect(result.rows[0].name).toBe(STORE.orders[2].name)
-    }
+    expect(result.length).toBe(1)
+    expect(result[0].name).toBe(STORE.orders[2].name)
   })
 
   it("should allow basic inner joins", async () => {
     const store = useDataStore<TestDatabaseType>(InMemoryQueryBuilder)
 
-    const result = await executor.run(
+    const result = await runQuery(
       store
         .select("orders")
         .columns("id")
@@ -313,18 +311,16 @@ describe("Relational query builder should support basic select functionality", (
         .build("testQuery"),
     )
 
-    if (Array.isArray(result.rows)) {
-      expect(result.rows.length).toBe(1)
-      expect(result.rows[0].order_id).toBe(3) // order 3
-      expect(result.rows[0].firstName).toBe("user") // user 2
-      expect(result.rows[0].lastName).toBe("two")
-    }
+    expect(result.length).toBe(1)
+    expect(result[0].order_id).toBe(3) // order 3
+    expect(result[0].firstName).toBe("user") // user 2
+    expect(result[0].lastName).toBe("two")
   })
 
   it("should allow a join with a source that has no values", async () => {
     const store = useDataStore<TestDatabaseType>(InMemoryQueryBuilder)
 
-    const result = await executor.run(
+    const result = await runQuery(
       store
         .select("orders")
         .columns("id")
@@ -338,14 +334,12 @@ describe("Relational query builder should support basic select functionality", (
     )
 
     // Should only get orders from customer id 2
-    if (Array.isArray(result.rows)) {
-      expect(result.rows.length).toBe(1)
-      expect(result.rows[0].id).toBe(3)
-    }
+    expect(result.length).toBe(1)
+    expect(result[0].id).toBe(3)
   })
 
   it("should allow multiple joins", async () => {
-    const result = await executor.run(
+    const result = await runQuery(
       useDataStore<TestDatabaseType>(InMemoryQueryBuilder)
         .withTableAlias("orders", "orders2")
         .select("orders")
@@ -367,17 +361,15 @@ describe("Relational query builder should support basic select functionality", (
         .build("testQuery"),
     )
 
-    if (Array.isArray(result.rows)) {
-      expect(result.rows.length).toBe(1)
-      expect(result.rows[0].firstName).toBe("user")
-      expect(result.rows[0].lastName).toBe("one")
-      expect(result.rows[0].customerId).toBe(1)
-      expect(result.rows[0].id).toBe(2)
-    }
+    expect(result.length).toBe(1)
+    expect(result[0].firstName).toBe("user")
+    expect(result[0].lastName).toBe("one")
+    expect(result[0].customerId).toBe(1)
+    expect(result[0].id).toBe(2)
   })
 
   it("should allow a join inside of a cte", async () => {
-    const result = await executor.run(
+    const result = await runQuery(
       useDataStore<TestDatabaseType>(InMemoryQueryBuilder)
         .withCte("customerOrders", (builder) =>
           builder
@@ -404,18 +396,16 @@ describe("Relational query builder should support basic select functionality", (
         .build("testQuery"),
     )
 
-    if (Array.isArray(result.rows)) {
-      const customer = STORE.customers[0]
-      expect(result.rows.length).toBe(2)
-      expect(result.rows[0].orderId).toBe(1) // order 2
-      expect(result.rows[0].firstName).toBe(customer.firstName) // user 1
-      expect(result.rows[0].lastName).toBe(customer.lastName)
-      expect(result.rows[0].createdAt).toBe(customer.createdAt)
-    }
+    const customer = STORE.customers[0]
+    expect(result.length).toBe(2)
+    expect(result[0].orderId).toBe(1) // order 2
+    expect(result[0].firstName).toBe(customer.firstName) // user 1
+    expect(result[0].lastName).toBe(customer.lastName)
+    expect(result[0].createdAt).toBe(customer.createdAt)
   })
 
   it("should allow a join utilizing a cte", async () => {
-    const result = await executor.run(
+    const result = await runQuery(
       useDataStore<TestDatabaseType>(InMemoryQueryBuilder)
         .withCte("customerOrders", (builder) =>
           builder
@@ -434,16 +424,13 @@ describe("Relational query builder should support basic select functionality", (
         .build("testQuery"),
     )
 
-    expect(Array.isArray(result.rows)).toBeTruthy()
-    if (Array.isArray(result.rows)) {
-      expect(result.rows.length).toBe(3)
+    expect(result.length).toBe(3)
 
-      expect(result.rows[0].orderId).toBe(1)
-      expect(result.rows[0].lastName).toBe("one")
+    expect(result[0].orderId).toBe(1)
+    expect(result[0].lastName).toBe("one")
 
-      expect(result.rows[2].orderId).toBe(3)
-      expect(result.rows[2].lastName).toBe("two")
-    }
+    expect(result[2].orderId).toBe(3)
+    expect(result[2].lastName).toBe("two")
   })
 })
 
@@ -488,7 +475,7 @@ describe("Relational query builder should support basic select functionality", (
     const results = await executor.run(bound)
     expect(results).not.toBeUndefined()
 
-    const returned = Array.isArray(results.rows) ? results.rows : []
+    const returned = results.mode === ExecutionMode.Normal ? results.rows : []
     expect(returned.length).toBe(1)
     expect(returned[0].categories.length).toBe(1)
     expect(returned[0].name).toBe("order1")
@@ -502,8 +489,8 @@ describe("Relational query builder should support basic select functionality", (
         .columns("*")
         .build("select"),
     )
-    expect(Array.isArray(selectRes.rows)).toBeTruthy()
-    const rows = Array.isArray(selectRes.rows) ? selectRes.rows : []
+
+    const rows = selectRes.mode === ExecutionMode.Normal ? selectRes.rows : []
     expect(rows.length).toBe(1)
     expect(rows[0].id).toEqual(1)
   })

@@ -23,6 +23,7 @@ import {
   SQLNodeType,
   type ColumnAliasClause,
   type CteClause,
+  type DeleteClause,
   type InsertClause,
   type JoinClauseQueryNode,
   type ReturningClause,
@@ -52,6 +53,7 @@ import type {
   STAR,
 } from "../index"
 import {
+  type DeleteBuilder,
   type InsertBuilder,
   type JoinNodeBuilder,
   type ModifiedStore,
@@ -117,6 +119,20 @@ export class DefaultSQLNodeBuilder<
     this.queryBuilder = queryBuilder
     this.#context = context
     this.#tableAlias = tableAlias
+  }
+
+  delete<T extends keyof D["tables"]>(
+    tableName: T,
+  ): DeleteBuilder<D, T, never, P, Q> {
+    return new InternalDeleteBuilder(
+      tableName,
+      new DefaultSQLNodeBuilder(
+        this.queryType,
+        this.queryBuilder,
+        this.#context,
+        this.tableAlias,
+      ),
+    )
   }
 
   update<T extends keyof D["tables"]>(
@@ -242,6 +258,121 @@ export class DefaultSQLNodeBuilder<
       undefined,
       undefined,
       this.context,
+    )
+  }
+}
+
+class InternalDeleteBuilder<
+  D extends SQLDataStore,
+  T extends keyof D["tables"],
+  R extends SQLDataTable,
+  P extends SQLDataTable,
+  Q extends BuildableQueryTypes,
+> implements DeleteBuilder<D, T, R, P, Q>
+{
+  tableName: T
+  returningColumns?: string[] | STAR
+  builder: SQLNodeBuilderContext<D, Q, R>
+  whereClause?: WhereClause
+
+  constructor(
+    tableName: T,
+    builder: SQLNodeBuilderContext<D, Q, R>,
+    returningColumns?: string[] | STAR,
+    whereClause?: WhereClause,
+  ) {
+    this.tableName = tableName
+    this.builder = builder
+    this.returningColumns = returningColumns
+    this.whereClause = whereClause
+  }
+
+  returning(columns: "*"): DeleteBuilder<D, T, D["tables"][T], P, Q>
+  returning<C extends keyof D["tables"][T]>(
+    ...columns: C[]
+  ): DeleteBuilder<D, T, Pick<D["tables"][T], C>, P, Q>
+  returning<C extends keyof D["tables"][T]>(
+    columns?: C | STAR,
+    ...rest: C[]
+  ):
+    | DeleteBuilder<D, T, D["tables"][T], P, Q>
+    | DeleteBuilder<D, T, Pick<D["tables"][T], C>, P, Q> {
+    if (columns === "*") {
+      return new InternalDeleteBuilder<D, T, D["tables"][T], P, Q>(
+        this.tableName,
+        this.builder,
+        columns,
+        this.whereClause,
+      )
+    }
+
+    return new InternalDeleteBuilder<D, T, Pick<D["tables"][T], C>, P, Q>(
+      this.tableName,
+      this.builder,
+      rest
+        ? [columns as string].concat(rest.map((r: C) => r as string))
+        : columns
+          ? [columns as string]
+          : undefined,
+      this.whereClause,
+    )
+  }
+
+  where(
+    clause: (
+      builder: WhereClauseBuilder<D["tables"][T], Q, P>,
+    ) => WhereClauseBuilder<D["tables"][T], Q, P>,
+  ): Omit<DeleteBuilder<D, T, R, P, Q>, "where"> {
+    const filter = clause(
+      new InternalWhereClauseBuilder<D["tables"][T], Q, P>(
+        this.builder.queryType,
+      ),
+    ).current
+
+    return new InternalDeleteBuilder(
+      this.tableName,
+      this.builder,
+      this.returningColumns,
+      filter
+        ? {
+            filter,
+            nodeType: SQLNodeType.WHERE,
+          }
+        : undefined,
+    )
+  }
+
+  asNode(): SQLQueryNode<SQLNodeType> {
+    const d: DeleteClause = {
+      nodeType: SQLNodeType.DELETE,
+      tableName: this.tableName as string,
+    }
+
+    if (this.returningColumns) {
+      const returning: ReturningClause = {
+        nodeType: SQLNodeType.RETURNING,
+        columns: this.returningColumns,
+      }
+
+      makeChild(d, returning)
+    }
+
+    if (this.whereClause) {
+      makeChild(d, this.whereClause)
+    }
+
+    return d
+  }
+
+  build(
+    name: string,
+    mode: ExecutionMode = ExecutionMode.Normal,
+  ): [P] extends [never] ? SimpleQuery<R> : ParameterizedQuery<R, P> {
+    return this.builder.queryBuilder.build(
+      this.asNode(),
+      this.builder.queryType,
+      name,
+      mode,
     )
   }
 }
@@ -393,7 +524,7 @@ class InternalUpdateBuilder<
   ): [P] extends [never] ? SimpleQuery<R> : ParameterizedQuery<R, P> {
     return this.builder.queryBuilder.build(
       this.asNode(),
-      QueryType.PARAMETERIZED,
+      this.builder.queryType,
       name,
       mode,
     )
@@ -765,7 +896,7 @@ class InternalTableBuilder<
 
   build(
     name: string,
-    mode: ExecutionMode,
+    mode: ExecutionMode = ExecutionMode.Normal,
   ): [P] extends [never] ? SimpleQuery<R> : ParameterizedQuery<R, P> {
     return this.builder.queryBuilder.build(
       this.asNode(),

@@ -1,6 +1,7 @@
 import { SchemaBuilder } from "@telefrek/query/sql/schema/builder"
 import type { SQLDatabaseSchema } from "@telefrek/query/sql/schema/index"
-import { SQLColumnType } from "@telefrek/query/sql/types"
+import { SQLColumnTypes } from "@telefrek/query/sql/testUtils"
+import { SQLColumnType, type ColumnDefinition } from "@telefrek/query/sql/types"
 import pg from "pg"
 
 /**
@@ -12,36 +13,24 @@ export const Category = {
   PURCHASE: "purchase",
 } as const
 
+export class PostgresColumnTypes {
+  static bigserial = (): ColumnDefinition<SQLColumnType.BIGINT> => {
+    return SQLColumnTypes.incremental(SQLColumnType.BIGINT, true)
+  }
+}
+
 const Order = {
-  id: {
-    type: SQLColumnType.BIGINT,
-  },
-  name: {
-    type: SQLColumnType.TEXT,
-  },
-  customerId: {
-    type: SQLColumnType.BIGINT,
-  },
-  createdAt: {
-    type: SQLColumnType.TIMESTAMP,
-    nullable: true,
-  },
-  updatedAt: {
-    type: SQLColumnType.TIMESTAMP,
-  },
-  amount: {
-    type: SQLColumnType.DECIMAL,
-  },
-  categories: {
-    type: Category,
-    isArray: true,
-  },
+  id: PostgresColumnTypes.bigserial(),
+  name: SQLColumnTypes.base(SQLColumnType.TEXT),
+  customerId: SQLColumnTypes.base(SQLColumnType.BIGINT),
+  createdAt: SQLColumnTypes.base(SQLColumnType.TIMESTAMP),
+  updatedAt: SQLColumnTypes.base(SQLColumnType.TIMESTAMP),
+  amount: SQLColumnTypes.base(SQLColumnType.DECIMAL),
+  categories: SQLColumnTypes.arrayOf(SQLColumnTypes.base(Category)),
 } as const
 
 const Customer = {
-  id: {
-    type: SQLColumnType.BIGINT,
-  },
+  id: PostgresColumnTypes.bigserial(),
   firstName: {
     type: SQLColumnType.TEXT,
   },

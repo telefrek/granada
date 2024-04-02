@@ -2,54 +2,74 @@
  * Test utilities for verifying the SQL packages
  */
 
+import { ExecutionMode, type QueryResult, type RowType } from "../index"
 import { SchemaBuilder } from "./schema/builder"
 import type { SQLDatabaseSchema } from "./schema/index"
-import { SQLColumnType } from "./types"
+import {
+  SQLColumnType,
+  type BaseColumnDefinition,
+  type ColumnDefinition,
+  type IncrementalColumnDefinition,
+  type IncrementalSQLTypes,
+  type ValidSQLTypes,
+  type VariableColumnDefinition,
+  type VariableSQLTypes,
+} from "./types"
 
 export const Category = {
   TEST: "test",
   PURCHASE: "purchase",
 } as const
 
+export class SQLColumnTypes {
+  static base = <T extends ValidSQLTypes>(type: T): BaseColumnDefinition<T> => {
+    return {
+      type,
+    }
+  }
+
+  static variable = <T extends VariableSQLTypes>(
+    type: T,
+    maxSize?: number,
+  ): VariableColumnDefinition<T> => {
+    return {
+      type,
+      size: maxSize ?? -1,
+    }
+  }
+
+  static incremental = <T extends IncrementalSQLTypes>(
+    type: T,
+    autoIncrement?: boolean,
+  ): IncrementalColumnDefinition<T> => {
+    return {
+      type,
+      autoIncrement: autoIncrement ?? true,
+    }
+  }
+
+  static arrayOf = <T extends ValidSQLTypes>(
+    definition: ColumnDefinition<T>,
+  ): ColumnDefinition<T>[] => {
+    return [definition]
+  }
+}
+
 const Order = {
-  id: {
-    type: SQLColumnType.BIGINT,
-  },
-  name: {
-    type: SQLColumnType.TEXT,
-  },
-  customerId: {
-    type: SQLColumnType.BIGINT,
-  },
-  createdAt: {
-    type: SQLColumnType.TIMESTAMP,
-    nullable: true,
-  },
-  updatedAt: {
-    type: SQLColumnType.TIMESTAMP,
-  },
-  amount: {
-    type: SQLColumnType.DECIMAL,
-  },
-  categories: {
-    type: Category,
-    isArray: true,
-  },
+  id: SQLColumnTypes.base(SQLColumnType.BIGINT),
+  name: SQLColumnTypes.base(SQLColumnType.TEXT),
+  customerId: SQLColumnTypes.base(SQLColumnType.BIGINT),
+  createdAt: SQLColumnTypes.base(SQLColumnType.TIMESTAMP),
+  updatedAt: SQLColumnTypes.base(SQLColumnType.TIMESTAMP),
+  amount: SQLColumnTypes.base(SQLColumnType.DECIMAL),
+  categories: SQLColumnTypes.arrayOf(SQLColumnTypes.base(Category)),
 } as const
 
 const Customer = {
-  id: {
-    type: SQLColumnType.BIGINT,
-  },
-  firstName: {
-    type: SQLColumnType.TEXT,
-  },
-  lastName: {
-    type: SQLColumnType.TEXT,
-  },
-  createdAt: {
-    type: SQLColumnType.TIMESTAMP,
-  },
+  id: SQLColumnTypes.base(SQLColumnType.BIGINT),
+  firstName: SQLColumnTypes.base(SQLColumnType.TEXT),
+  lastName: SQLColumnTypes.base(SQLColumnType.TEXT),
+  createdAt: SQLColumnTypes.base(SQLColumnType.TIMESTAMP),
 } as const
 
 export const TestDatabase = new SchemaBuilder()
@@ -59,3 +79,7 @@ export const TestDatabase = new SchemaBuilder()
   .build()
 
 export type TestDatabaseType = SQLDatabaseSchema<typeof TestDatabase>
+
+export function getRows<T extends RowType>(result: QueryResult<T>): T[] {
+  return result.mode === ExecutionMode.Normal ? result.rows : []
+}

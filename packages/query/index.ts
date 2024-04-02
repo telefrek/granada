@@ -142,25 +142,20 @@ export interface QueryExecutor {
    */
   run<T extends RowType, P extends QueryParameters>(
     query: SimpleQuery<T> | BoundQuery<T, P>,
-  ): Promise<QueryResult<T, P> | StreamingQueryResult<T, P>>
+  ): Promise<QueryResult<T>>
 }
 
 /**
  * Represents the result of executing a {@link QueryBase}
  */
-export interface QueryResult<T extends RowType, P extends QueryParameters> {
-  query: SimpleQuery<T> | BoundQuery<T, P>
-  rows: T[]
-  duration: Duration
-}
-
-/**
- * Represents the result of executing a {@link QueryBase} where values are provided
- * incrmentally
- */
-export interface StreamingQueryResult<
-  T extends RowType,
-  P extends QueryParameters,
-> extends Omit<QueryResult<T, P>, "rows"> {
-  rows: AsyncIterable<T>
-}
+export type QueryResult<T extends RowType> =
+  | {
+      mode: ExecutionMode.Normal
+      rows: T[]
+      duration: Duration
+    }
+  | {
+      mode: ExecutionMode.Streaming
+      stream: AsyncIterable<T>
+      duration: Duration
+    }

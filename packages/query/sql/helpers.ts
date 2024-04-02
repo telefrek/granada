@@ -6,6 +6,7 @@ import { getDebugInfo } from "@telefrek/core"
 import {
   SQLNodeType,
   type CteClause,
+  type DeleteClause,
   type InsertClause,
   type JoinClauseQueryNode,
   type JoinQueryNode,
@@ -17,8 +18,8 @@ import {
   type WhereClause,
 } from "./ast"
 import {
+  isBranchNode,
   isColumnAliasClause,
-  isGenerator,
   isJoinClauseNode,
   isNamedSQLQueryNode,
   isReturningClause,
@@ -42,6 +43,10 @@ export function getTreeRoot(node: RNode): RNode {
   }
 
   return current
+}
+
+export function getChildBranches(node: RNode): RNode[] | undefined {
+  return node.children?.filter(isSQLQueryNode).filter(isBranchNode)
 }
 
 /**
@@ -92,8 +97,8 @@ abstract class RelationalASTNodeManager<NodeType extends RNode> {
   /**
    * Get the {@link SQLQueryNode} that is a child of this query
    */
-  get child(): RNode | undefined {
-    return this.node.children?.filter(isSQLQueryNode).filter(isGenerator).at(0)
+  get children(): RNode[] | undefined {
+    return getChildBranches(this.node)
   }
 
   public toString = (): string => getDebugInfo(this.node)
@@ -138,6 +143,19 @@ export class UpdateNodeManager extends TableNodeManager<UpdateClause> {
   }
 }
 
+export class DeleteNodeManager extends TableNodeManager<DeleteClause> {
+  get returning(): string[] | STAR | undefined {
+    return this.node.children?.filter(isReturningClause).at(0)?.columns
+  }
+
+  /**
+   * Get the {@link WhereClause} if present
+   */
+  get where(): WhereClause | undefined {
+    return this.node.children?.filter(isWhereClause).at(0)
+  }
+}
+
 /**
  * Helper class for manipulating {@link TableQueryNode}
  */
@@ -165,11 +183,14 @@ export class SelectNodeManager extends TableNodeManager<SelectClause> {
 }
 
 export class CteNodeManager extends RelationalASTNodeManager<CteClause> {
-  override get child(): RNode | undefined {
+  get source(): RNode {
+    return this.node.source
+  }
+
+  override get children(): RNode[] | undefined {
     return this.node.children
       ?.filter(isSQLQueryNode)
-      .filter((c) => c !== this.node.source)
-      .at(0)
+      .filter((c) => c !== this.source)
   }
 }
 

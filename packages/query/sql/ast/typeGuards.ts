@@ -130,22 +130,33 @@ export function isStringFilter(
   )
 }
 
+/** These node types cannot have children and are terminal */
+const TERMINAL_NODE_TYPES = [
+  SQLNodeType.ALIAS,
+  SQLNodeType.ON,
+  SQLNodeType.PARAMETER,
+  SQLNodeType.RETURNING,
+  SQLNodeType.WHERE,
+]
+
 /**
- * Type guard for {@link SQLQueryNode} that generate rows
+ * Check if a node is a leaf node
  *
- * @param node The {@link QueryNode} to check
- * @returns True if the object is a {@link SQLQueryNode} that generated rows
+ * @param node The {@link SQLQueryNode} to check for termination
+ * @returns True if the node is a leaf node that has no children
  */
-export function isGenerator(
-  node: QueryNode,
-): node is SQLQueryNode<SQLNodeType> {
-  return (
-    isSQLQueryNode(node) &&
-    (node.nodeType === SQLNodeType.SELECT ||
-      node.nodeType === SQLNodeType.JOIN ||
-      node.nodeType === SQLNodeType.CTE ||
-      node.nodeType === SQLNodeType.ALIAS)
-  )
+export function isLeafNode(node: SQLQueryNode<SQLNodeType>): boolean {
+  return TERMINAL_NODE_TYPES.indexOf(node.nodeType) >= 0
+}
+
+/**
+ * Check if a node is an expected (possible) branch node
+ *
+ * @param node The {@link SQLQueryNode} to check for possible branching status
+ * @returns True if the node is not a leaf node
+ */
+export function isBranchNode(node: SQLQueryNode<SQLNodeType>): boolean {
+  return !isLeafNode(node)
 }
 
 /**

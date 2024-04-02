@@ -1,10 +1,11 @@
+import { ExecutionMode } from "@telefrek/query"
 import type { SQLEnum } from "@telefrek/query/sql/types"
 import {
   PostgreSqlContainer,
   StartedPostgreSqlContainer,
 } from "@testcontainers/postgresql"
 import pg from "pg"
-import { createPostgresQueryContext } from "./builder"
+import { createPostgresQueryBuilder } from "./builder"
 import { PostgresQueryExecutor } from "./executor"
 import {
   Category,
@@ -49,41 +50,51 @@ describe("Postgres should be able to execute queries", () => {
   })
 
   it("Should be able to issue a simple query", async () => {
-    const insertUserQuery = createPostgresQueryContext<TestDatabaseType>()
+    const insertUserQuery = createPostgresQueryBuilder<TestDatabaseType>()
       .insert("customers")
       .returning("*")
       .build("insertCustomer")
 
-    await executor?.run(
+    // Get a value that is 1 too large...
+    const big: bigint = BigInt(Number.MAX_SAFE_INTEGER) + 1n
+
+    const insRes = await executor?.run(
       insertUserQuery.bind({
         id: 1n,
         firstName: "test",
         lastName: "customer1",
         createdAt: Date.now(),
-        updatedAt: Date.now(),
+        updatedAt: big,
       }),
     )
 
-    const updateUserQuery = createPostgresQueryContext<TestDatabaseType>()
+    const firstUpdate =
+      insRes?.mode === ExecutionMode.Normal ? insRes.rows[0].updatedAt : 0
+
+    // We have to use strings here because JEST doesn't support bigint....wtf... https://github.com/jestjs/jest/issues/11617
+    expect(firstUpdate.toString()).toBe(big.toString())
+    expect(typeof firstUpdate).toBe("bigint")
+
+    const updateUserQuery = createPostgresQueryBuilder<TestDatabaseType>()
       .withParameters<{ id: bigint | number; updatedAt: bigint | number }>()
       .update("customers")
       .set("updatedAt", "updatedAt")
       .where((builder) => builder.eq("id", "id"))
       .returning("updatedAt", "lastName")
       .build("updateCustomer")
-      .bind({ id: 1, updatedAt: 2 })
+      .bind({ id: 1, updatedAt: 9n })
 
     let updateResult = await executor?.run(updateUserQuery)
 
-    const updateRows = Array.isArray(updateResult?.rows)
-      ? updateResult.rows
-      : []
+    const updateRows =
+      updateResult?.mode === ExecutionMode.Normal ? updateResult.rows : []
     expect(updateRows.length).toBe(1)
     expect(updateRows[0].lastName).toBe("customer1")
-    expect(updateRows[0].updatedAt).toBe(2n)
+    expect(updateRows[0].updatedAt).toBe(9) // Ensure the 2n was translated to 2 on the readback...
+    expect(typeof updateRows[0].updatedAt).toBe("number")
 
     await executor?.run(
-      createPostgresQueryContext<TestDatabaseType>()
+      createPostgresQueryBuilder<TestDatabaseType>()
         .insert("orders")
         .build("insertCustomer")
         .bind({
@@ -97,7 +108,7 @@ describe("Postgres should be able to execute queries", () => {
         }),
     )
 
-    const query = createPostgresQueryContext<TestDatabaseType>()
+    const query = createPostgresQueryBuilder<TestDatabaseType>()
       .withParameters<{
         amount: number
         categories: SQLEnum<typeof Category>[]
@@ -130,15 +141,13 @@ describe("Postgres should be able to execute queries", () => {
     let result = await executor?.run(
       query.bind({ amount: 1, categories: [Category.PURCHASE] }),
     )
-    expect(result).not.toBeUndefined()
 
-    expect(Array.isArray(result?.rows))
-    let rows = Array.isArray(result?.rows) ? result.rows : []
+    let rows = result?.mode === ExecutionMode.Normal ? result.rows : []
 
     expect(rows.length).toBe(1)
 
     result = await executor?.run(
-      createPostgresQueryContext<TestDatabaseType>()
+      createPostgresQueryBuilder<TestDatabaseType>()
         .withCte("customerOrders", (builder) =>
           builder
             .select("orders")
@@ -167,8 +176,7 @@ describe("Postgres should be able to execute queries", () => {
 
     expect(result).not.toBeUndefined()
 
-    expect(Array.isArray(result?.rows))
-    rows = Array.isArray(result?.rows) ? result.rows : []
+    rows = result?.mode === ExecutionMode.Normal ? result.rows : []
 
     expect(rows.length).toBe(0)
   }, 180_000)

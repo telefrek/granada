@@ -42,25 +42,22 @@ export type SQLEnum<E extends SQLEnumType> = E[keyof E]
 
 export type ValidSQLTypes = SQLColumnType | SQLEnumType
 
-export type ColumnType<S extends SimpleColumnDefinition<ValidSQLTypes>> =
-  unknown extends S["isArray"]
-    ? SQLType<S["type"]>
-    : true extends S["isArray"]
-      ? SQLType<S["type"]>[]
-      : SQLType<S["type"]>
-
 export type SQLType<S extends ValidSQLTypes> = S extends SQLColumnType
   ? _SQLType<S>
   : S extends SQLEnumType
     ? S[keyof S]
     : never
 
+export type BaseColumnDefinition<ColumnType extends ValidSQLTypes> = {
+  type: ColumnType
+}
+
 export type ColumnDefinition<ColumnType extends ValidSQLTypes> =
   ColumnType extends IncrementalSQLTypes
     ? IncrementalColumnDefinition<ColumnType>
     : ColumnType extends VariableSQLTypes
       ? VariableColumnDefinition<ColumnType>
-      : SimpleColumnDefinition<ColumnType>
+      : BaseColumnDefinition<ColumnType>
 
 export type ParameterOrValue<
   T extends SQLDataTable,
@@ -102,29 +99,24 @@ type _SQLColumnType<T extends SQLColumnType> = [T] extends [BigIntSQLTypes]
         ? boolean
         : string
 
-type VariableSQLTypes =
+export type VariableSQLTypes =
   | SQLColumnType.VARBINARY
   | SQLColumnType.VARCHAR
   | SQLColumnType.NVARCHAR
 
-type IncrementalSQLTypes =
+export type IncrementalSQLTypes =
   | SQLColumnType.BIGINT
   | SQLColumnType.INT
   | SQLColumnType.FLOAT
   | SQLColumnType.DECIMAL
 
-type SimpleColumnDefinition<ColumnType extends ValidSQLTypes> = {
-  type: ColumnType
-  nullable?: boolean
-  isArray?: boolean
+export type IncrementalColumnDefinition<
+  ColumnType extends IncrementalSQLTypes,
+> = BaseColumnDefinition<ColumnType> & {
+  autoIncrement: boolean
 }
 
-type IncrementalColumnDefinition<ColumnType extends IncrementalSQLTypes> =
-  SimpleColumnDefinition<ColumnType> & {
-    autoIncrement?: boolean
-  }
-
-type VariableColumnDefinition<ColumnType extends VariableSQLTypes> =
-  SimpleColumnDefinition<ColumnType> & {
+export type VariableColumnDefinition<ColumnType extends VariableSQLTypes> =
+  BaseColumnDefinition<ColumnType> & {
     size: number
   }

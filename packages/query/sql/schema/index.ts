@@ -1,4 +1,9 @@
-import type { ColumnDefinition, ColumnType } from "../types"
+import type {
+  BaseColumnDefinition,
+  ColumnDefinition,
+  SQLType,
+  ValidSQLTypes,
+} from "../types"
 
 export type SQLDatabase<Tables extends DatabaseTables> = {
   tables: Tables
@@ -17,7 +22,7 @@ export interface SQLTableDefinition<Schema extends ColumnSchema> {
 
 export type ColumnSchema = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [key: string]: ColumnDefinition<any>
+  [key: string]: ColumnDefinition<any> | ColumnDefinition<any>[]
 }
 
 export interface PrimaryKey<Schema extends ColumnSchema> {
@@ -45,19 +50,14 @@ export type SQLDatabaseSchema<Database extends SQLDatabase<DatabaseTables>> = {
   }
 }
 
-type NullableKeys<S extends ColumnSchema> = {
-  [K in keyof S]: undefined extends S[K]["nullable"]
-    ? never
-    : true extends S[K]["nullable"]
-      ? K
-      : never
-}[keyof S]
-
 type TableSchema<S extends ColumnSchema> = {
-  [K in keyof S]: ColumnType<S[K]>
+  [K in keyof S]: S[K] extends (infer U)[]
+    ? U extends BaseColumnDefinition<ValidSQLTypes>
+      ? SQLType<U["type"]>[]
+      : never
+    : S[K] extends BaseColumnDefinition<ValidSQLTypes>
+      ? SQLType<S[K]["type"]>
+      : never
 }
 
-export type SQLTableSchema<S extends ColumnSchema> = TableSchema<
-  Omit<S, NullableKeys<S>>
-> &
-  Partial<TableSchema<Pick<S, NullableKeys<S>>>>
+export type SQLTableSchema<S extends ColumnSchema> = TableSchema<S>

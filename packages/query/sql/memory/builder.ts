@@ -2,7 +2,7 @@
  * Set of utilities to treat in memory collections as a pseudo relational data store
  */
 
-import { Duration } from "@telefrek/core/time/index"
+import { Timer } from "@telefrek/core/time/index"
 import type { RelationalQueryBuilder, SQLDataStore, SQLDataTable } from ".."
 import {
   ExecutionMode,
@@ -16,7 +16,6 @@ import {
   type QueryResult,
   type RowType,
   type SimpleQuery,
-  type StreamingQueryResult,
 } from "../.."
 import { QueryError } from "../../error"
 import { getTreeRoot } from "../../sql/helpers"
@@ -55,18 +54,38 @@ export class InMemoryQueryExecutor<DataStoreType extends SQLDataStore>
     this.store = inMemoryStore ?? createInMemoryStore()
   }
 
-  run<R extends RowType, P extends QueryParameters>(
-    query: SimpleQuery<R> | BoundQuery<R, P>,
-  ): Promise<QueryResult<R, P> | StreamingQueryResult<R, P>> {
+  run<T extends RowType, P extends QueryParameters>(
+    query: SimpleQuery<T> | BoundQuery<T, P>,
+  ): Promise<QueryResult<T>> {
     if ("source" in query && typeof query.source === "function") {
-      const res = query.source(this.store, query)
-      return Promise.resolve({
-        rows: res,
-        duration: Duration.ZERO,
-      } as QueryResult<R, P>)
+      const timer = new Timer()
+      const rows = query.source(this.store, query) as T[]
+
+      const result: QueryResult<T> =
+        query.mode === ExecutionMode.Normal
+          ? {
+              mode: query.mode,
+              duration: timer.stop(),
+              rows,
+            }
+          : {
+              mode: query.mode,
+              duration: timer.stop(),
+              stream: {
+                [Symbol.asyncIterator]() {
+                  return (async function* () {
+                    for (const r of rows) {
+                      yield r
+                    }
+                  })()
+                },
+              },
+            }
+
+      return Promise.resolve(result)
     }
 
-    throw new Error("Method not implemented.")
+    throw new QueryError("Invalid qurey type")
   }
 }
 
@@ -112,6 +131,9 @@ export class InMemoryQueryBuilder<D extends SQLDataStore>
     name: string,
     mode: ExecutionMode,
   ): [P] extends [never] ? SimpleQuery<R> : ParameterizedQuery<R, P> {
+    if (mode === undefined) {
+      throw new QueryError("missing mode!!!")
+    }
     if (isSQLQueryNode(node)) {
       const simple: SimpleInMemoryQuery<D, R> = {
         queryType: QueryType.SIMPLE,

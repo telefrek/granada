@@ -6,6 +6,7 @@ import { Timer } from "@telefrek/core/time/index"
 import { makeCaseInsensitive } from "@telefrek/core/type/utils"
 import { QueryError } from "@telefrek/query/error"
 import {
+  ExecutionMode,
   QueryType,
   type BoundQuery,
   type QueryExecutor,
@@ -13,16 +14,26 @@ import {
   type QueryResult,
   type RowType,
   type SimpleQuery,
-  type StreamingQueryResult,
 } from "@telefrek/query/index"
 import pg from "pg"
-import { getDebugInfo } from "../../core/index"
 import { isPostgresQuery } from "./builder"
 
+const SAFE_INT_REGEX = /^(-)?[0-8]?\d{1,15}$/
+
+const safeBigInt = (v: string) => {
+  return SAFE_INT_REGEX.test(v)
+    ? Number(v) // If number is less than 16 digits that start with a 9 we don't care
+    : (v.startsWith("-") ? v.substring(1) : v) > "9007199254740991"
+      ? BigInt(v)
+      : Number(v)
+}
+
 pg.types.setTypeParser(pg.types.builtins.TIMESTAMP, (v) =>
-  v ? BigInt(v) : null,
+  v ? safeBigInt(v) : null,
 )
-pg.types.setTypeParser(pg.types.builtins.INT8, (v) => (v ? BigInt(v) : null))
+pg.types.setTypeParser(pg.types.builtins.INT8, (v) =>
+  v ? safeBigInt(v) : null,
+)
 
 export class PostgresQueryExecutor implements QueryExecutor {
   #client: pg.Client
@@ -33,7 +44,7 @@ export class PostgresQueryExecutor implements QueryExecutor {
 
   async run<T extends RowType, P extends QueryParameters>(
     query: SimpleQuery<T> | BoundQuery<T, P>,
-  ): Promise<QueryResult<T, P> | StreamingQueryResult<T, P>> {
+  ): Promise<QueryResult<T>> {
     if (isPostgresQuery(query)) {
       const timer = new Timer()
       timer.start()
@@ -64,9 +75,8 @@ export class PostgresQueryExecutor implements QueryExecutor {
         // Postgres doesn't care about casing in most places, so we need to make our results agnostic as well...
         if (results.rows) {
           return {
-            query,
+            mode: ExecutionMode.Normal,
             duration: timer.elapsed(),
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
             rows: results.rows.map((r) => makeCaseInsensitive(r as T)),
           }
         }
@@ -76,8 +86,6 @@ export class PostgresQueryExecutor implements QueryExecutor {
 
       throw new QueryError("failed to execute query")
     }
-
-    console.log(getDebugInfo(query))
 
     throw new QueryError("Unsupported query type")
   }

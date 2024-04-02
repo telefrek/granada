@@ -107,6 +107,10 @@ export interface SQLNodeBuilder<
   update<T extends keyof D["tables"]>(
     tableName: T,
   ): UpdateBuilder<D, T, never, P, Q, never>
+
+  delete<T extends keyof D["tables"]>(
+    tableName: T,
+  ): DeleteBuilder<D, T, never, P, Q>
 }
 
 export interface UpdateBuilder<
@@ -132,6 +136,25 @@ export interface UpdateBuilder<
       builder: WhereClauseBuilder<D["tables"][T], Q, P>,
     ) => WhereClauseBuilder<D["tables"][T], Q, P>,
   ): Omit<UpdateBuilder<D, T, R, P, Q, U>, "where">
+}
+
+export interface DeleteBuilder<
+  D extends SQLDataStore,
+  T extends keyof D["tables"],
+  R extends SQLDataTable,
+  P extends SQLDataTable,
+  Q extends BuildableQueryTypes,
+> extends SQLNodeProcessor<D, R, P> {
+  returning(columns: STAR): DeleteBuilder<D, T, D["tables"][T], P, Q>
+  returning<C extends keyof D["tables"][T]>(
+    ...columns: C[]
+  ): DeleteBuilder<D, T, Pick<D["tables"][T], C>, P, Q>
+
+  where(
+    clause: (
+      builder: WhereClauseBuilder<D["tables"][T], Q, P>,
+    ) => WhereClauseBuilder<D["tables"][T], Q, P>,
+  ): Omit<DeleteBuilder<D, T, R, P, Q>, "where">
 }
 
 export interface InsertBuilder<
