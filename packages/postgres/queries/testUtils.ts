@@ -26,7 +26,7 @@ const Order = {
   createdAt: SQLColumnTypes.base(SQLColumnType.TIMESTAMP),
   updatedAt: SQLColumnTypes.base(SQLColumnType.TIMESTAMP),
   amount: SQLColumnTypes.base(SQLColumnType.DECIMAL),
-  categories: SQLColumnTypes.arrayOf(SQLColumnTypes.base(Category)),
+  categories: SQLColumnTypes.arrayOf(Category),
 } as const
 
 const Customer = {

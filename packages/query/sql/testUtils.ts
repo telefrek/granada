@@ -49,9 +49,13 @@ export class SQLColumnTypes {
   }
 
   static arrayOf = <T extends ValidSQLTypes>(
-    definition: ColumnDefinition<T>,
+    definition: ColumnDefinition<T> | T,
   ): ColumnDefinition<T>[] => {
-    return [definition]
+    return [
+      typeof definition === "object"
+        ? (definition as ColumnDefinition<T>)
+        : (SQLColumnTypes.base(definition) as ColumnDefinition<T>),
+    ]
   }
 }
 
@@ -62,7 +66,7 @@ const Order = {
   createdAt: SQLColumnTypes.base(SQLColumnType.TIMESTAMP),
   updatedAt: SQLColumnTypes.base(SQLColumnType.TIMESTAMP),
   amount: SQLColumnTypes.base(SQLColumnType.DECIMAL),
-  categories: SQLColumnTypes.arrayOf(SQLColumnTypes.base(Category)),
+  categories: SQLColumnTypes.arrayOf(Category),
 } as const
 
 const Customer = {
