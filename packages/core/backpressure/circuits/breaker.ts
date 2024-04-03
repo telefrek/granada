@@ -2,8 +2,7 @@
  * Simple package for implementing a basic circuit breaker
  */
 
-import { isPromise } from "util/types"
-import type { MaybeAwaitable } from "../../index"
+import { asPromise, type MaybeAwaitable } from "../../index"
 import { Duration, Timer } from "../../time/index"
 import type { Func } from "../../type/utils"
 
@@ -32,6 +31,16 @@ export interface CircuitOpenOptions extends ErrorOptions {
  * an open state
  */
 export class CircuitOpenError extends Error {
+  static readonly CIRCUIT_OPEN_ERR: unique symbol = Symbol();
+
+  [Symbol.hasInstance](error: unknown): error is CircuitOpenError {
+    return (
+      typeof error === "object" &&
+      error !== null &&
+      CircuitOpenError.CIRCUIT_OPEN_ERR in error
+    )
+  }
+
   constructor(message?: string, options?: CircuitOpenOptions) {
     super(message, options)
   }
@@ -52,6 +61,12 @@ export interface CircuitBreakerOptions {
  * Custom type to allow evaluation of a response for the duration of time,
  * response object and/or error presence to allow flexibility in the detection
  * of degradation that may not be simply on/off
+ *
+ * @param duration The {@link Duration} of the call
+ * @param response The response from the call
+ * @param error The optional error encountered
+ *
+ * @return True if the call was a success
  */
 export type ResponseEvaluator<T> = (
   duration: Duration,
@@ -66,7 +81,7 @@ export type ResponseEvaluator<T> = (
  */
 export const errorsOnly = <T>(): ResponseEvaluator<T> => {
   return (_duration: Duration, _response?: T, error?: unknown): boolean => {
-    return error !== undefined
+    return error === undefined
   }
 }
 
@@ -79,7 +94,7 @@ export const errorsOnly = <T>(): ResponseEvaluator<T> => {
  */
 export const errorOrDuration = <T>(limitMs: number): ResponseEvaluator<T> => {
   return (duration: Duration, _response?: T, error?: unknown): boolean => {
-    return error !== undefined ? true : duration.milliseconds() <= limitMs
+    return error === undefined && duration.milliseconds() <= limitMs
   }
 }
 
@@ -116,11 +131,15 @@ export interface CircuitBreaker {
 /**
  * Creates a new default {@link CircuitBreaker} object
  *
+ * @param thisArg The argument to be used for binding `this` in calls
  * @param options The {@link CircuitBreakerOptions} to use
  * @returns A new {@link CircuitBreaker}
  */
-export function createBreaker(options?: CircuitBreakerOptions) {
-  return new DefaultCircuitBreaker(options)
+export function createBreaker(
+  thisArg: unknown,
+  options?: CircuitBreakerOptions,
+) {
+  return new DefaultCircuitBreaker(thisArg, options)
 }
 
 /**
@@ -134,12 +153,14 @@ class DefaultCircuitBreaker implements CircuitBreaker {
   #retryAfterMs: number
   #openedAt?: number
   #timer?: NodeJS.Timeout
+  #thisArg: unknown
 
-  constructor(options?: CircuitBreakerOptions) {
+  constructor(thisArg: unknown, options?: CircuitBreakerOptions) {
     this.#state = BreakerState.CLOSED
     this.#failureThreshold = options?.failureThreshold ?? 5
     this.#retryAfterMs = options?.retryAfterMs ?? 5_000
     this.#failureCount = 0
+    this.#thisArg = thisArg
   }
 
   get state(): BreakerState {
@@ -184,59 +205,35 @@ class DefaultCircuitBreaker implements CircuitBreaker {
 
     // Start a timer
     const timer = new Timer()
-    try {
-      // Invoke the function
-      const response = callable(...functionArgs)
 
-      // Check for a promise (most likely)
-      if (isPromise(response)) {
-        // Update that promise with callbacks to hook our state
-        return (response as Promise<T>).then(
-          (r: T) => {
-            // Check the response
-            if (responseCheck(timer.stop(), r)) {
-              onFailure()
-            } else {
-              onSuccess()
-            }
+    // Invoke the function
+    const response = asPromise(callable.call(this.#thisArg, ...functionArgs))
 
-            return r
-          },
-          (err: unknown) => {
-            // Check the error
-            if (responseCheck(timer.stop(), undefined, err)) {
-              onFailure()
-            } else {
-              // This looks funny but since not all errors are bad to all callers this
-              // could be successful
-              onSuccess()
-            }
-
-            throw err
-          },
-        )
-      } else {
+    // Update that promise with callbacks to hook our state
+    return (response as Promise<T>).then(
+      (r: T) => {
         // Check the response
-        if (responseCheck(timer.stop(), response as T)) {
-          onFailure()
-        } else {
+        if (responseCheck(timer.stop(), r)) {
           onSuccess()
+        } else {
+          onFailure()
         }
 
-        return response
-      }
-    } catch (err) {
-      // Check for a failure or success case
-      if (responseCheck(timer.stop(), undefined, err)) {
-        onFailure()
-      } else {
-        // This looks funny but since not all errors are bad to all callers this
-        // could be successful
-        onSuccess()
-      }
+        return r
+      },
+      (err: unknown) => {
+        // Check the error
+        if (responseCheck(timer.stop(), undefined, err)) {
+          // This looks funny but since not all errors are bad to all callers this
+          // could be successful
+          onSuccess()
+        } else {
+          onFailure()
+        }
 
-      throw err
-    }
+        throw err
+      },
+    )
   }
 
   #checkState(): void {
@@ -283,7 +280,7 @@ class DefaultCircuitBreaker implements CircuitBreaker {
     // Reset the failure count
     this.#failureCount = 0
 
-    // Set the state back to open
-    this.#state = BreakerState.OPEN
+    // Set the state back to closed
+    this.#state = BreakerState.CLOSED
   }
 }

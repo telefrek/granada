@@ -102,6 +102,10 @@ export class Duration {
     return this.#microseconds
   }
 
+  public toString(): string {
+    return `${this.seconds()}`
+  }
+
   /**
    * Create a {@link Duration} from the nanosecond measurement (from something like {@link process.hrtime.bigint()})
    *
@@ -126,4 +130,14 @@ export class Duration {
    * Helper to identify an empty or zero time elapsed duration
    */
   static ZERO: Duration = Duration.fromNano(0n)
+}
+
+export class HiResClock {
+  private static readonly INIT = process.hrtime.bigint()
+
+  public static timestamp(): string {
+    return Duration.fromNano(
+      process.hrtime.bigint() - HiResClock.INIT,
+    ).toString()
+  }
 }

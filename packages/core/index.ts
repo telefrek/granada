@@ -1,4 +1,5 @@
 import util from "util"
+import { isPromise } from "util/types"
 
 /**
  * Get the information about an object to help with debugging that leverages the
@@ -14,6 +15,19 @@ export function getDebugInfo(target: unknown, depth = 25): string {
 
 /** Simple type representing `void | PromiseLike<void>` */
 export type MaybeAwaitable<T> = T | PromiseLike<T>
+
+/**
+ * Ensure the {@link MaybeAwaitable} is a {@link Promise}
+ *
+ * @param awaitable The {@link MaybeAwaitable} to transform
+ * @returns A {@link Promise} with the results of the awaitable
+ */
+export function asPromise<T>(awaitable: MaybeAwaitable<T>): Promise<T> {
+  // Ensure this is a promise or cast it as one
+  return isPromise(awaitable)
+    ? (awaitable as Promise<T>)
+    : Promise.resolve(awaitable as T)
+}
 
 /**
  * A resolver type for {@link PromiseLike} constructors

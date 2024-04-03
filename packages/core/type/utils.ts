@@ -81,3 +81,8 @@ export type AliasedType<
  * Type the represents a typed function that takes specific parameters during invocation
  */
 export type Func<Args extends unknown[], Result> = (...args: Args) => Result
+
+/**
+ * Type to represent a method that takes some arguments and returns nothing
+ */
+export type Callback<Args extends unknown[]> = (...args: Args) => void

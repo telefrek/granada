@@ -6,6 +6,26 @@ import { MaybeAwaitable } from "../"
 import { Duration } from "../time/"
 
 /**
+ * This is a wrapper around a value that allows it to be changed and reflect
+ * correctly across execution contexts
+ */
+export class SynchronizedValue<T> {
+  #value: T
+
+  constructor(value: T) {
+    this.#value = value
+  }
+
+  get value(): T {
+    return this.#value
+  }
+
+  set value(newValue: T) {
+    this.#value = newValue
+  }
+}
+
+/**
  * Simple type definition for a monitor callback that mirrors what a {@link Promise} will provide
  */
 type MutexCallback = (value: MaybeAwaitable<boolean>) => void
@@ -111,6 +131,10 @@ type SignalCallback = (value: MaybeAwaitable<boolean>) => void
 export class Signal {
   #callbacks: SignalCallback[] = []
 
+  get waiting(): number {
+    return this.#callbacks.length
+  }
+
   /**
    * Wait for the given {@link Signal} to become available
    *
@@ -118,7 +142,7 @@ export class Signal {
    *
    * @returns A {@link Promise} value that can be used to `await` the underly resource being available
    */
-  wait(timeout?: Duration): PromiseLike<boolean> | void {
+  wait(timeout?: Duration): PromiseLike<boolean> {
     return new Promise<boolean>((resolve) => {
       // Check for timeout
       if (timeout !== undefined) {
@@ -174,6 +198,7 @@ export class Signal {
    */
   notifyAll(): void {
     // Fire the next callback when ready with a true flag to indicate success
+
     while (this.#callbacks.length > 0) {
       const resolve = this.#callbacks.shift()!
 
@@ -188,7 +213,7 @@ export class Signal {
 }
 
 /** Internal symbol for tracking monitors on objects */
-const MONITOR_SYMBOL = Symbol("_monitor_")
+const MONITOR_SYMBOL: unique symbol = Symbol()
 
 /**
  * Simple implementation of a monitor
