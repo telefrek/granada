@@ -4,16 +4,16 @@
  * around timeouts, rebuilding and circuit breakers
  */
 
+import { ValueType } from "@opentelemetry/api"
 import {
   BreakerState,
   createBreaker,
   type CircuitBreaker,
   type CircuitBreakerOptions,
 } from "../backpressure/circuits/breaker"
-import { vegasBuilder } from "../backpressure/limits/algorithms"
-import { type LimitAlgorithm } from "../backpressure/limits/index"
 import { Signal } from "../concurrency/index"
-import { asPromise, type MaybeAwaitable } from "../index"
+import { type MaybeAwaitable } from "../index"
+import { FRAMEWORK_METRICS_METER } from "../observability/metrics"
 import { Duration, Timer } from "../time/index"
 
 /**
@@ -48,11 +48,6 @@ export interface Pool<T> {
   readonly size: number
 
   /**
-   * Check to see if the pool has an item available for immediate use
-   */
-  available(): boolean
-
-  /**
    * Try to get another item from the pool immediately
    */
   get(): PoolItem<T>
@@ -74,63 +69,71 @@ export interface Pool<T> {
 }
 
 export interface PoolOptions extends CircuitBreakerOptions {
+  /** The name of the pool to be used for instrumentation */
+  name: string
   /** Default value is 1 */
   initialSize?: number
   /** Default value is 4 */
   maxSize?: number
 }
 
+const PoolMetrics = {
+  PoolWaitTime: FRAMEWORK_METRICS_METER.createHistogram("pool.wait.time", {
+    description:
+      "Measures long a consumer waits for a pool item to be available",
+    valueType: ValueType.DOUBLE,
+    unit: "s",
+  }),
+  PoolSize: FRAMEWORK_METRICS_METER.createObservableGauge("pool.size", {
+    description: "The current size of the pool",
+    valueType: ValueType.INT,
+  }),
+  PoolRetrievalFailure: FRAMEWORK_METRICS_METER.createCounter(
+    "pool.retrieval.failure",
+    {
+      description:
+        "The number of times the pool was unable to provide an item under the timeout",
+      valueType: ValueType.INT,
+    },
+  ),
+} as const
+
 /**
  * The abstract base class that implements the {@link Pool} with appropriate
  * circuit breakers and rate limiting on pool size to grow/shrink with the load
  */
 export abstract class PoolBase<T> implements Pool<T> {
-  protected currentSize: number = 0
-
   #items: T[] = []
   #signal: Signal = new Signal()
-  #algorithm: LimitAlgorithm
   #circuit: CircuitBreaker
+  #floatingLimit: number
   #size: number
   #maximum: number
+  #name: string
 
   constructor(options: PoolOptions) {
     // Set the initial sizing parameters
     this.#maximum = Math.max(options.maxSize ?? 4, 2)
 
     // Start with half the maximum allowed
-    this.#size = this.#maximum >> 1
+    this.#floatingLimit = this.#maximum >> 1
 
-    // Setup the limit algorithm and allow it to scale to max-1 (we need at
-    // least one connection to work...)
-    this.#algorithm = vegasBuilder(this.#size)
-      .withMax(this.#maximum - 1)
-      .build()
-
-    /**
-     * Calcluate the new limit based on the maximum size subtracting the new limit
-     *
-     * @param newLimit The updated limit
-     */
-    const updateLimit = (newLimit: number) => {
-      // We get the max - the limit calculated so far
-      //this.#size = this.#maximum - newLimit
-
-      console.log(`updating limit... ${newLimit}`)
-    }
-
-    this.#algorithm.on("changed", updateLimit)
+    // There are no items in the pool to start
+    this.#size = 0
 
     // Create the circuit breaker
     this.#circuit = createBreaker(this, options)
+
+    this.#name = options.name
+
+    // Add the size callback
+    PoolMetrics.PoolSize.addCallback((r) => {
+      r.observe(this.size, { name: this.#name })
+    })
   }
 
   get size(): number {
-    return this.currentSize
-  }
-
-  available(): boolean {
-    return this.#items.length > 0
+    return this.#size
   }
 
   static counter: number = 0
@@ -138,62 +141,72 @@ export abstract class PoolBase<T> implements Pool<T> {
   get(): PoolItem<T>
   get(timeout: Duration): MaybeAwaitable<PoolItem<T>>
   get(timeout?: Duration): MaybeAwaitable<PoolItem<T>> {
-    // Start a timer
-    const timer = new Timer()
-
-    // Try to get an item if it already exists
-    const item = this.#items.shift()
-    if (item) {
-      // We have too many connections open, indicate a drop
-      this.#algorithm.update(timer.stop(), this.currentSize, true)
-
-      // Return the item
-      return new PoolBaseItem(item, this)
+    // Check to see if others are waiting, if so get in line
+    if (this.#signal.waiting === 0) {
+      // Try to get the next item from the available set
+      const item = this.#items.shift()
+      if (item) {
+        // Return the item
+        return new PoolBaseItem(item, this)
+      }
     }
 
     // Check to see if they want to wait and our breaker is open
     if (timeout && this.#circuit.state !== BreakerState.OPEN) {
-      try {
-        return asPromise(this.#signal.wait(timeout)).then((success) => {
-          if (success) {
-            const item = this.#items.shift()
-            if (!item) {
-              console.trace("failed") /// WTF...
-            } else {
-              return new PoolBaseItem(item, this)
-            }
-          } else {
-            this.#algorithm.update(timer.stop(), this.currentSize, false)
-          }
-
-          throw new NoItemAvailableError(
-            "Unable to retrieve an item before timeout",
-          )
-        })
-      } finally {
-        if (this.currentSize < this.#size) {
-          // Start another thread to try and create a connection
-          this.currentSize++
-
-          void this.#tryCreateItem().then((created) => {
-            // If we didn't create it roll back the count
-            if (!created) {
-              this.currentSize--
-            }
-          })
-        }
+      if (this.#size < this.#floatingLimit) {
+        this.#size++
+        void this.#tryCreateItem().then(
+          (success) => (this.#size += success ? 0 : -1),
+        )
       }
-    }
 
-    console.log(`Breaker status: ${this.#circuit.state}`)
+      return this.#getNextItem(timeout)
+    }
 
     // Fail the request since the caller doesn't want to wait
     throw new NoItemAvailableError("Unable to retrieve an item")
   }
 
+  async #getNextItem(timeout: Duration): Promise<PoolItem<T>> {
+    // Start a timer to track how long this takes
+    const timer = Timer.startNew()
+
+    const expires = Date.now() + timeout.milliseconds()
+    while (Date.now() < expires) {
+      // Wait for the signal to fire before trying again
+      if (await this.#signal.wait(Duration.fromMilli(expires - Date.now()))) {
+        // Due to the nature of process.nextTick() it is difficult to guarantee
+        // this always is available, hence a check for the next item to ensure
+        // we don't pass false items around
+        const item = this.#items.shift()
+        if (item) {
+          PoolMetrics.PoolWaitTime.record(timer.stop().seconds(), {
+            name: this.#name,
+          })
+          return new PoolBaseItem(item, this)
+        }
+
+        // Get back in line...
+        continue
+      }
+
+      // Stop
+      break
+    }
+
+    PoolMetrics.PoolRetrievalFailure.add(1, { name: this.#name })
+
+    throw new NoItemAvailableError(
+      "No item was available in the pool before the timeout",
+    )
+  }
+
   reclaim(item: PoolItem<T>, reason?: unknown): void {
     // Check if the item is still valid and we have room to keep it alive
-    if (this.checkIfValid(item.item, reason) && this.currentSize <= this.size) {
+    if (
+      this.checkIfValid(item.item, reason) &&
+      this.size <= this.#floatingLimit
+    ) {
       this.#addToPool(item.item)
     } else {
       this.#destroyItem(item.item)
@@ -215,7 +228,7 @@ export abstract class PoolBase<T> implements Pool<T> {
       // Swallow the errors for now
     }
 
-    this.currentSize--
+    this.#size--
   }
 
   async #tryCreateItem(): Promise<boolean> {

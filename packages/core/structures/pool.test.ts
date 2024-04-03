@@ -13,7 +13,7 @@ class TestPool extends PoolBase<TestObject> {
   static ITEM_ID: number = 0
 
   override checkIfValid(item: TestObject, reason?: unknown): boolean {
-    return item.count++ < 4 && reason === undefined
+    return item.count++ < 25 && reason === undefined
   }
 
   override recycleItem(_item: TestObject): void {
@@ -33,6 +33,7 @@ class TestPool extends PoolBase<TestObject> {
 describe("Pools should satisfy all runtime constraints expected", () => {
   it("Should be able to create and reuse items", async () => {
     const pool = new TestPool({
+      name: "testPool",
       maxSize: 10,
       retryAfterMs: 100,
       initialSize: 2,
@@ -78,42 +79,50 @@ describe("Pools should satisfy all runtime constraints expected", () => {
 
   it("Should be able to scale the pool up and down", async () => {
     const pool = new TestPool({
-      maxSize: 10,
+      name: "testPool",
+      maxSize: 5,
       retryAfterMs: 100,
-      initialSize: 2,
+      initialSize: 3,
       failureThreshold: 2,
     })
 
-    const timeout = Duration.fromMilli(20)
+    const timeout = Duration.fromMilli(50)
 
     async function runLoop(check: SynchronizedValue<boolean>): Promise<void> {
+      let n = 0
+      let m = 0
       for (; check.value; ) {
         try {
           const item = await pool.get(timeout)
-          expect(item).not.toBeUndefined()
+          expect(item.item).not.toBeUndefined()
+          ++m
 
           await delay(5)
 
           item.release()
         } catch {
-          await delay(25)
+          n++
         }
       }
+      console.log(`${n} failures, ${m} success`)
     }
 
     const loops: Promise<void>[] = []
 
     const check = new SynchronizedValue(true)
 
-    for (let n = 0; n < 6; ++n) {
+    const numLoops = 15
+    for (let n = 0; n < numLoops; ++n) {
       loops.push(runLoop(check))
-
       await delay(100)
     }
 
     await delay(1000)
 
     check.value = false
-    await Promise.allSettled(loops)
+    const results = await Promise.allSettled(loops)
+    expect(results.filter((r) => r.status === "fulfilled").length).toBe(
+      numLoops,
+    )
   })
 })

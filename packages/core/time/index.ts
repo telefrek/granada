@@ -21,6 +21,17 @@ export class Timer {
   stopped = 0n
 
   /**
+   * Start a new timer
+   *
+   * @returns A new {@link Timer} that has been started
+   */
+  public static startNew(): Timer {
+    const timer = new Timer()
+    timer.start()
+    return timer
+  }
+
+  /**
    * Starts the timer
    */
   start(): void {

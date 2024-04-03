@@ -130,9 +130,10 @@ type SignalCallback = (value: MaybeAwaitable<boolean>) => void
  */
 export class Signal {
   #callbacks: SignalCallback[] = []
+  #waiting: number = 0
 
   get waiting(): number {
-    return this.#callbacks.length
+    return this.#waiting
   }
 
   /**
@@ -143,6 +144,8 @@ export class Signal {
    * @returns A {@link Promise} value that can be used to `await` the underly resource being available
    */
   wait(timeout?: Duration): PromiseLike<boolean> {
+    this.#waiting++
+
     return new Promise<boolean>((resolve) => {
       // Check for timeout
       if (timeout !== undefined) {
@@ -152,6 +155,10 @@ export class Signal {
         // Have to create the callback before the timeout
         const callback: SignalCallback = () => {
           clearTimeout(timer)
+
+          // Decrement the waiting count
+          this.#waiting--
+
           resolve(true)
         }
 
@@ -162,6 +169,9 @@ export class Signal {
           if (idx >= 0) {
             // Remove the callback from being accessed to release memory
             this.#callbacks.splice(idx, 1)
+
+            // Decrement the waiting count
+            this.#waiting--
 
             // Don't resolve false unless we popped off the stack
             resolve(false)
