@@ -31,10 +31,10 @@
   "license": "MIT",
   "dependencies": {
     "@telefrek/query": "^1.0.0-alpha.12",
-    "pg": "^8.11.3"
+    "pg": "^8.11.5"
   },
   "devDependencies": {
-    "@testcontainers/postgresql": "^10.7.2",
+    "@testcontainers/postgresql": "^10.8.1",
     "@types/pg": "^8.11.4"
   },
   "gitHead": "730d8573af6f7e7edf7187ab6f1a082f52d224e0"

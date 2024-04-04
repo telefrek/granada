@@ -4,7 +4,7 @@
  * around timeouts, rebuilding and circuit breakers
  */
 
-import { ValueType } from "@opentelemetry/api"
+import { ValueType, type Attributes } from "@opentelemetry/api"
 import {
   BreakerState,
   createBreaker,
@@ -71,10 +71,14 @@ export interface Pool<T> {
 export interface PoolOptions extends CircuitBreakerOptions {
   /** The name of the pool to be used for instrumentation */
   name: string
-  /** Default value is 1 */
+  /** The initial size of the pool (Default value is 1) */
   initialSize?: number
-  /** Default value is 4 */
-  maxSize?: number
+  /** The maximum size of the pool (Default value is 4) */
+  maximumSize?: number
+  /** Successive cache hits before scale in (Default is 25) */
+  scaleInThreshold?: number
+  /** Flag to indicate if pool resources should be pre-allocated (Default is false) */
+  lazyCreation?: boolean
 }
 
 const PoolMetrics = {
@@ -109,14 +113,19 @@ export abstract class PoolBase<T> implements Pool<T> {
   #floatingLimit: number
   #size: number
   #maximum: number
-  #name: string
+  #scaleInTolerance
+  #hits: number = 0
+  #attributes: Attributes
 
   constructor(options: PoolOptions) {
     // Set the initial sizing parameters
-    this.#maximum = Math.max(options.maxSize ?? 4, 2)
+    this.#maximum = Math.max(options.maximumSize ?? 4, 2)
 
     // Start with half the maximum allowed
-    this.#floatingLimit = this.#maximum >> 1
+    this.#floatingLimit = Math.max(options.initialSize ?? 1, 1)
+
+    // Get the scale in tolerance value
+    this.#scaleInTolerance = Math.max(options.scaleInThreshold ?? 25, 1)
 
     // There are no items in the pool to start
     this.#size = 0
@@ -124,12 +133,19 @@ export abstract class PoolBase<T> implements Pool<T> {
     // Create the circuit breaker
     this.#circuit = createBreaker(this, options)
 
-    this.#name = options.name
+    this.#attributes = { name: options.name }
 
     // Add the size callback
     PoolMetrics.PoolSize.addCallback((r) => {
-      r.observe(this.size, { name: this.#name })
+      r.observe(this.size, this.#attributes)
     })
+
+    // Don't wait and do lazy creation
+    if (options.lazyCreation) {
+      for (let n = 0; n < this.#floatingLimit; ++n) {
+        void this.#tryCreateItem()
+      }
+    }
   }
 
   get size(): number {
@@ -146,20 +162,25 @@ export abstract class PoolBase<T> implements Pool<T> {
       // Try to get the next item from the available set
       const item = this.#items.shift()
       if (item) {
+        // If our tolerance
+        if (++this.#hits > this.#scaleInTolerance) {
+          this.#floatingLimit = Math.max(1, this.#floatingLimit - 1)
+          this.#hits = 0
+        }
+
         // Return the item
         return new PoolBaseItem(item, this)
       }
     }
 
+    // Reset the tolerance
+    this.#hits = 0
+
     // Check to see if they want to wait and our breaker is open
     if (timeout && this.#circuit.state !== BreakerState.OPEN) {
       if (this.#size < this.#floatingLimit) {
-        this.#size++
-        void this.#tryCreateItem().then(
-          (success) => (this.#size += success ? 0 : -1),
-        )
+        void this.#tryCreateItem()
       }
-
       return this.#getNextItem(timeout)
     }
 
@@ -175,14 +196,15 @@ export abstract class PoolBase<T> implements Pool<T> {
     while (Date.now() < expires) {
       // Wait for the signal to fire before trying again
       if (await this.#signal.wait(Duration.fromMilli(expires - Date.now()))) {
-        // Due to the nature of process.nextTick() it is difficult to guarantee
-        // this always is available, hence a check for the next item to ensure
-        // we don't pass false items around
+        // Try to shift the value off though because we rely on promises (which
+        // also use process.nextTick() that our signals do) this might have been
+        // stolen in the main get.
         const item = this.#items.shift()
         if (item) {
-          PoolMetrics.PoolWaitTime.record(timer.stop().seconds(), {
-            name: this.#name,
-          })
+          PoolMetrics.PoolWaitTime.record(
+            timer.stop().seconds(),
+            this.#attributes,
+          )
           return new PoolBaseItem(item, this)
         }
 
@@ -194,7 +216,28 @@ export abstract class PoolBase<T> implements Pool<T> {
       break
     }
 
-    PoolMetrics.PoolRetrievalFailure.add(1, { name: this.#name })
+    // Test if we can raise our floating limit
+    if (this.#floatingLimit < this.#maximum) {
+      this.#floatingLimit++
+
+      // Try to create an item
+      if (await this.#tryCreateItem()) {
+        const item = this.#items.shift()
+        if (item) {
+          if (item) {
+            PoolMetrics.PoolWaitTime.record(
+              timer.stop().seconds(),
+              this.#attributes,
+            )
+            return new PoolBaseItem(item, this)
+          }
+        }
+      } else {
+        this.#floatingLimit--
+      }
+    }
+
+    PoolMetrics.PoolRetrievalFailure.add(1, this.#attributes)
 
     throw new NoItemAvailableError(
       "No item was available in the pool before the timeout",
@@ -213,6 +256,11 @@ export abstract class PoolBase<T> implements Pool<T> {
     }
   }
 
+  /**
+   * Add the item to the pool and signal anyone waiting
+   *
+   * @param item The item to add to the pool
+   */
   #addToPool(item: T): void {
     // Add the item back to the pool
     this.#items.push(item)
@@ -221,6 +269,11 @@ export abstract class PoolBase<T> implements Pool<T> {
     this.#signal.notify()
   }
 
+  /**
+   * Destroy the item and decrement the size
+   *
+   * @param item The item to recycle
+   */
   #destroyItem(item: T): void {
     try {
       this.recycleItem(item)
@@ -236,6 +289,7 @@ export abstract class PoolBase<T> implements Pool<T> {
       // Create the item and add it to the pool
       const newItem = await this.#circuit.invoke(this.createItem)
       this.#addToPool(newItem)
+      this.#size++
     } catch (err) {
       return false
     }
