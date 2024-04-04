@@ -4,7 +4,6 @@ import {
   PostgreSqlContainer,
   StartedPostgreSqlContainer,
 } from "@testcontainers/postgresql"
-import pg from "pg"
 import { createPostgresQueryBuilder } from "./builder"
 import { PostgresQueryExecutor } from "./executor"
 import {
@@ -13,40 +12,66 @@ import {
   type TestDatabaseType,
 } from "./testUtils"
 
+import { getNodeAutoInstrumentations } from "@opentelemetry/auto-instrumentations-node"
+import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-proto"
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto"
+import { PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics"
+import * as opentelemetry from "@opentelemetry/sdk-node"
+import { PostgresPool } from "../pool"
+
 describe("Postgres should be able to execute queries", () => {
   let postgresContainer: StartedPostgreSqlContainer | undefined
-  let postgresClient: pg.Client | undefined
+  let pool: PostgresPool | undefined
   let executor: PostgresQueryExecutor | undefined
+  let sdk: opentelemetry.NodeSDK
 
   beforeAll(async () => {
     postgresContainer = await new PostgreSqlContainer().start()
-    postgresClient = new pg.Client({
-      connectionString: postgresContainer.getConnectionUri(),
+    pool = new PostgresPool({
+      name: "testPostgresPool",
+      clientConfig: {
+        connectionString: postgresContainer.getConnectionUri(),
+      },
     })
-    await postgresClient.connect()
 
-    await createTestDatabase(postgresClient)
+    using client = await pool.get()
 
-    executor = new PostgresQueryExecutor(postgresClient)
+    await createTestDatabase(client.item)
+
+    executor = new PostgresQueryExecutor(pool)
+
+    sdk = new opentelemetry.NodeSDK({
+      traceExporter: new OTLPTraceExporter(),
+      metricReader: new PeriodicExportingMetricReader({
+        exporter: new OTLPMetricExporter(),
+      }),
+      instrumentations: [getNodeAutoInstrumentations()],
+    })
+    sdk.start()
   }, 60_000)
 
   afterAll(async () => {
-    if (postgresClient) {
-      await postgresClient.end()
+    if (pool) {
+      await pool.shutdown()
     }
 
     if (postgresContainer) {
       await postgresContainer.stop()
     }
+
+    if (sdk) {
+      sdk.shutdown()
+    }
   })
 
   beforeEach(async () => {
-    await postgresClient?.query("TRUNCATE TABLE customers")
-    await postgresClient?.query("TRUNCATE TABLE orders")
-    await postgresClient?.query(
-      "ALTER SEQUENCE customers_id_seq RESTART WITH 1",
-    )
-    await postgresClient?.query("ALTER SEQUENCE orders_id_seq RESTART WITH 1")
+    using item = await pool!.get()
+    const client = item.item
+
+    await client.query("TRUNCATE TABLE customers")
+    await client.query("TRUNCATE TABLE orders")
+    await client.query("ALTER SEQUENCE customers_id_seq RESTART WITH 1")
+    await client.query("ALTER SEQUENCE orders_id_seq RESTART WITH 1")
   })
 
   it("Should be able to issue a simple query", async () => {

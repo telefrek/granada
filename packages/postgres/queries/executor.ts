@@ -2,7 +2,7 @@
  * Executor for queries
  */
 
-import { Timer } from "@telefrek/core/time/index"
+import { Duration, Timer } from "@telefrek/core/time/index"
 import { makeCaseInsensitive } from "@telefrek/core/type/proxies"
 import { QueryError } from "@telefrek/query/error"
 import {
@@ -16,6 +16,7 @@ import {
   type SimpleQuery,
 } from "@telefrek/query/index"
 import pg from "pg"
+import type { PostgresPool } from "../pool"
 import { isPostgresQuery } from "./builder"
 
 const SAFE_INT_REGEX = /^(-)?[0-8]?\d{1,15}$/
@@ -36,10 +37,10 @@ pg.types.setTypeParser(pg.types.builtins.INT8, (v) =>
 )
 
 export class PostgresQueryExecutor implements QueryExecutor {
-  #client: pg.Client
+  #pool: PostgresPool
 
-  constructor(client: pg.Client) {
-    this.#client = client
+  constructor(pool: PostgresPool) {
+    this.#pool = pool
   }
 
   async run<T extends RowType, P extends QueryParameters>(
@@ -70,7 +71,8 @@ export class PostgresQueryExecutor implements QueryExecutor {
       }
 
       try {
-        const results = await this.#client.query(queryText!, parameters)
+        using client = await this.#pool.get(Duration.fromMilli(500))
+        const results = await client.item.query(queryText!, parameters)
 
         // Postgres doesn't care about casing in most places, so we need to make our results agnostic as well...
         if (results.rows) {

@@ -56,7 +56,7 @@ describe("Pools should satisfy all runtime constraints expected", () => {
     item.release()
 
     // Verify that we got it back
-    item = pool.get()
+    item = await pool.get()
     expect(item.item.id).toBe(previousId)
     expect(item.item.count).toBe(1)
 
