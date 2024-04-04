@@ -2,8 +2,11 @@
  * Package for managing load shedding within an application
  */
 
-import { Limiter, createSimpleLimiter } from "@telefrek/core/concurrency/limits"
-import { vegasBuilder } from "@telefrek/core/concurrency/limits/algorithms"
+import {
+  Limiter,
+  createSimpleLimiter,
+} from "@telefrek/core/backpressure/limits"
+import { vegasBuilder } from "@telefrek/core/backpressure/limits/algorithms"
 import { Timer } from "@telefrek/core/time"
 import { HttpStatus, emptyHeaders } from ".."
 import { HttpPipelineTransform } from "../pipeline"
@@ -18,7 +21,7 @@ export function enableLoadShedding(
     createSimpleLimiter(
       vegasBuilder(10)
         .build()
-        .on("changed", (l) => {
+        .on("changed", (l: number) => {
           console.log(`new limit: ${l}`)
         }),
       10,

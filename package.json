@@ -32,6 +32,7 @@
     "typescript": "^5.4.3"
   },
   "dependencies": {
+    "@eslint/js": "^8.57.0",
     "@typescript/analyze-trace": "^0.10.1"
   }
 }
