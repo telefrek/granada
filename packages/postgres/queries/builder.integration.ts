@@ -50,8 +50,9 @@ describe("Postgres should be able to execute queries", () => {
 
   async function createDatabase(): Promise<void> {
     if (pool) {
-      using client = await pool.get()
+      const client = await pool.get()
       await createTestDatabase(client.item)
+      client.release()
     }
   }
 
@@ -71,13 +72,15 @@ describe("Postgres should be able to execute queries", () => {
 
   beforeEach(async () => {
     if (pool) {
-      using item = await pool.get()
+      const item = await pool.get()
       const client = item.item
 
       await client.query("TRUNCATE TABLE customers")
       await client.query("TRUNCATE TABLE orders")
       await client.query("ALTER SEQUENCE customers_id_seq RESTART WITH 1")
       await client.query("ALTER SEQUENCE orders_id_seq RESTART WITH 1")
+
+      item.release()
     }
   })
 
@@ -225,11 +228,13 @@ describe("Postgres should be able to execute queries", () => {
     expect(delRows.length).toBe(1)
     expect(delRows[0].id).toBe(1)
 
-    result = await executor?.run(
-      query.bind({ amount: 1, categories: [Category.PURCHASE] }),
-    )
+    for (let n = 0; n < 25_000; ++n) {
+      result = await executor?.run(
+        query.bind({ amount: 1, categories: [Category.PURCHASE] }),
+      )
 
-    rows = result?.mode === ExecutionMode.Normal ? result.rows : []
-    expect(rows.length).toBe(0)
+      rows = result?.mode === ExecutionMode.Normal ? result.rows : []
+      expect(rows.length).toBe(0)
+    }
   }, 180_000)
 })

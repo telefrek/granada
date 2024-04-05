@@ -16,6 +16,7 @@ import {
   type SimpleQuery,
 } from "@telefrek/query/index"
 import pg from "pg"
+import type { PoolItem } from "../../core/structures/pool"
 import type { PostgresPool } from "../pool"
 import { isPostgresQuery } from "./builder"
 
@@ -70,8 +71,9 @@ export class PostgresQueryExecutor implements QueryExecutor {
         parameters = dynamic[1]
       }
 
+      let client: PoolItem<pg.Client> | undefined
       try {
-        using client = await this.#pool.get(Duration.fromMilli(500))
+        client = await this.#pool.get(Duration.fromMilli(500))
         const results = await client.item.query(queryText!, parameters)
 
         // Postgres doesn't care about casing in most places, so we need to make our results agnostic as well...
@@ -84,6 +86,10 @@ export class PostgresQueryExecutor implements QueryExecutor {
         }
       } catch (err) {
         console.log(err)
+      } finally {
+        if (client) {
+          client.release()
+        }
       }
 
       throw new QueryError("failed to execute query")

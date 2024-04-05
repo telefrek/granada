@@ -13,7 +13,6 @@ module.exports = {
     "jest.*.config.js",
     "/node_modules",
     "/dist",
-    "packages/http/content/media.ts",
   ],
   moduleNameMapper: {
     "^@telefrek/(.*)$": "<rootDir>/packages/$1/",
