@@ -34,11 +34,9 @@ describe("Postgres should be able to execute queries", () => {
       },
     })
 
-    using client = await pool.get()
-
-    await createTestDatabase(client.item)
-
     executor = new PostgresQueryExecutor(pool)
+
+    await createDatabase()
 
     sdk = new opentelemetry.NodeSDK({
       traceExporter: new OTLPTraceExporter(),
@@ -49,6 +47,13 @@ describe("Postgres should be able to execute queries", () => {
     })
     sdk.start()
   }, 60_000)
+
+  async function createDatabase(): Promise<void> {
+    if (pool) {
+      using client = await pool.get()
+      await createTestDatabase(client.item)
+    }
+  }
 
   afterAll(async () => {
     if (pool) {
@@ -62,16 +67,18 @@ describe("Postgres should be able to execute queries", () => {
     if (sdk) {
       sdk.shutdown()
     }
-  })
+  }, 30_000)
 
   beforeEach(async () => {
-    using item = await pool!.get()
-    const client = item.item
+    if (pool) {
+      using item = await pool.get()
+      const client = item.item
 
-    await client.query("TRUNCATE TABLE customers")
-    await client.query("TRUNCATE TABLE orders")
-    await client.query("ALTER SEQUENCE customers_id_seq RESTART WITH 1")
-    await client.query("ALTER SEQUENCE orders_id_seq RESTART WITH 1")
+      await client.query("TRUNCATE TABLE customers")
+      await client.query("TRUNCATE TABLE orders")
+      await client.query("ALTER SEQUENCE customers_id_seq RESTART WITH 1")
+      await client.query("ALTER SEQUENCE orders_id_seq RESTART WITH 1")
+    }
   })
 
   it("Should be able to issue a simple query", async () => {

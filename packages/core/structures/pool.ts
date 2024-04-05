@@ -14,7 +14,7 @@ import {
 import { Signal } from "../concurrency/index"
 import { type MaybeAwaitable } from "../index"
 import { FRAMEWORK_METRICS_METER } from "../observability/metrics"
-import { Duration, Timer, delay } from "../time/index"
+import { Duration, Timer } from "../time/index"
 
 /**
  * Custom error raised when there is no value available in the {@link Pool}
@@ -75,7 +75,7 @@ export interface Pool<T> {
   /**
    * Release any held connections
    */
-  shutdown(): Promise<void>
+  shutdown(): MaybeAwaitable<void>
 }
 
 export interface PoolOptions extends CircuitBreakerOptions {
@@ -296,13 +296,11 @@ export abstract class PoolBase<T> implements Pool<T> {
     }
   }
 
-  async shutdown(): Promise<void> {
+  shutdown(): MaybeAwaitable<void> {
+    this.#shutdown = true
+
     while (this.#items.length > 0) {
       this.#destroyItem(this.#items.shift()!)
-    }
-
-    while (this.#size > 0) {
-      await delay(500)
     }
 
     return
@@ -394,7 +392,7 @@ class PoolBaseItem<T> implements PoolItem<T> {
     this.#pool = pool
   }
 
-  [Symbol.dispose](): void {
+  [Symbol.dispose]() {
     this.release()
   }
 

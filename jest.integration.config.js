@@ -1,4 +1,6 @@
+/** @type {import('ts-jest').JestConfigWithTsJest} */
 module.exports = {
+  preset: "ts-jest",
   testEnvironment: "node",
   coverageDirectory: "coverage",
   testMatch: ["<rootDir>/**/*.integration.ts"],
@@ -6,9 +8,6 @@ module.exports = {
     "packages/**/*.{ts,js,jsx}",
     "!packages/**/testUtils.ts",
   ],
-  transform: {
-    "^.+\\.(js|ts)$": "babel-jest",
-  },
   coveragePathIgnorePatterns: [
     "eslint.config.js",
     "jest.*.config.js",
