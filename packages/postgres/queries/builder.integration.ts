@@ -1,9 +1,15 @@
+import { sdk } from "./dummy"
+
+sdk.start()
+
 import { ExecutionMode } from "@telefrek/query"
 import type { SQLEnum } from "@telefrek/query/sql/types"
 import {
   PostgreSqlContainer,
   StartedPostgreSqlContainer,
 } from "@testcontainers/postgresql"
+import { GRANADA_METRICS_METER } from "../../core/observability/metrics"
+import { PostgresPool } from "../pool"
 import { createPostgresQueryBuilder } from "./builder"
 import { PostgresQueryExecutor } from "./executor"
 import {
@@ -12,19 +18,10 @@ import {
   type TestDatabaseType,
 } from "./testUtils"
 
-import { getNodeAutoInstrumentations } from "@opentelemetry/auto-instrumentations-node"
-import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-proto"
-import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto"
-import { PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics"
-import * as opentelemetry from "@opentelemetry/sdk-node"
-import { PostgresPool } from "../pool"
-
 describe("Postgres should be able to execute queries", () => {
   let postgresContainer: StartedPostgreSqlContainer | undefined
   let pool: PostgresPool | undefined
   let executor: PostgresQueryExecutor | undefined
-  let sdk: opentelemetry.NodeSDK
-
   beforeAll(async () => {
     postgresContainer = await new PostgreSqlContainer().start()
     pool = new PostgresPool({
@@ -37,15 +34,6 @@ describe("Postgres should be able to execute queries", () => {
     executor = new PostgresQueryExecutor(pool)
 
     await createDatabase()
-
-    sdk = new opentelemetry.NodeSDK({
-      traceExporter: new OTLPTraceExporter(),
-      metricReader: new PeriodicExportingMetricReader({
-        exporter: new OTLPMetricExporter(),
-      }),
-      instrumentations: [getNodeAutoInstrumentations()],
-    })
-    sdk.start()
   }, 60_000)
 
   async function createDatabase(): Promise<void> {
@@ -65,9 +53,7 @@ describe("Postgres should be able to execute queries", () => {
       await postgresContainer.stop()
     }
 
-    if (sdk) {
-      sdk.shutdown()
-    }
+    sdk.shutdown()
   }, 30_000)
 
   beforeEach(async () => {
@@ -89,6 +75,9 @@ describe("Postgres should be able to execute queries", () => {
       .insert("customers")
       .returning("*")
       .build("insertCustomer")
+
+    const counter = GRANADA_METRICS_METER.createCounter("testing")
+    counter.add(1)
 
     // Get a value that is 1 too large...
     const big: bigint = BigInt(Number.MAX_SAFE_INTEGER) + 1n
@@ -229,6 +218,7 @@ describe("Postgres should be able to execute queries", () => {
     expect(delRows[0].id).toBe(1)
 
     for (let n = 0; n < 25_000; ++n) {
+      counter.add(1)
       result = await executor?.run(
         query.bind({ amount: 1, categories: [Category.PURCHASE] }),
       )

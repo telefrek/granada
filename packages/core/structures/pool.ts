@@ -13,7 +13,7 @@ import {
 } from "../backpressure/circuits/breaker"
 import { Signal } from "../concurrency/index"
 import { type MaybeAwaitable } from "../index"
-import { FRAMEWORK_METRICS_METER } from "../observability/metrics"
+import { GRANADA_METRICS_METER } from "../observability/metrics"
 import { Duration, Timer } from "../time/index"
 
 /**
@@ -94,18 +94,18 @@ export interface PoolOptions extends CircuitBreakerOptions {
 }
 
 const PoolMetrics = {
-  PoolWaitTime: FRAMEWORK_METRICS_METER.createHistogram("pool.wait.time", {
+  PoolWaitTime: GRANADA_METRICS_METER.createHistogram("pool_wait_time", {
     description:
       "Measures long a consumer waits for a pool item to be available",
     valueType: ValueType.DOUBLE,
     unit: "s",
   }),
-  PoolSize: FRAMEWORK_METRICS_METER.createObservableGauge("pool.size", {
+  PoolSize: GRANADA_METRICS_METER.createObservableGauge("pool_size", {
     description: "The current size of the pool",
     valueType: ValueType.INT,
   }),
-  PoolRetrievalFailure: FRAMEWORK_METRICS_METER.createCounter(
-    "pool.retrieval.failure",
+  PoolRetrievalFailure: GRANADA_METRICS_METER.createCounter(
+    "pool_retrieval_failure",
     {
       description:
         "The number of times the pool was unable to provide an item under the timeout",
@@ -206,6 +206,8 @@ export abstract class PoolBase<T> implements Pool<T> {
           this.#floatingLimit = Math.max(1, this.#floatingLimit - 1)
           this.#hits = 0
         }
+
+        PoolMetrics.PoolWaitTime.record(0.0001, this.#attributes)
 
         // Return the item
         return new PoolBaseItem(item, this)
