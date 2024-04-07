@@ -68,7 +68,7 @@ describe("Postgres should be able to execute queries", () => {
     const insertUserQuery = createPostgresQueryBuilder<TestDatabaseType>()
       .insert("customers")
       .returning("*")
-      .build("returnCustomerInsertInfo")
+      .build("insertCustomer")
 
     const counter = GRANADA_METRICS_METER.createCounter("testing")
     counter.add(1)
@@ -154,7 +154,7 @@ describe("Postgres should be able to execute queries", () => {
         "customerId",
         "id",
       )
-      .build("testQuery1")
+      .build("testQuery")
 
     let result = await executor?.run(
       query.bind({ amount: 1, categories: [Category.PURCHASE] }),
@@ -189,7 +189,7 @@ describe("Postgres should be able to execute queries", () => {
           "customerId",
           "id",
         )
-        .build("testQuery2"),
+        .build("testQuery"),
     )
 
     expect(result).not.toBeUndefined()

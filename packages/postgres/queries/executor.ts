@@ -71,7 +71,9 @@ export class PostgresQueryExecutor implements QueryExecutor {
         client = await this.#pool.get(Duration.fromMilli(500))
 
         // TODO: Update for cursors...
-        const results = await client.item.query(query)
+        // TODO: How do we want to deal with "named queries..." as well as
+        // tracking duplicates
+        const results = await client.item.query({ ...query, name: undefined })
 
         // TODO: What about errors
         QueryMetrics.QueryExecutionDuration.record(timer.elapsed().seconds(), {
