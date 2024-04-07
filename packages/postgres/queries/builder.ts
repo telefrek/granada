@@ -58,6 +58,7 @@ import type {
   RelationalQueryBuilder,
   SQLDataStore,
 } from "@telefrek/query/sql/index"
+import type { PostgresQuery, QueryMaterializer } from ".."
 
 export function createPostgresQueryBuilder<
   Database extends SQLDataStore,
@@ -76,45 +77,15 @@ type PostgresStaticContext = {
 
 type PostgresDynamicContext = {
   materializer: "dynamic"
-  queryMaterializer: (parameters: QueryParameters) => [string, unknown[]]
+  queryMaterializer: QueryMaterializer
 }
 
 type PostgresContext = PostgresStaticContext | PostgresDynamicContext
 
-type PostgresQuery = {
-  context: PostgresContext
-}
-
-export function isPostgresQuery(query: unknown): query is PostgresQuery {
-  return (
-    typeof query === "object" &&
-    query !== null &&
-    "context" in query &&
-    typeof query.context === "object" &&
-    query.context !== null &&
-    isPostgresContext(query.context)
-  )
-}
-
-type SimplePostgresQuery<R extends RowType> = PostgresQuery & SimpleQuery<R>
-
 type ParametizedPostgresQuery<
   R extends RowType,
   P extends QueryParameters,
-> = PostgresQuery & ParameterizedQuery<R, P>
-
-type BoundPostgresQuery<
-  R extends RowType,
-  P extends QueryParameters,
-> = PostgresQuery & BoundQuery<R, P>
-
-function isPostgresContext(context: object): context is PostgresContext {
-  return (
-    "materializer" in context &&
-    typeof context.materializer === "string" &&
-    (context.materializer === "static" || context.materializer === "dynamic")
-  )
-}
+> = ParameterizedQuery<R, P> & PostgresQuery<unknown[]>
 
 export class PostgresQueryBuilder<D extends SQLDataStore>
   implements RelationalQueryBuilder<D>
@@ -132,35 +103,75 @@ export class PostgresQueryBuilder<D extends SQLDataStore>
     if (isSQLQueryNode(node)) {
       const context = translateNode(getTreeRoot(node))
 
-      const simple: SimplePostgresQuery<R> = {
-        queryType: QueryType.SIMPLE,
-        name,
+      const postgresQuery: PostgresQuery = {
         mode,
-        context,
+        name,
+        text: (context as PostgresStaticContext).queryString!,
       }
 
-      if (queryType === QueryType.SIMPLE) {
-        return simple as never
-      }
+      let parameterized: ParametizedPostgresQuery<R, P> | undefined
 
-      const parameterized: ParametizedPostgresQuery<R, P> = {
-        ...simple,
-        queryType: QueryType.PARAMETERIZED,
-        bind: (p: P): BoundQuery<R, P> => {
+      if (context.materializer === "static") {
+        // Do we need parameters?
+        if (context.parameterMapping.size > 0) {
+          // Setup the materializer...
+          postgresQuery.materializer = (parameters: QueryParameters) => {
+            return {
+              text: postgresQuery.text,
+              values: Array.from(context.parameterMapping.keys())
+                .sort(
+                  (a, b) =>
+                    context.parameterMapping.get(a)! -
+                    context.parameterMapping.get(b)!,
+                )
+                .map((k) => parameters[k]),
+            }
+          }
+
+          parameterized = {
+            ...postgresQuery,
+            queryType: QueryType.PARAMETERIZED,
+            bind: (parameters: P) => {
+              return bindQuery(postgresQuery, parameters)
+            },
+          }
+        } else {
           return {
-            parameters: p,
-            context,
-            name,
-            mode,
-            queryType: QueryType.BOUND,
-          } as BoundPostgresQuery<R, P>
-        },
+            queryType: QueryType.SIMPLE,
+            ...postgresQuery,
+          } as never
+        }
+      } else {
+        postgresQuery.materializer = context.queryMaterializer
+        parameterized = {
+          ...postgresQuery,
+          queryType: QueryType.PARAMETERIZED,
+          bind: (parameters: P) => {
+            return bindQuery(postgresQuery, parameters)
+          },
+        }
       }
 
       return parameterized as never
     }
 
     throw new QueryError("Invalid query node, expected SQLQueryNode")
+  }
+}
+
+function bindQuery<R extends RowType, P extends QueryParameters>(
+  query: PostgresQuery,
+  parameters: P,
+): BoundQuery<R, P> & PostgresQuery<unknown[]> {
+  const { text, values } = query.materializer!(parameters)
+
+  return {
+    parameters,
+    name: query.name!,
+    mode: query.mode,
+    text,
+    values: values,
+    queryType: QueryType.BOUND,
   }
 }
 
@@ -353,7 +364,9 @@ function translateInsert(insert: InsertClause): PostgresContext {
   const tableName = manager.tableName
   const returning = manager.returning
 
-  const insertMaterializer = (p: QueryParameters): [string, unknown[]] => {
+  const insertMaterializer = (
+    p: QueryParameters,
+  ): { text: string; values?: unknown[] } => {
     const columns = Object.keys(p)
 
     const queryString = `
@@ -361,7 +374,7 @@ function translateInsert(insert: InsertClause): PostgresContext {
         VALUES(${columns.map((_, idx) => `$${idx + 1}`).join(",")})
         ${returning ? ` RETURNING ${returning === "*" ? "*" : returning.join(",")}` : ""}`
 
-    return [queryString, columns.map((c) => p[c])]
+    return { text: queryString, values: columns.map((c) => p[c]) as unknown[] }
   }
 
   return {

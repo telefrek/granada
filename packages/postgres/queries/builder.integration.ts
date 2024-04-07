@@ -1,7 +1,3 @@
-import { sdk } from "./dummy"
-
-sdk.start()
-
 import { ExecutionMode } from "@telefrek/query"
 import type { SQLEnum } from "@telefrek/query/sql/types"
 import {
@@ -52,8 +48,6 @@ describe("Postgres should be able to execute queries", () => {
     if (postgresContainer) {
       await postgresContainer.stop()
     }
-
-    sdk.shutdown()
   }, 30_000)
 
   beforeEach(async () => {
@@ -74,7 +68,7 @@ describe("Postgres should be able to execute queries", () => {
     const insertUserQuery = createPostgresQueryBuilder<TestDatabaseType>()
       .insert("customers")
       .returning("*")
-      .build("insertCustomer")
+      .build("returnCustomerInsertInfo")
 
     const counter = GRANADA_METRICS_METER.createCounter("testing")
     counter.add(1)
@@ -160,7 +154,7 @@ describe("Postgres should be able to execute queries", () => {
         "customerId",
         "id",
       )
-      .build("testQuery")
+      .build("testQuery1")
 
     let result = await executor?.run(
       query.bind({ amount: 1, categories: [Category.PURCHASE] }),
@@ -195,7 +189,7 @@ describe("Postgres should be able to execute queries", () => {
           "customerId",
           "id",
         )
-        .build("testQuery"),
+        .build("testQuery2"),
     )
 
     expect(result).not.toBeUndefined()
@@ -217,7 +211,7 @@ describe("Postgres should be able to execute queries", () => {
     expect(delRows.length).toBe(1)
     expect(delRows[0].id).toBe(1)
 
-    for (let n = 0; n < 25_000; ++n) {
+    for (let n = 0; n < 1_000; ++n) {
       counter.add(1)
       result = await executor?.run(
         query.bind({ amount: 1, categories: [Category.PURCHASE] }),

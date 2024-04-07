@@ -15,12 +15,6 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.0.2",
     "@eslint/js": "^8.57.0",
-    "@opentelemetry/auto-instrumentations-node": "^0.44.0",
-    "@opentelemetry/exporter-metrics-otlp-proto": "^0.50.0",
-    "@opentelemetry/exporter-prometheus": "^0.50.0",
-    "@opentelemetry/exporter-trace-otlp-proto": "^0.50.0",
-    "@opentelemetry/resources": "^1.23.0",
-    "@opentelemetry/sdk-node": "^0.50.0",
     "@types/jest": "^29.5.12",
     "@types/node": "^20.12.4",
     "@typescript-eslint/eslint-plugin": "^7.5.0",

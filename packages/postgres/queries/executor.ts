@@ -7,7 +7,6 @@ import { makeCaseInsensitive } from "@telefrek/core/type/proxies"
 import { QueryError } from "@telefrek/query/error"
 import {
   ExecutionMode,
-  QueryType,
   type BoundQuery,
   type QueryExecutor,
   type QueryParameters,
@@ -16,9 +15,10 @@ import {
   type SimpleQuery,
 } from "@telefrek/query/index"
 import pg from "pg"
+import { isPostgresQuery } from ".."
+import { GRANADA_METRICS_METER } from "../../core/observability/metrics"
 import type { PoolItem } from "../../core/structures/pool"
 import type { PostgresPool } from "../pool"
-import { isPostgresQuery } from "./builder"
 
 const SAFE_INT_REGEX = /^(-)?[0-8]?\d{1,15}$/
 
@@ -29,6 +29,20 @@ const safeBigInt = (v: string) => {
       ? BigInt(v)
       : Number(v)
 }
+
+const QueryMetrics = {
+  QueryExecutionDuration: GRANADA_METRICS_METER.createHistogram(
+    "query_execution_time",
+    {
+      description: "The amount of time the query took to execute",
+      unit: "s",
+    },
+  ),
+  QueryErrors: GRANADA_METRICS_METER.createCounter("query_error", {
+    description:
+      "The number of errors that have been encountered for the query",
+  }),
+} as const
 
 pg.types.setTypeParser(pg.types.builtins.TIMESTAMP, (v) =>
   v ? safeBigInt(v) : null,
@@ -51,44 +65,36 @@ export class PostgresQueryExecutor implements QueryExecutor {
       const timer = new Timer()
       timer.start()
 
-      let queryText: string | undefined
-      let parameters: unknown[] | undefined
-
-      if (query.context.materializer === "static") {
-        queryText = query.context.queryString
-
-        const mapping = query.context.parameterMapping
-        if (query.queryType === QueryType.BOUND) {
-          parameters = Array.from(query.context.parameterMapping.keys())
-            .sort((a, b) => mapping.get(a)! - mapping.get(b)!)
-            .map((k) => query.parameters[k])
-        }
-      } else {
-        const dynamic = query.context.queryMaterializer(
-          query.queryType === QueryType.BOUND ? query.parameters : {},
-        )
-        queryText = dynamic[0]
-        parameters = dynamic[1]
-      }
-
       let client: PoolItem<pg.Client> | undefined
+      let error: unknown | undefined
       try {
         client = await this.#pool.get(Duration.fromMilli(500))
-        const results = await client.item.query(queryText!, parameters)
+
+        // TODO: Update for cursors...
+        const results = await client.item.query(query)
+
+        // TODO: What about errors
+        QueryMetrics.QueryExecutionDuration.record(timer.elapsed().seconds(), {
+          "query.name": query.name,
+          "query.mode": query.mode,
+        })
 
         // Postgres doesn't care about casing in most places, so we need to make our results agnostic as well...
-        if (results.rows) {
-          return {
-            mode: ExecutionMode.Normal,
-            duration: timer.elapsed(),
-            rows: results.rows.map((r) => makeCaseInsensitive(r as T)),
-          }
+        return {
+          mode: ExecutionMode.Normal,
+          duration: timer.elapsed(),
+          rows: results.rows.map((r) => makeCaseInsensitive(r as T)),
         }
       } catch (err) {
+        QueryMetrics.QueryErrors.add(1, {
+          "query.name": query.name,
+          "query.mode": query.mode,
+        })
         console.log(err)
+        error = err
       } finally {
         if (client) {
-          client.release()
+          client.release(error)
         }
       }
 

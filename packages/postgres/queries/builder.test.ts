@@ -1,6 +1,7 @@
 import type { SQLEnum } from "@telefrek/query/sql/types"
-import { createPostgresQueryBuilder, isPostgresQuery } from "./builder"
+import { createPostgresQueryBuilder } from "./builder"
 
+import { isPostgresQuery } from ".."
 import { Category, type TestDatabaseType } from "./testUtils"
 
 describe("Postgres query syntax should be translated correctly", () => {
@@ -13,8 +14,8 @@ describe("Postgres query syntax should be translated correctly", () => {
       .where((clause) => clause.containsItems("categories", "purchase"))
       .build("testQuery")
 
-    if (isPostgresQuery(query) && query.context.materializer === "static") {
-      expect(query.context.queryString).toEqual(
+    if (isPostgresQuery(query)) {
+      expect(query.text).toEqual(
         `SELECT id AS orderId, categories FROM orders WHERE '{"purchase"}' && categories`,
       )
     }
@@ -41,8 +42,8 @@ describe("Postgres query syntax should be translated correctly", () => {
       .columns("*")
       .build("testQuery")
 
-    if (isPostgresQuery(query) && query.context.materializer === "static") {
-      expect(query.context.queryString).toEqual(
+    if (isPostgresQuery(query)) {
+      expect(query.text).toEqual(
         "WITH customerOrders AS (SELECT customers.createdAt, customers.firstName, customers.lastName, orders.amount, orders.categories, orders.id AS orderId FROM orders JOIN customers ON orders.customerId = customers.id WHERE orders.amount > 0) SELECT * FROM customerOrders",
       )
     }
@@ -75,8 +76,8 @@ describe("Postgres query syntax should be translated correctly", () => {
       )
       .build("testQuery")
 
-    if (isPostgresQuery(query) && query.context.materializer === "static") {
-      expect(query.context.queryString).toEqual(
+    if (isPostgresQuery(query)) {
+      expect(query.text).toEqual(
         `WITH customerOrders AS (SELECT id AS orderId, customerId, categories, amount FROM orders WHERE amount > 0 and '{"test"}' && categories), customerNames AS (SELECT id, firstName, lastName FROM customers) SELECT customerNames.firstName, customerNames.lastName, customerOrders.amount, customerOrders.categories, customerOrders.orderId FROM customerOrders JOIN customerNames ON customerOrders.customerId = customerNames.id`,
       )
     }
@@ -113,8 +114,8 @@ describe("Postgres query syntax should be translated correctly", () => {
       )
       .build("testQuery")
 
-    if (isPostgresQuery(query) && query.context.materializer === "static") {
-      expect(query.context.queryString).toEqual(
+    if (isPostgresQuery(query)) {
+      expect(query.text).toEqual(
         "WITH customerOrders AS (SELECT id AS orderId, customerId, categories, amount FROM orders WHERE amount > $1 and $2 && categories), customerNames AS (SELECT id, firstName, lastName FROM customers) SELECT customerNames.firstName, customerNames.lastName, customerOrders.amount, customerOrders.categories, customerOrders.orderId FROM customerOrders JOIN customerNames ON customerOrders.customerId = customerNames.id",
       )
     }
