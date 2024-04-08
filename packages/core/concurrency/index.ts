@@ -143,7 +143,7 @@ export class Signal {
    *
    * @returns A {@link Promise} value that can be used to `await` the underly resource being available
    */
-  wait(timeout?: Duration): PromiseLike<boolean> {
+  wait(timeout?: Duration): Promise<boolean> {
     this.#waiting++
 
     return new Promise<boolean>((resolve) => {

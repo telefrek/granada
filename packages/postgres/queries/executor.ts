@@ -15,10 +15,10 @@ import {
   type SimpleQuery,
 } from "@telefrek/query/index"
 import pg from "pg"
+import type { Database } from ".."
 import { isPostgresQuery } from ".."
 import { GRANADA_METRICS_METER } from "../../core/observability/metrics"
 import type { PoolItem } from "../../core/structures/pool"
-import type { PostgresPool } from "../pool"
 
 const SAFE_INT_REGEX = /^(-)?[0-8]?\d{1,15}$/
 
@@ -52,9 +52,9 @@ pg.types.setTypeParser(pg.types.builtins.INT8, (v) =>
 )
 
 export class PostgresQueryExecutor implements QueryExecutor {
-  #pool: PostgresPool
+  #pool: Database
 
-  constructor(pool: PostgresPool) {
+  constructor(pool: Database) {
     this.#pool = pool
   }
 

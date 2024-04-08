@@ -2,8 +2,40 @@
  * Basic abstractions for Postgres
  */
 
+import { PoolBase, type PoolOptions } from "@telefrek/core/structures/pool"
 import { ExecutionMode, QueryParameters } from "@telefrek/query"
-import type { QueryConfig } from "pg"
+import { Client, type ClientConfig, type QueryConfig } from "pg"
+
+export interface PostgresPoolOptions extends PoolOptions {
+  clientConfig: ClientConfig
+}
+
+export class Database extends PoolBase<Client> {
+  #clientConfig: ClientConfig
+
+  constructor(options: PostgresPoolOptions) {
+    super(options)
+    this.#clientConfig = options.clientConfig
+  }
+
+  override checkIfValid(_item: Client, _reason?: unknown): boolean {
+    // TODO: Actually implement this
+    return true
+  }
+
+  override recycleItem(item: Client): void {
+    item.end((_) => {
+      // TODO: Add error tracking
+    })
+  }
+
+  override async createItem(): Promise<Client> {
+    const client = new Client(this.#clientConfig)
+    await client.connect()
+
+    return client
+  }
+}
 
 export type QueryMaterializer = (parameters: QueryParameters) => {
   text: string

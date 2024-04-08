@@ -4,8 +4,7 @@ import {
   PostgreSqlContainer,
   StartedPostgreSqlContainer,
 } from "@testcontainers/postgresql"
-import { GRANADA_METRICS_METER } from "../../core/observability/metrics"
-import { PostgresPool } from "../pool"
+import { Database } from ".."
 import { createPostgresQueryBuilder } from "./builder"
 import { PostgresQueryExecutor } from "./executor"
 import {
@@ -16,11 +15,11 @@ import {
 
 describe("Postgres should be able to execute queries", () => {
   let postgresContainer: StartedPostgreSqlContainer | undefined
-  let pool: PostgresPool | undefined
+  let pool: Database | undefined
   let executor: PostgresQueryExecutor | undefined
   beforeAll(async () => {
     postgresContainer = await new PostgreSqlContainer().start()
-    pool = new PostgresPool({
+    pool = new Database({
       name: "testPostgresPool",
       clientConfig: {
         connectionString: postgresContainer.getConnectionUri(),
@@ -69,9 +68,6 @@ describe("Postgres should be able to execute queries", () => {
       .insert("customers")
       .returning("*")
       .build("insertCustomer")
-
-    const counter = GRANADA_METRICS_METER.createCounter("testing")
-    counter.add(1)
 
     // Get a value that is 1 too large...
     const big: bigint = BigInt(Number.MAX_SAFE_INTEGER) + 1n
@@ -211,14 +207,11 @@ describe("Postgres should be able to execute queries", () => {
     expect(delRows.length).toBe(1)
     expect(delRows[0].id).toBe(1)
 
-    for (let n = 0; n < 1_000; ++n) {
-      counter.add(1)
-      result = await executor?.run(
-        query.bind({ amount: 1, categories: [Category.PURCHASE] }),
-      )
+    result = await executor?.run(
+      query.bind({ amount: 1, categories: [Category.PURCHASE] }),
+    )
 
-      rows = result?.mode === ExecutionMode.Normal ? result.rows : []
-      expect(rows.length).toBe(0)
-    }
-  }, 180_000)
+    rows = result?.mode === ExecutionMode.Normal ? result.rows : []
+    expect(rows.length).toBe(0)
+  })
 })

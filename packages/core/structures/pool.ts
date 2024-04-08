@@ -360,21 +360,21 @@ export abstract class PoolBase<T> implements Pool<T> {
    * @param item The item
    * @param reason The reason the item was reclaimed
    */
-  abstract checkIfValid(item: T, reason?: unknown): boolean
+  protected abstract checkIfValid(item: T, reason?: unknown): boolean
 
   /**
    * Allows the implementation to release any resources associated with the item
    *
    * @param item The item to recycle
    */
-  abstract recycleItem(item: T): void
+  protected abstract recycleItem(item: T): void
 
   /**
    * Creates a new item for the pool
    *
    * @returns The new item
    */
-  abstract createItem(): MaybeAwaitable<T>
+  protected abstract createItem(): MaybeAwaitable<T>
 }
 
 /**
