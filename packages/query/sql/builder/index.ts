@@ -167,6 +167,10 @@ export interface InsertBuilder<
   returning<C extends keyof D["tables"][T]>(
     ...columns: C[]
   ): InsertBuilder<D, T, Pick<D["tables"][T], C>, P>
+
+  columns<C extends keyof D["tables"][T]>(
+    ...columns: C[]
+  ): Omit<InsertBuilder<D, T, R, Pick<D["tables"][T], C>>, "columns">
 }
 
 export type SQLProcessorBuilder<

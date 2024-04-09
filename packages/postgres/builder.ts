@@ -364,6 +364,22 @@ function translateInsert(insert: InsertClause): PostgresContext {
   const tableName = manager.tableName
   const returning = manager.returning
 
+  if (insert.columns) {
+    const parameterMapping: Map<string, number> = new Map()
+    for (let n = 0; n < insert.columns.length; ++n) {
+      parameterMapping.set(insert.columns[n], n + 1)
+    }
+
+    return {
+      materializer: "static",
+      parameterMapping,
+      queryString: `
+      INSERT INTO ${tableName}(${insert.columns.join(",")}) 
+        VALUES(${insert.columns.map((_, idx) => `$${idx + 1}`).join(",")})
+        ${returning ? ` RETURNING ${returning === "*" ? "*" : returning.join(",")}` : ""}`,
+    } as PostgresStaticContext
+  }
+
   const insertMaterializer = (
     p: QueryParameters,
   ): { text: string; values?: unknown[] } => {

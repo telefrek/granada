@@ -539,17 +539,31 @@ class InternalInsertBuilder<
 > implements InsertBuilder<D, T, R, P>
 {
   tableName: T
+  insertColumns?: string[]
   returningColumns?: string[] | STAR
   builder: SQLNodeBuilderContext<D, QueryType.PARAMETERIZED, R>
 
   constructor(
     tableName: T,
     builder: SQLNodeBuilderContext<D, QueryType.PARAMETERIZED, R>,
+    columns?: string[],
     returningColumns?: string[] | STAR,
   ) {
     this.tableName = tableName
     this.builder = builder
+    this.insertColumns = columns
     this.returningColumns = returningColumns
+  }
+
+  columns<C extends keyof D["tables"][T]>(
+    ...columns: C[]
+  ): Omit<InsertBuilder<D, T, R, Pick<D["tables"][T], C>>, "columns"> {
+    return new InternalInsertBuilder(
+      this.tableName,
+      this.builder,
+      columns as string[],
+      this.returningColumns,
+    )
   }
 
   returning(columns: "*"): InsertBuilder<D, T, D["tables"][T], P>
@@ -566,6 +580,7 @@ class InternalInsertBuilder<
       return new InternalInsertBuilder<D, T, D["tables"][T], P>(
         this.tableName,
         this.builder,
+        this.insertColumns,
         columns,
       )
     }
@@ -573,6 +588,7 @@ class InternalInsertBuilder<
     return new InternalInsertBuilder<D, T, Pick<D["tables"][T], C>, P>(
       this.tableName,
       this.builder,
+      this.insertColumns,
       rest
         ? [columns as string].concat(rest.map((r: C) => r as string))
         : columns
@@ -585,6 +601,7 @@ class InternalInsertBuilder<
     const insert: InsertClause = {
       nodeType: SQLNodeType.INSERT,
       tableName: this.tableName as string,
+      columns: this.insertColumns,
     }
 
     if (this.returningColumns) {
