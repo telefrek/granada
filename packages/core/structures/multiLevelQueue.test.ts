@@ -2,11 +2,11 @@
  * Testing Multi Level Queue behaviors
  */
 
+import { TimeoutError } from "../errors"
 import { delay } from "../time"
 import {
   DefaultMultiLevelPriorityQueue,
   TaskPriority,
-  TimeoutError,
   type MultiLevelPriorityQueue,
 } from "./multiLevelQueue"
 

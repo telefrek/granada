@@ -2,6 +2,12 @@ import util from "util"
 import { isPromise } from "util/types"
 
 /**
+ * Simple numeric to represent priority values (pseudo "niceness" score) where
+ * lower priority is executed first
+ */
+export type FrameworkPriority = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+
+/**
  * Get the information about an object to help with debugging that leverages the
  * `util.inspect` method
  *
@@ -45,7 +51,7 @@ export type Rejector = (reason: unknown) => void
  * has the {@link Resolver} and {@link Rejector} objects exposed via the
  * corresponding `resolve` and `reject` methods
  */
-export class DeferredPromise<T> implements PromiseLike<T> {
+export class DeferredPromise<T> implements Promise<T> {
   #resolver: Resolver<T>
   #rejector: Rejector
   #promise: Promise<T>
@@ -67,6 +73,10 @@ export class DeferredPromise<T> implements PromiseLike<T> {
     Object.seal(this)
   }
 
+  get [Symbol.toStringTag](): string {
+    return `Deferred=>${this.#promise[Symbol.toStringTag]}`
+  }
+
   then<TResult1 = T, TResult2 = never>(
     onfulfilled?:
       | ((value: T) => TResult1 | PromiseLike<TResult1>)
@@ -76,8 +86,21 @@ export class DeferredPromise<T> implements PromiseLike<T> {
       | ((reason: unknown) => TResult2 | PromiseLike<TResult2>)
       | null
       | undefined,
-  ): PromiseLike<TResult1 | TResult2> {
+  ): Promise<TResult1 | TResult2> {
     return this.#promise.then(onfulfilled, onrejected)
+  }
+
+  catch<TResult = never>(
+    onrejected?:
+      | ((reason: unknown) => TResult | PromiseLike<TResult>)
+      | null
+      | undefined,
+  ): Promise<T | TResult> {
+    return this.#promise.catch(onrejected)
+  }
+
+  finally(onfinally?: (() => void) | null | undefined): Promise<T> {
+    return this.#promise.finally(onfinally)
   }
 
   /**

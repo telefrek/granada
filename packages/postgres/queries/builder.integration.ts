@@ -4,7 +4,7 @@ import {
   PostgreSqlContainer,
   StartedPostgreSqlContainer,
 } from "@testcontainers/postgresql"
-import { Database } from ".."
+import { PostgresConnectionPool } from "../pool"
 import { createPostgresQueryBuilder } from "./builder"
 import { PostgresQueryExecutor } from "./executor"
 import {
@@ -15,11 +15,11 @@ import {
 
 describe("Postgres should be able to execute queries", () => {
   let postgresContainer: StartedPostgreSqlContainer | undefined
-  let pool: Database | undefined
+  let pool: PostgresConnectionPool | undefined
   let executor: PostgresQueryExecutor | undefined
   beforeAll(async () => {
     postgresContainer = await new PostgreSqlContainer().start()
-    pool = new Database({
+    pool = new PostgresConnectionPool({
       name: "testPostgresPool",
       clientConfig: {
         connectionString: postgresContainer.getConnectionUri(),

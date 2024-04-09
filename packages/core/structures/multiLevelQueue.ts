@@ -2,8 +2,9 @@
  * Multi-Level Priority Queue
  */
 
-import { DeferredPromise, MaybeAwaitable } from ".."
+import { DeferredPromise, MaybeAwaitable, type FrameworkPriority } from ".."
 import { Signal } from "../concurrency"
+import { TimeoutError } from "../errors"
 import { Duration } from "../time"
 import type { Func } from "../type/utils"
 
@@ -15,6 +16,22 @@ export enum TaskPriority {
   HIGH,
   MEDIUM,
   LOW,
+}
+
+/**
+ * Map between the general {@link FrameworkPriority} and {@link TaskPriority} to bucketize
+ *
+ * @param priority The {@link FrameworkPriority} to map
+ * @returns The corrisponding {@link TaskPriority}
+ */
+export function asTaskPriority(priority: FrameworkPriority) {
+  return priority <= 1
+    ? TaskPriority.CRITICAL
+    : priority <= 3
+      ? TaskPriority.HIGH
+      : priority <= 5
+        ? TaskPriority.MEDIUM
+        : TaskPriority.LOW
 }
 
 /**
@@ -33,29 +50,17 @@ export interface MultiLevelPriorityQueue {
   queue<T, Args extends unknown[]>(
     work: Func<Args, MaybeAwaitable<T>>,
     ...args: Args
-  ): PromiseLike<T>
+  ): Promise<T>
   queue<T, Args extends unknown[]>(
     options: MultiLevelTaskOptions,
     work: Func<Args, MaybeAwaitable<T>>,
     ...args: Args
-  ): PromiseLike<T>
+  ): Promise<T>
 
   workers: number
   size: number
 
   shutdown(): Promise<void>
-}
-
-export class TimeoutError extends Error {
-  static readonly TIMEOUT_ERR_SYMBOL: unique symbol = Symbol();
-
-  [Symbol.hasInstance](error: unknown): error is TimeoutError {
-    return (
-      typeof error === "object" &&
-      error !== null &&
-      TimeoutError.TIMEOUT_ERR_SYMBOL in error
-    )
-  }
 }
 
 /**
@@ -124,17 +129,17 @@ export class DefaultMultiLevelPriorityQueue implements MultiLevelPriorityQueue {
   queue<T, Args extends unknown[]>(
     work: Func<Args, MaybeAwaitable<T>>,
     ...args: Args
-  ): PromiseLike<T>
+  ): Promise<T>
   queue<T, Args extends unknown[]>(
     options: MultiLevelTaskOptions,
     work: Func<Args, MaybeAwaitable<T>>,
     ...args: Args
-  ): PromiseLike<T>
+  ): Promise<T>
   queue<T, Args extends unknown[]>(
     options: Func<Args, MaybeAwaitable<T>> | MultiLevelTaskOptions,
     work?: Func<Args, MaybeAwaitable<T>> | unknown,
     ...args: Args
-  ): PromiseLike<T> {
+  ): Promise<T> {
     const taskOptions: TaskRuntimeOptions = {
       priority: TaskPriority.MEDIUM,
       timeout: Date.now() + 15_000, // TODO: make this configurable
