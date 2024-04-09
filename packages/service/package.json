@@ -1,6 +1,6 @@
 {
   "name": "@telefrek/service",
-  "version": "1.0.0-alpha.15",
+  "version": "1.0.0-alpha.16",
   "description": "This package makes creating new services easier than working with the raw HTTP stack",
   "scripts": {
     "clean": "rm -rf ./dist",
@@ -31,7 +31,7 @@
   "author": "nathan@telefrek.com",
   "license": "MIT",
   "dependencies": {
-    "@telefrek/http": "^1.0.0-alpha.15"
+    "@telefrek/http": "^1.0.0-alpha.16"
   },
   "gitHead": "1be6bb3a61aab8ae5361827b54f8428682b9d536"
 }
