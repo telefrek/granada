@@ -6,6 +6,53 @@ import type { PropertyOfType } from "@telefrek/core/type/utils"
 import type { QueryParameters } from "../index"
 import type { SQLDataTable } from "./index"
 
+/**
+ * Helper class for building type definitions
+ */
+export class SQLColumnTypes {
+  static enum = <T extends SQLEnumType>(type: T): BaseColumnDefinition<T> => {
+    return {
+      type,
+    }
+  }
+
+  static of = <T extends ValidSQLTypes>(type: T): BaseColumnDefinition<T> => {
+    return {
+      type,
+    }
+  }
+
+  static variable = <T extends VariableSQLTypes>(
+    type: T,
+    maxSize?: number,
+  ): VariableColumnDefinition<T> => {
+    return {
+      type,
+      size: maxSize ?? -1,
+    }
+  }
+
+  static incremental = <T extends IncrementalSQLTypes>(
+    type: T,
+    autoIncrement?: boolean,
+  ): IncrementalColumnDefinition<T> => {
+    return {
+      type,
+      autoIncrement: autoIncrement ?? true,
+    }
+  }
+
+  static arrayOf = <T extends ValidSQLTypes>(
+    definition: ColumnDefinition<T> | T,
+  ): ColumnDefinition<T>[] => {
+    return [
+      typeof definition === "object"
+        ? (definition as ColumnDefinition<T>)
+        : (SQLColumnTypes.of(definition) as ColumnDefinition<T>),
+    ]
+  }
+}
+
 export enum SQLColumnType {
   BIT = "bit",
   TINYINT = "tinyint",
