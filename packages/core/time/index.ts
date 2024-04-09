@@ -83,10 +83,10 @@ const MICRO_PER_MILLI = 1_000
  * Represents a duration of time
  */
 export class Duration {
-  #microseconds: number
+  _microseconds: number
 
   private constructor(nanoseconds: bigint) {
-    this.#microseconds = Number((nanoseconds * 1_000_000n) / NANO_PER_SECOND)
+    this._microseconds = Number((nanoseconds * 1_000_000n) / NANO_PER_SECOND)
   }
 
   /**
@@ -94,7 +94,7 @@ export class Duration {
    * @returns The number of seconds with 6 decimal places for microsecond resolution
    */
   public seconds(): number {
-    return this.#microseconds / MICRO_PER_SECOND
+    return this._microseconds / MICRO_PER_SECOND
   }
 
   /**
@@ -102,7 +102,7 @@ export class Duration {
    * @returns the number of milliseconds with 3 decimal places for microsecond resolution
    */
   public milliseconds(): number {
-    return this.#microseconds / MICRO_PER_MILLI
+    return this._microseconds / MICRO_PER_MILLI
   }
 
   /**
@@ -110,7 +110,7 @@ export class Duration {
    * @returns The number of microseconds
    */
   public microseconds(): number {
-    return this.#microseconds
+    return this._microseconds
   }
 
   public toString(): string {
@@ -144,7 +144,7 @@ export class Duration {
 }
 
 export class HiResClock {
-  private static readonly INIT = process.hrtime.bigint()
+  private static readonly INIT: bigint = process.hrtime.bigint()
 
   public static timestamp(): string {
     return Duration.fromNano(

@@ -10,11 +10,11 @@ export type TransformFunc<T, U> = (data: T) => MaybeAwaitable<U | undefined>
  * Create a generic {@link Stream.Transform} using a {@link TransformFunc}
  */
 export class GenericTransform<T, U> extends Stream.Transform {
-  #transform: TransformFunc<T, U>
+  private transform: TransformFunc<T, U>
 
   constructor(transform: TransformFunc<T, U>) {
     super({ objectMode: true })
-    this.#transform = transform
+    this.transform = transform
   }
 
   /**
@@ -30,7 +30,7 @@ export class GenericTransform<T, U> extends Stream.Transform {
     callback: TransformCallback,
   ): Promise<void> {
     try {
-      const val = await this.#transform(chunk)
+      const val = await this.transform(chunk)
       if (val !== undefined) this.push(val)
       callback()
     } catch (err) {

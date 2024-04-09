@@ -87,33 +87,33 @@ interface RoutingLayer {
  * Builder class for creating pipelines using a flow style api
  */
 class HttpPipelineBuilder {
-  readonly #source: RequestSource
-  readonly #unhandled: UnhandledRequestConsumer
-  readonly #routing: RoutingLayer = {}
-  readonly #pipeline: StagedPipeline = {}
+  readonly _source: RequestSource
+  readonly _unhandled: UnhandledRequestConsumer
+  readonly _routing: RoutingLayer = {}
+  readonly _pipeline: StagedPipeline = {}
 
   constructor(
     source: RequestSource,
     unhandled: UnhandledRequestConsumer = NOT_FOUND_CONSUMER,
   ) {
-    this.#source = source
-    this.#unhandled = unhandled
+    this._source = source
+    this._unhandled = unhandled
   }
 
   withContentParsing(transform: HttpPipelineTransform): HttpPipelineBuilder {
     // Already defined, this is meant to be singular
     // TODO: Create the types to handle combined vs singular per stage so it's easy to see
-    if (this.#pipeline.contentParsing) {
+    if (this._pipeline.contentParsing) {
       throw new Error("ContentParsing is already specified")
     }
 
-    this.#pipeline.contentParsing = transform
+    this._pipeline.contentParsing = transform
     return this
   }
 
   withContentHosting(transform: HttpPipelineTransform): HttpPipelineBuilder {
-    this.#routing.hosting = this.#routing.hosting
-      ? combineTransforms(this.#routing.hosting, transform)
+    this._routing.hosting = this._routing.hosting
+      ? combineTransforms(this._routing.hosting, transform)
       : transform
     return this
   }
@@ -121,11 +121,11 @@ class HttpPipelineBuilder {
   withApi(routable: unknown): HttpPipelineBuilder {
     if (isRoutableApi(routable)) {
       // Ensure it exists
-      if (this.#routing.apiRouting === undefined) {
-        this.#routing.apiRouting = createRouter()
+      if (this._routing.apiRouting === undefined) {
+        this._routing.apiRouting = createRouter()
       }
 
-      this.#routing.apiRouting.addRouter(
+      this._routing.apiRouting.addRouter(
         routable.prefix ?? "/",
         routable.router,
       )
@@ -136,21 +136,21 @@ class HttpPipelineBuilder {
 
   build(): HttpPipeline {
     // Build the routing
-    let route = this.#routing.apiRouting
-      ? routeTransform(this.#routing.apiRouting)
+    let route = this._routing.apiRouting
+      ? routeTransform(this._routing.apiRouting)
       : undefined
 
     if (route) {
-      route = this.#routing.hosting
-        ? combineTransforms(route, this.#routing.hosting)
+      route = this._routing.hosting
+        ? combineTransforms(route, this._routing.hosting)
         : route
     } else {
-      route = this.#routing.hosting
+      route = this._routing.hosting
     }
 
-    this.#pipeline.routing = route
+    this._pipeline.routing = route
 
-    return new DefaultPipeline(this.#source, this.#pipeline, this.#unhandled)
+    return new DefaultPipeline(this._source, this._pipeline, this._unhandled)
   }
 }
 
@@ -214,9 +214,9 @@ export const createPipeline = (
 ): HttpPipelineBuilder => new HttpPipelineBuilder(source, unhandledRequest)
 
 class DefaultPipeline extends EventEmitter implements HttpPipeline {
-  #reader: Readable
-  #abort = new AbortController()
-  #pipelineCompletion: Promise<void>
+  _reader: Readable
+  _abort = new AbortController()
+  _pipelineCompletion: Promise<void>
 
   constructor(
     source: RequestSource,
@@ -225,7 +225,7 @@ class DefaultPipeline extends EventEmitter implements HttpPipeline {
   ) {
     super()
 
-    this.#reader = Readable.from(source)
+    this._reader = Readable.from(source)
     let transform: HttpPipelineTransform | undefined
 
     // Combine the transforms in order
@@ -251,21 +251,21 @@ class DefaultPipeline extends EventEmitter implements HttpPipeline {
     })
 
     if (transform) {
-      this.#pipelineCompletion = promisify(pipeline)(
-        this.#reader.on("error", (err) => this.emit("error", err)),
+      this._pipelineCompletion = promisify(pipeline)(
+        this._reader.on("error", (err) => this.emit("error", err)),
 
         createTransform(transform).once("error", (err) =>
           this.emit("error", err),
         ),
         unhandled,
         {
-          signal: this.#abort.signal,
+          signal: this._abort.signal,
           end: true,
         },
       )
     } else {
-      this.#pipelineCompletion = promisify(pipeline)(this.#reader, unhandled, {
-        signal: this.#abort.signal,
+      this._pipelineCompletion = promisify(pipeline)(this._reader, unhandled, {
+        signal: this._abort.signal,
         end: true,
       })
     }
@@ -274,11 +274,11 @@ class DefaultPipeline extends EventEmitter implements HttpPipeline {
   async stop(): Promise<void> {
     // Emit our stopping event
     this.emit("stopping")
-    this.#abort.abort("stop requested")
+    this._abort.abort("stop requested")
 
     try {
       // Wait for the pipeline to complete
-      await this.#pipelineCompletion
+      await this._pipelineCompletion
     } catch (err) {
       // Emit any errors
       this.emit("error", err)

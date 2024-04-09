@@ -125,18 +125,18 @@ const parseParameter = (s: string): SegmentValue => {
  * Default {@link Router} implementation that uses a tree structure to hold the mapping information
  */
 class RouterImpl implements Router {
-  readonly #root: RouteTrieNode = {
+  readonly _root: RouteTrieNode = {
     info: RouteSegmentInfo.None,
   }
 
   lookup(request: LookupRequest): RouteInfo | undefined {
-    let current = this.#root
+    let current = this._root
     let remainder = request.path
 
     let parameters: Map<string, SegmentValue> | undefined
     let nextSlash = -1
-    let children = this.#root.children
-    let info = this.#root.info
+    let children = this._root.children
+    let info = this._root.info
 
     // Still more to search
     while (remainder.length > 0) {
@@ -254,13 +254,13 @@ class RouterImpl implements Router {
     method?: HttpMethod | undefined,
   ): void {
     // Verify the template and get the set of segments
-    const segments = this.#verifyRoute(template)
+    const segments = this._verifyRoute(template)
 
     // Get the last segment off the list
     const final = segments.pop()!
 
     // No children so far, just embed this entire stack
-    if (this.#root.children === undefined) {
+    if (this._root.children === undefined) {
       const handlerNode: HandlerNode = {
         segment: final.segment,
         parameter: final.parameter,
@@ -277,17 +277,17 @@ class RouterImpl implements Router {
       }
 
       // Add the first node
-      this.#addFast(this.#root, segments, handlerNode)
+      this._addFast(this._root, segments, handlerNode)
     } else {
-      let current = this.#root
+      let current = this._root
 
       // Merge all the segments
       for (const segment of segments) {
-        current = this.#mergeSegment(current, segment)
+        current = this._mergeSegment(current, segment)
       }
 
       // Get the location for our handler from the final merge
-      current = this.#mergeSegment(current, final)
+      current = this._mergeSegment(current, final)
 
       if (isHandlerNode(current)) {
         if (method) {
@@ -329,13 +329,13 @@ class RouterImpl implements Router {
 
   addRouter(template: string, router: Router): void {
     // Verify the template and get the set of segments
-    const segments = this.#verifyRoute(template)
+    const segments = this._verifyRoute(template)
 
     // Get the last segment off the list
     const final = segments.pop()!
 
     // No children so far, just embed this entire stack
-    if (this.#root.children === undefined) {
+    if (this._root.children === undefined) {
       // Build the node
       const routerNode: RouterNode = {
         segment: final.segment,
@@ -345,17 +345,17 @@ class RouterImpl implements Router {
       }
 
       // Add this to the root, no need for collision checks
-      this.#addFast(this.#root, segments, routerNode)
+      this._addFast(this._root, segments, routerNode)
     } else {
-      let current = this.#root
+      let current = this._root
 
       // Merge all the segments
       for (const segment of segments) {
-        current = this.#mergeSegment(current, segment)
+        current = this._mergeSegment(current, segment)
       }
 
       // Get the location for our handler from the final merge
-      current = this.#mergeSegment(current, final)
+      current = this._mergeSegment(current, final)
 
       if (isHandlerNode(current)) {
         throw new RoutingError(
@@ -379,7 +379,7 @@ class RouterImpl implements Router {
    * @param children The children to inspect
    * @param info The info for the collision check
    */
-  #guardUnmappable(children: RouteTrieNode[], info: RouteSegmentInfo): void {
+  _guardUnmappable(children: RouteTrieNode[], info: RouteSegmentInfo): void {
     if (
       children.some((c) => c.info !== info && c.info !== RouteSegmentInfo.None)
     ) {
@@ -396,7 +396,7 @@ class RouterImpl implements Router {
    * @param segment The {@link RouteSegment} we want to add at this point
    * @returns The resulting {@link RouteTrieNode} where the next operations would happen
    */
-  #mergeSegment(current: RouteTrieNode, segment: RouteSegment): RouteTrieNode {
+  _mergeSegment(current: RouteTrieNode, segment: RouteSegment): RouteTrieNode {
     // Easy case
     if (current.children === undefined) {
       const next: RouteTrieNode = {
@@ -415,7 +415,7 @@ class RouterImpl implements Router {
       // Handle terminal and wildcard where we are just looking for a match or inserting
       case RouteSegmentInfo.Wildcard:
       case RouteSegmentInfo.Terminal: {
-        this.#guardUnmappable(current.children, segment.info)
+        this._guardUnmappable(current.children, segment.info)
 
         let next = current.children.find((child) => child.info === segment.info)
 
@@ -445,7 +445,7 @@ class RouterImpl implements Router {
           // Fine to share from here
           return paramNode
         } else {
-          this.#guardUnmappable(current.children, segment.info)
+          this._guardUnmappable(current.children, segment.info)
           // Create the new node
           const next: RouteTrieNode = {
             segment: segment.segment,
@@ -504,7 +504,7 @@ class RouterImpl implements Router {
             return covering
           }
 
-          return this.#split(covering, segment, lcp)
+          return this._split(covering, segment, lcp)
         } else {
           // No covering, just add from here
           const next: RouteTrieNode = {
@@ -521,7 +521,7 @@ class RouterImpl implements Router {
     }
   }
 
-  #split(
+  _split(
     current: RouteTrieNode,
     segment: RouteSegment,
     prefixLegnth: number,
@@ -569,7 +569,7 @@ class RouterImpl implements Router {
    * @param segments The remaining {@link RouteSegment}
    * @param node The terminal {@link RouteTrieNode}
    */
-  #addFast(
+  _addFast(
     current: RouteTrieNode,
     segments: RouteSegment[],
     node: RouteTrieNode,
@@ -599,7 +599,7 @@ class RouterImpl implements Router {
    *
    * @returns The set of {@link RouteSegment} found for this template path
    */
-  #verifyRoute(template: string): RouteSegment[] {
+  _verifyRoute(template: string): RouteSegment[] {
     // verify the template matches
     if (!TEMPLATE_REGEX.test(template)) {
       throw new RoutingError("Template is not valid")

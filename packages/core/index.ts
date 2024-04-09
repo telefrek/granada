@@ -52,21 +52,21 @@ export type Rejector = (reason: unknown) => void
  * corresponding `resolve` and `reject` methods
  */
 export class DeferredPromise<T> implements Promise<T> {
-  #resolver: Resolver<T>
-  #rejector: Rejector
-  #promise: Promise<T>
+  _resolver: Resolver<T>
+  _rejector: Rejector
+  _promise: Promise<T>
 
   constructor() {
     let resolver: Resolver<T> | undefined
     let rejector: Rejector | undefined
 
-    this.#promise = new Promise<T>((resolve: Resolver<T>, reject: Rejector) => {
+    this._promise = new Promise<T>((resolve: Resolver<T>, reject: Rejector) => {
       resolver = resolve
       rejector = reject
     })
 
-    this.#resolver = resolver!
-    this.#rejector = rejector!
+    this._resolver = resolver!
+    this._rejector = rejector!
 
     // Prevent further extension of the object since we want this as a
     // lightweight wrapper around a Promise, not an extension point around them
@@ -74,7 +74,7 @@ export class DeferredPromise<T> implements Promise<T> {
   }
 
   get [Symbol.toStringTag](): string {
-    return `Deferred=>${this.#promise[Symbol.toStringTag]}`
+    return `Deferred=>${this._promise[Symbol.toStringTag]}`
   }
 
   then<TResult1 = T, TResult2 = never>(
@@ -87,7 +87,7 @@ export class DeferredPromise<T> implements Promise<T> {
       | null
       | undefined,
   ): Promise<TResult1 | TResult2> {
-    return this.#promise.then(onfulfilled, onrejected)
+    return this._promise.then(onfulfilled, onrejected)
   }
 
   catch<TResult = never>(
@@ -96,11 +96,11 @@ export class DeferredPromise<T> implements Promise<T> {
       | null
       | undefined,
   ): Promise<T | TResult> {
-    return this.#promise.catch(onrejected)
+    return this._promise.catch(onrejected)
   }
 
   finally(onfinally?: (() => void) | null | undefined): Promise<T> {
-    return this.#promise.finally(onfinally)
+    return this._promise.finally(onfinally)
   }
 
   /**
@@ -109,7 +109,7 @@ export class DeferredPromise<T> implements Promise<T> {
    * @param value The {@link MaybeAwaitable} to provide to the {@link Promise} chain
    */
   resolve(value: MaybeAwaitable<T>): void {
-    this.#resolver(value)
+    this._resolver(value)
   }
 
   /**
@@ -118,6 +118,6 @@ export class DeferredPromise<T> implements Promise<T> {
    * @param reason The reason to provide the {@link Promise} chain for rejection
    */
   reject(reason: unknown): void {
-    this.#rejector(reason)
+    this._rejector(reason)
   }
 }

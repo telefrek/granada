@@ -16,11 +16,11 @@ export interface PostgresPoolOptions extends PoolOptions {
  * Default implementation of a {@link PoolBase} for postgres
  */
 export class PostgresConnectionPool extends PoolBase<Client> {
-  #clientConfig: ClientConfig
+  _clientConfig: ClientConfig
 
   constructor(options: PostgresPoolOptions) {
     super(options)
-    this.#clientConfig = options.clientConfig
+    this._clientConfig = options.clientConfig
   }
 
   override checkIfValid(_item: Client, _reason?: unknown): boolean {
@@ -35,7 +35,7 @@ export class PostgresConnectionPool extends PoolBase<Client> {
   }
 
   override async createItem(): Promise<Client> {
-    const client = new Client(this.#clientConfig)
+    const client = new Client(this._clientConfig)
     await client.connect()
 
     return client

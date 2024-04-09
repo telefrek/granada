@@ -67,27 +67,27 @@ export interface MultiLevelPriorityQueue {
  * Default implementation of the {@link MultiLevelPriorityQueue}
  */
 export class DefaultMultiLevelPriorityQueue implements MultiLevelPriorityQueue {
-  #queue: MultiLevelQueue = {
+  _queue: MultiLevelQueue = {
     [TaskPriority.CRITICAL]: [],
     [TaskPriority.HIGH]: [],
     [TaskPriority.MEDIUM]: [],
     [TaskPriority.LOW]: [],
   }
-  #signal: Signal = new Signal()
-  #workers: QueueWorker[]
-  #curator: QueueWorker
+  _signal: Signal = new Signal()
+  _workers: QueueWorker[]
+  _curator: QueueWorker
 
   constructor(size: number) {
-    this.#workers = []
+    this._workers = []
     for (let n = 0; n < size; ++n) {
       const controller = new AbortController()
       const worker = new MultiLevelWorkerThread(
-        this.#queue,
-        this.#signal,
+        this._queue,
+        this._signal,
         controller.signal,
       )
 
-      this.#workers.push({
+      this._workers.push({
         worker,
         controller,
         promise: worker.run(),
@@ -95,8 +95,8 @@ export class DefaultMultiLevelPriorityQueue implements MultiLevelPriorityQueue {
     }
 
     const curatorController = new AbortController()
-    const curator = new QueueCurator(this.#queue, curatorController.signal)
-    this.#curator = {
+    const curator = new QueueCurator(this._queue, curatorController.signal)
+    this._curator = {
       worker: curator,
       controller: curatorController,
       promise: curator.run(),
@@ -104,24 +104,24 @@ export class DefaultMultiLevelPriorityQueue implements MultiLevelPriorityQueue {
   }
 
   get workers(): number {
-    return this.#workers.length
+    return this._workers.length
   }
 
   get size(): number {
     return (
-      this.#queue[TaskPriority.CRITICAL].length +
-      this.#queue[TaskPriority.HIGH].length +
-      this.#queue[TaskPriority.MEDIUM].length +
-      this.#queue[TaskPriority.LOW].length
+      this._queue[TaskPriority.CRITICAL].length +
+      this._queue[TaskPriority.HIGH].length +
+      this._queue[TaskPriority.MEDIUM].length +
+      this._queue[TaskPriority.LOW].length
     )
   }
 
   async shutdown(): Promise<void> {
-    this.#workers.forEach((w) => w.controller.abort())
-    await Promise.allSettled(this.#workers.map((w) => w.promise))
+    this._workers.forEach((w) => w.controller.abort())
+    await Promise.allSettled(this._workers.map((w) => w.promise))
 
-    this.#curator.controller.abort()
-    await this.#curator.promise
+    this._curator.controller.abort()
+    await this._curator.promise
 
     return
   }
@@ -178,10 +178,10 @@ export class DefaultMultiLevelPriorityQueue implements MultiLevelPriorityQueue {
       options: taskOptions,
     }
 
-    this.#queue[taskOptions.priority].push(task)
+    this._queue[taskOptions.priority].push(task)
 
     // If anything is waiting signal it
-    this.#signal.notify()
+    this._signal.notify()
 
     return task.promise
   }
@@ -210,19 +210,19 @@ interface MultiLevelWorker {
 }
 
 class MultiLevelWorkerThread implements MultiLevelWorker {
-  readonly #queue: MultiLevelQueue
-  readonly #signal: Signal
-  readonly #abort: AbortSignal
+  readonly _queue: MultiLevelQueue
+  readonly _signal: Signal
+  readonly _abort: AbortSignal
 
   constructor(queue: MultiLevelQueue, signal: Signal, abort: AbortSignal) {
-    this.#queue = queue
-    this.#signal = signal
-    this.#abort = abort
+    this._queue = queue
+    this._signal = signal
+    this._abort = abort
   }
 
   async run(): Promise<void> {
-    while (!this.#abort.aborted) {
-      const task = this.#next()
+    while (!this._abort.aborted) {
+      const task = this._next()
       if (task) {
         try {
           if (task.args) {
@@ -234,14 +234,14 @@ class MultiLevelWorkerThread implements MultiLevelWorker {
           task.promise.reject(err)
         }
       } else {
-        await this.#signal.wait(Duration.fromMilli(500))
+        await this._signal.wait(Duration.fromMilli(500))
       }
     }
   }
 
-  #next(): MultiLevelQueueTask_T | undefined {
+  _next(): MultiLevelQueueTask_T | undefined {
     for (let p = 0; p < 4; ++p) {
-      const task = this.#queue[p as TaskPriority].shift()
+      const task = this._queue[p as TaskPriority].shift()
       if (task) {
         return task
       }
@@ -252,32 +252,32 @@ class MultiLevelWorkerThread implements MultiLevelWorker {
 }
 
 class QueueCurator implements MultiLevelWorker {
-  readonly #queue: MultiLevelQueue
-  readonly #abort: AbortSignal
-  readonly #timeout: NodeJS.Timeout
-  readonly #signal: Signal = new Signal()
+  readonly _queue: MultiLevelQueue
+  readonly _abort: AbortSignal
+  readonly _timeout: NodeJS.Timeout
+  readonly _signal: Signal = new Signal()
 
   constructor(queue: MultiLevelQueue, abort: AbortSignal) {
-    this.#queue = queue
-    this.#abort = abort
+    this._queue = queue
+    this._abort = abort
 
-    const curate = this.#curate.bind(this)
-    this.#timeout = setInterval(curate, 250)
+    const curate = this._curate.bind(this)
+    this._timeout = setInterval(curate, 250)
   }
 
-  #curate(): void {
+  _curate(): void {
     // Check for an abort
-    if (this.#abort.aborted) {
-      this.#signal.notify()
+    if (this._abort.aborted) {
+      this._signal.notify()
 
       // Cancel the interval
-      clearInterval(this.#timeout)
+      clearInterval(this._timeout)
       return
     }
 
     // Process each queue looking for things that are expired
     for (let n = 3; n >= 0; --n) {
-      const queue = this.#queue[n as TaskPriority]
+      const queue = this._queue[n as TaskPriority]
 
       while (queue.length > 0 && queue[0].options.timeout < Date.now()) {
         queue
@@ -293,13 +293,13 @@ class QueueCurator implements MultiLevelWorker {
         queue[0].options.escalate === n &&
         n > 0
       ) {
-        this.#queue[(n - 1) as TaskPriority].push(queue.shift()!)
+        this._queue[(n - 1) as TaskPriority].push(queue.shift()!)
       }
     }
   }
 
   run(): Promise<void> {
-    return this.#signal.wait().then((_) => {
+    return this._signal.wait().then((_) => {
       return
     })
   }

@@ -90,19 +90,19 @@ export class DefaultSQLNodeBuilder<
   A extends keyof D["tables"] = never,
 > implements SQLNodeBuilderContext<D, Q, R, P, A>
 {
-  #context?: SQLQueryNode<SQLNodeType>
-  #tableAlias: TableAlias
+  _context?: SQLQueryNode<SQLNodeType>
+  _tableAlias: TableAlias
 
   // Only all the context to transit to the next node in the chain
   get context(): SQLQueryNode<SQLNodeType> | undefined {
-    const current = this.#context
-    this.#context = undefined
+    const current = this._context
+    this._context = undefined
 
     return current
   }
 
   get tableAlias(): TableAlias {
-    return this.#tableAlias
+    return this._tableAlias
   }
 
   queryBuilder: QueryBuilder
@@ -117,8 +117,8 @@ export class DefaultSQLNodeBuilder<
   ) {
     this.queryType = queryType
     this.queryBuilder = queryBuilder
-    this.#context = context
-    this.#tableAlias = tableAlias
+    this._context = context
+    this._tableAlias = tableAlias
   }
 
   delete<T extends keyof D["tables"]>(
@@ -129,7 +129,7 @@ export class DefaultSQLNodeBuilder<
       new DefaultSQLNodeBuilder(
         this.queryType,
         this.queryBuilder,
-        this.#context,
+        this._context,
         this.tableAlias,
       ),
     )
@@ -143,7 +143,7 @@ export class DefaultSQLNodeBuilder<
       new DefaultSQLNodeBuilder(
         this.queryType,
         this.queryBuilder,
-        this.#context,
+        this._context,
         this.tableAlias,
       ),
     )
@@ -157,7 +157,7 @@ export class DefaultSQLNodeBuilder<
       new DefaultSQLNodeBuilder(
         QueryType.PARAMETERIZED,
         this.queryBuilder,
-        this.#context,
+        this._context,
         this.tableAlias,
       ),
     )
@@ -177,7 +177,7 @@ export class DefaultSQLNodeBuilder<
     return new DefaultSQLNodeBuilder(
       QueryType.PARAMETERIZED,
       this.queryBuilder,
-      this.#context,
+      this._context,
       this.tableAlias,
     )
   }
@@ -202,7 +202,7 @@ export class DefaultSQLNodeBuilder<
       R,
       P,
       A | Alias
-    >(this.queryType, this.queryBuilder, this.#context, {
+    >(this.queryType, this.queryBuilder, this._context, {
       ...this.tableAlias,
       ...a,
     })
@@ -247,8 +247,8 @@ export class DefaultSQLNodeBuilder<
     tableName: T,
   ): SelectBuilder<D, T, D["tables"][T], P, Q> {
     const alias: keyof D["tables"] | undefined =
-      tableName in this.#tableAlias
-        ? this.#tableAlias[tableName as string]
+      tableName in this._tableAlias
+        ? this._tableAlias[tableName as string]
         : undefined
     return new InternalTableBuilder(
       tableName,
@@ -919,7 +919,7 @@ class InternalWhereClauseBuilder<
   ): WhereClauseBuilder<T, Q, P> {
     return new InternalWhereClauseBuilder(
       this.queryType,
-      this.#columnFilter(column as string, ColumnFilteringOperation.EQ, value),
+      this._columnFilter(column as string, ColumnFilteringOperation.EQ, value),
     )
   }
 
@@ -929,7 +929,7 @@ class InternalWhereClauseBuilder<
   ): WhereClauseBuilder<T, Q, P> {
     return new InternalWhereClauseBuilder(
       this.queryType,
-      this.#columnFilter(column as string, ColumnFilteringOperation.GT, value),
+      this._columnFilter(column as string, ColumnFilteringOperation.GT, value),
     )
   }
 
@@ -939,7 +939,7 @@ class InternalWhereClauseBuilder<
   ): WhereClauseBuilder<T, Q, P> {
     return new InternalWhereClauseBuilder(
       this.queryType,
-      this.#columnFilter(column as string, ColumnFilteringOperation.GTE, value),
+      this._columnFilter(column as string, ColumnFilteringOperation.GTE, value),
     )
   }
 
@@ -949,7 +949,7 @@ class InternalWhereClauseBuilder<
   ): WhereClauseBuilder<T, Q, P> {
     return new InternalWhereClauseBuilder(
       this.queryType,
-      this.#columnFilter(column as string, ColumnFilteringOperation.LT, value),
+      this._columnFilter(column as string, ColumnFilteringOperation.LT, value),
     )
   }
 
@@ -959,11 +959,11 @@ class InternalWhereClauseBuilder<
   ): WhereClauseBuilder<T, Q, P> {
     return new InternalWhereClauseBuilder(
       this.queryType,
-      this.#columnFilter(column as string, ColumnFilteringOperation.LTE, value),
+      this._columnFilter(column as string, ColumnFilteringOperation.LTE, value),
     )
   }
 
-  #columnFilter(
+  _columnFilter(
     column: string,
     op: ColumnFilteringOperation,
     value: unknown,
@@ -1010,7 +1010,7 @@ class InternalWhereClauseBuilder<
   ): WhereClauseBuilder<T, Q, P> {
     return new InternalWhereClauseBuilder(
       this.queryType,
-      this.#containmentFilter(
+      this._containmentFilter(
         column as string,
         ColumnValueContainsOperation.IN,
         ContainmentObjectType.STRING,
@@ -1027,7 +1027,7 @@ class InternalWhereClauseBuilder<
   ): WhereClauseBuilder<T, Q, P> {
     return new InternalWhereClauseBuilder(
       this.queryType,
-      this.#containmentFilter(
+      this._containmentFilter(
         column as string,
         ColumnValueContainsOperation.IN,
         ContainmentObjectType.ARRAY,
@@ -1040,7 +1040,7 @@ class InternalWhereClauseBuilder<
     )
   }
 
-  #containmentFilter<T extends ContainmentObjectType>(
+  _containmentFilter<T extends ContainmentObjectType>(
     column: string,
     op: ColumnValueContainsOperation,
     columnType: T,

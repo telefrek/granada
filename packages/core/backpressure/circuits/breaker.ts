@@ -147,24 +147,24 @@ export function createBreaker(
  * marshalling calls and tracking success/failure thresholds
  */
 class DefaultCircuitBreaker implements CircuitBreaker {
-  #state: BreakerState
-  #failureCount: number
-  #failureThreshold: number
-  #retryAfterMs: number
-  #openedAt?: number
-  #timer?: NodeJS.Timeout
-  #thisArg: unknown
+  _state: BreakerState
+  _failureCount: number
+  _failureThreshold: number
+  _retryAfterMs: number
+  _openedAt?: number
+  _timer?: NodeJS.Timeout
+  _thisArg: unknown
 
   constructor(thisArg: unknown, options?: CircuitBreakerOptions) {
-    this.#state = BreakerState.CLOSED
-    this.#failureThreshold = options?.failureThreshold ?? 5
-    this.#retryAfterMs = options?.retryAfterMs ?? 5_000
-    this.#failureCount = 0
-    this.#thisArg = thisArg
+    this._state = BreakerState.CLOSED
+    this._failureThreshold = options?.failureThreshold ?? 5
+    this._retryAfterMs = options?.retryAfterMs ?? 5_000
+    this._failureCount = 0
+    this._thisArg = thisArg
   }
 
   get state(): BreakerState {
-    return this.#state
+    return this._state
   }
 
   invoke<Args extends unknown[], T>(
@@ -182,7 +182,7 @@ class DefaultCircuitBreaker implements CircuitBreaker {
     ...args: unknown[]
   ): MaybeAwaitable<T> {
     // Check our current state
-    this.#checkState()
+    this._checkState()
 
     // Get our response check object
     const responseCheck =
@@ -200,14 +200,14 @@ class DefaultCircuitBreaker implements CircuitBreaker {
     ) as Args
 
     // Bind our failure and success calls since we're most likely in a promise
-    const onFailure = this.#updateFailure.bind(this)
-    const onSuccess = this.#updateSuccess.bind(this)
+    const onFailure = this._updateFailure.bind(this)
+    const onSuccess = this._updateSuccess.bind(this)
 
     // Start a timer
     const timer = new Timer()
 
     // Invoke the function
-    const response = asPromise(callable.call(this.#thisArg, ...functionArgs))
+    const response = asPromise(callable.call(this._thisArg, ...functionArgs))
 
     // Update that promise with callbacks to hook our state
     return (response as Promise<T>).then(
@@ -236,51 +236,51 @@ class DefaultCircuitBreaker implements CircuitBreaker {
     )
   }
 
-  #checkState(): void {
+  _checkState(): void {
     // If we are open, don't let the call through
-    if (this.#state === BreakerState.OPEN) {
-      const openMs = Date.now() - (this.#openedAt ?? Date.now())
+    if (this._state === BreakerState.OPEN) {
+      const openMs = Date.now() - (this._openedAt ?? Date.now())
 
       // Raise the error with the given information
       throw new CircuitOpenError("CircuitBreaker is open", {
         openDuration: Duration.fromMilli(openMs),
         timeToClose: Duration.fromMilli(
-          Math.max(0, this.#retryAfterMs - openMs),
+          Math.max(0, this._retryAfterMs - openMs),
         ),
       })
     }
   }
 
-  #updateFailure(): void {
-    this.#failureCount++
+  _updateFailure(): void {
+    this._failureCount++
 
     // Check if we need to stop things
-    if (this.#failureCount >= this.#failureThreshold) {
+    if (this._failureCount >= this._failureThreshold) {
       // Fail open
-      this.#state = BreakerState.OPEN
+      this._state = BreakerState.OPEN
 
       // Check to see if we already triggered the half open state callback
-      if (this.#timer === undefined) {
+      if (this._timer === undefined) {
         // Track when we failed open
-        this.#openedAt = Date.now()
+        this._openedAt = Date.now()
 
         // Trigger the retry after MS call so we don't have to wait for
         // another call to update state
-        this.#timer = setTimeout(() => {
+        this._timer = setTimeout(() => {
           // Set the state and clear the timer states
-          this.#state = BreakerState.HALF_OPEN
-          this.#timer = undefined
-          this.#openedAt = undefined
-        }, this.#retryAfterMs)
+          this._state = BreakerState.HALF_OPEN
+          this._timer = undefined
+          this._openedAt = undefined
+        }, this._retryAfterMs)
       }
     }
   }
 
-  #updateSuccess(): void {
+  _updateSuccess(): void {
     // Reset the failure count
-    this.#failureCount = 0
+    this._failureCount = 0
 
     // Set the state back to closed
-    this.#state = BreakerState.CLOSED
+    this._state = BreakerState.CLOSED
   }
 }

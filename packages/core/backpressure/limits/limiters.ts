@@ -6,13 +6,13 @@ import { LimitAlgorithm, LimitedOperation, Limiter } from "./"
  * Base class for all implementations of the {@link Limiter}
  */
 abstract class AbstractLimiter implements Limiter {
-  #limitAlgorithm: LimitAlgorithm
-  #limit: number
-  #inFlight: number
+  _limitAlgorithm: LimitAlgorithm
+  _limit: number
+  _inFlight: number
 
   // Allow retrieving the internal limit
   get limit() {
-    return this.#limit
+    return this._limit
   }
 
   /**
@@ -26,18 +26,18 @@ abstract class AbstractLimiter implements Limiter {
       throw new Error(`Invalid initialLimit: ${initialLimit}`)
     }
 
-    this.#limitAlgorithm = limitAlgorithm
-    this.#limit = initialLimit
-    this.#inFlight = 0
+    this._limitAlgorithm = limitAlgorithm
+    this._limit = initialLimit
+    this._inFlight = 0
 
-    this.#limitAlgorithm.on("changed", this.onChange.bind(this))
+    this._limitAlgorithm.on("changed", this.onChange.bind(this))
   }
 
   /**
    * @returns The current limit
    */
   getLimit(): number {
-    return this.#limit
+    return this._limit
   }
 
   tryAcquire(): LimitedOperation | undefined {
@@ -50,7 +50,7 @@ abstract class AbstractLimiter implements Limiter {
    * @param newLimit The new limit to use
    */
   protected onChange(newLimit: number) {
-    this.#limit = newLimit
+    this._limit = newLimit
   }
 
   /**
@@ -66,10 +66,10 @@ abstract class AbstractLimiter implements Limiter {
    * Base {@link LimitedOperation} that handles state tracking and mainpulation of the underlying {@link AbstractLimiter}
    */
   AbstractLimitOperation = class implements LimitedOperation {
-    #limiter: AbstractLimiter
-    #finished: boolean
-    #timer: Timer
-    #running: number
+    _limiter: AbstractLimiter
+    _finished: boolean
+    _timer: Timer
+    _running: number
 
     /**
      * Requires the base {@link AbstractLimiter} which can be updated
@@ -77,31 +77,31 @@ abstract class AbstractLimiter implements Limiter {
      * @param limiter The {@link AbstractLimiter} to update
      */
     constructor(limiter: AbstractLimiter) {
-      this.#limiter = limiter
-      this.#finished = false
-      this.#running = ++limiter.#inFlight
-      this.#timer = new Timer()
-      this.#timer.start()
+      this._limiter = limiter
+      this._finished = false
+      this._running = ++limiter._inFlight
+      this._timer = new Timer()
+      this._timer.start()
     }
 
     success(): void {
-      this.#update()
-      this.#limiter.#limitAlgorithm.update(
-        this.#timer.stop(),
-        this.#running,
+      this._update()
+      this._limiter._limitAlgorithm.update(
+        this._timer.stop(),
+        this._running,
         false,
       )
     }
 
     ignore(): void {
-      this.#update()
+      this._update()
     }
 
     dropped(): void {
-      this.#update()
-      this.#limiter.#limitAlgorithm.update(
-        this.#timer.stop(),
-        this.#running,
+      this._update()
+      this._limiter._limitAlgorithm.update(
+        this._timer.stop(),
+        this._running,
         true,
       )
     }
@@ -109,11 +109,11 @@ abstract class AbstractLimiter implements Limiter {
     /**
      * Private method to update the finished state and limiter inFlight value
      */
-    #update(): void {
+    _update(): void {
       // Ensure we only finish this once for any state
-      if (!this.#finished) {
-        this.#finished = true
-        this.#limiter.#inFlight--
+      if (!this._finished) {
+        this._finished = true
+        this._limiter._inFlight--
       } else {
         throw new Error("This operation has already been finished!")
       }
@@ -125,7 +125,7 @@ abstract class AbstractLimiter implements Limiter {
  * Simple {@link Limiter} that uses a {@link Semaphore} to gate access
  */
 class SimpleLimiter extends AbstractLimiter {
-  #semaphore: Semaphore
+  _semaphore: Semaphore
 
   /**
    * SimpleLimiter requires at least a {@link LimitAlgorithm} and optional limit (default is 1)
@@ -136,14 +136,14 @@ class SimpleLimiter extends AbstractLimiter {
   constructor(limitAlgorithm: LimitAlgorithm, initialLimit = 1) {
     super(limitAlgorithm, initialLimit)
 
-    this.#semaphore = new Semaphore(initialLimit)
+    this._semaphore = new Semaphore(initialLimit)
   }
 
   override tryAcquire(): LimitedOperation | undefined {
     // Use the non-blocking version
-    if (this.#semaphore.tryAcquire()) {
+    if (this._semaphore.tryAcquire()) {
       return new this.SimpleLimitedOperation(
-        this.#semaphore,
+        this._semaphore,
         this.createOperation(),
       )
     }
@@ -153,7 +153,7 @@ class SimpleLimiter extends AbstractLimiter {
 
   protected override onChange(newLimit: number): void {
     // Resize the semaphore
-    this.#semaphore.resize(newLimit)
+    this._semaphore.resize(newLimit)
 
     // Propogate the change
     super.onChange(newLimit)
@@ -163,8 +163,8 @@ class SimpleLimiter extends AbstractLimiter {
    * Wrapped {@link LimitedOperation} for releasing the internal {@link Semaphore}
    */
   SimpleLimitedOperation = class implements LimitedOperation {
-    #delegate: LimitedOperation
-    #semaphore: Semaphore
+    _delegate: LimitedOperation
+    _semaphore: Semaphore
 
     /**
      * Requires the objects to manage as internal state
@@ -173,23 +173,23 @@ class SimpleLimiter extends AbstractLimiter {
      * @param delegate The {@link LimitedOperation} to delegate to
      */
     constructor(semaphore: Semaphore, delegate: LimitedOperation) {
-      this.#delegate = delegate
-      this.#semaphore = semaphore
+      this._delegate = delegate
+      this._semaphore = semaphore
     }
 
     success(): void {
-      this.#semaphore.release()
-      this.#delegate.success()
+      this._semaphore.release()
+      this._delegate.success()
     }
 
     ignore(): void {
-      this.#semaphore.release()
-      this.#delegate.ignore()
+      this._semaphore.release()
+      this._delegate.ignore()
     }
 
     dropped(): void {
-      this.#semaphore.release()
-      this.#delegate.dropped()
+      this._semaphore.release()
+      this._delegate.dropped()
     }
   }
 }

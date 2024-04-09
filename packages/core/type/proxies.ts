@@ -13,23 +13,23 @@ export const makeCaseInsensitive = <T extends object>(obj: T): T =>
  * Custom {@link ProxyHandler} that makes access of a property mostly case insensitive
  */
 class CaseInsensitiveProxyHandler<T extends object> implements ProxyHandler<T> {
-  #keys: string[]
-  #lowerCaseKeys: string[]
+  _keys: string[]
+  _lowerCaseKeys: string[]
 
   constructor(obj: T) {
-    this.#keys = Object.keys(obj)
-    this.#lowerCaseKeys = this.#keys.map((k) => k.toLowerCase())
+    this._keys = Object.keys(obj)
+    this._lowerCaseKeys = this._keys.map((k) => k.toLowerCase())
   }
 
-  #getKey(property: string): keyof T | undefined {
-    const idx = this.#lowerCaseKeys.indexOf(property.toLowerCase())
-    return idx >= 0 ? (this.#keys.at(idx) as keyof T) : undefined
+  _getKey(property: string): keyof T | undefined {
+    const idx = this._lowerCaseKeys.indexOf(property.toLowerCase())
+    return idx >= 0 ? (this._keys.at(idx) as keyof T) : undefined
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   get(target: T, prop: string | symbol, _proxy: any): any {
     if (typeof prop === "string") {
-      const key = this.#getKey(prop)
+      const key = this._getKey(prop)
       return key ? target[key] : undefined
     }
 
@@ -40,7 +40,7 @@ class CaseInsensitiveProxyHandler<T extends object> implements ProxyHandler<T> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   set(target: T, prop: string | symbol, newValue: any, _proxy: any): boolean {
     if (typeof prop === "string") {
-      const key = this.#getKey(prop)
+      const key = this._getKey(prop)
       if (key) {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         target[key] = newValue

@@ -91,22 +91,22 @@ export interface PostgresDatabase extends QueryExecutor {
 }
 
 export class DefaultPostgresDatabase implements PostgresDatabase {
-  readonly #pool: Pool<Client>
-  readonly #defaultTimeout: Duration
-  readonly #queue: MultiLevelPriorityQueue
-  readonly #limit: Limiter
+  readonly _pool: Pool<Client>
+  readonly _defaultTimeout: Duration
+  readonly _queue: MultiLevelPriorityQueue
+  readonly _limit: Limiter
 
   constructor(options: PostgresDatabaseOptions) {
-    this.#pool = options.pool
-    this.#defaultTimeout = Duration.fromMilli(
+    this._pool = options.pool
+    this._defaultTimeout = Duration.fromMilli(
       options.defaultTimeoutMilliseconds ?? 1_000,
     )
 
     // TODO: make these potional
-    this.#limit = createSimpleLimiter(vegasBuilder(2).withMax(48).build())
+    this._limit = createSimpleLimiter(vegasBuilder(2).withMax(48).build())
 
     // TODO: Change queue working size based on rate limiting
-    this.#queue = new DefaultMultiLevelPriorityQueue(4)
+    this._queue = new DefaultMultiLevelPriorityQueue(4)
   }
 
   run<T extends RowType, P extends QueryParameters>(
@@ -129,14 +129,14 @@ export class DefaultPostgresDatabase implements PostgresDatabase {
     _timeout?: Duration,
   ): Promise<QueryResult<T>> {
     // TODO: Hook in the monitoring of pool errors
-    const result = await this.#queue.queue(
+    const result = await this._queue.queue(
       {
         priority: asTaskPriority(query.priority ?? 5),
       },
       executeQuery<T>,
       query,
-      this.#pool,
-      this.#defaultTimeout,
+      this._pool,
+      this._defaultTimeout,
     )
 
     return result

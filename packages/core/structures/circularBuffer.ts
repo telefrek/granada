@@ -138,33 +138,33 @@ export interface CircularArrayBufferOptions {
  */
 export class CircularArrayBuffer<T> implements CircularBuffer<T> {
   // Pointers and state
-  #head = 0
-  #tail = 0
-  #size = 0
-  #closed = false
+  _head = 0
+  _tail = 0
+  _size = 0
+  _closed = false
 
-  #capacity: number
+  _capacity: number
 
   // Read/Write signals
-  #readSignal = new Signal()
+  _readSignal = new Signal()
   writeSignal = new Signal()
 
   // Buffer management
-  readonly #MASK: number
-  readonly #buffer: T[]
+  readonly _MASK: number
+  readonly _buffer: T[]
 
   constructor(options: CircularArrayBufferOptions) {
     // Clamp the highWaterMark to a value >= 2
-    this.#capacity = Math.max(options.highWaterMark ?? 1024, 2)
+    this._capacity = Math.max(options.highWaterMark ?? 1024, 2)
 
     // Find the size of the buffer that will hold this amount of data
-    const bufferSize = 1 << (32 - Math.clz32(this.#capacity))
+    const bufferSize = 1 << (32 - Math.clz32(this._capacity))
 
     // Get the bitmask for doing fast wrap around without division
-    this.#MASK = bufferSize - 1
+    this._MASK = bufferSize - 1
 
     // Fill the buffer with a lot of nothing
-    this.#buffer = Array(bufferSize) as T[]
+    this._buffer = Array(bufferSize) as T[]
   }
 
   [Symbol.asyncIterator](): AsyncIterator<T, void, undefined> {
@@ -172,27 +172,27 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
   }
 
   get available(): number {
-    return this.#capacity - this.#size
+    return this._capacity - this._size
   }
 
   get size(): number {
-    return this.#size
+    return this._size
   }
 
   get closed(): boolean {
-    return this.#closed
+    return this._closed
   }
 
   get finished(): boolean {
-    return this.#closed && this.#size === 0
+    return this._closed && this._size === 0
   }
 
   tryAdd(value: T): boolean {
     // Verify we have enough space
     if (this.available > 0) {
-      this.#buffer[this.#head++] = value
-      this.#head &= this.#MASK
-      this.#size++
+      this._buffer[this._head++] = value
+      this._head &= this._MASK
+      this._size++
 
       // Notify pending writers there is more data
       this.writeSignal.notify()
@@ -211,9 +211,9 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
       // Keep adding until the remainder is 0
       // TODO: Probably a faster way to do this, but fine for now to walk the arrays
       while (rem-- > 0) {
-        this.#buffer[this.#head++] = values[idx++]
-        this.#head &= this.#MASK
-        this.#size++
+        this._buffer[this._head++] = values[idx++]
+        this._head &= this._MASK
+        this._size++
       }
 
       // Notify pending writers there is more data
@@ -229,15 +229,15 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
     // Check if there is something available
     while (this.available === 0) {
       // Try to see if we can became unblocked before the timeout
-      if (this.#closed || !(await this.#readSignal.wait(timeout))) {
+      if (this._closed || !(await this._readSignal.wait(timeout))) {
         return false
       }
     }
 
     // Add it to the buffer and return success
-    this.#buffer[this.#head++] = value
-    this.#head &= this.#MASK
-    this.#size++
+    this._buffer[this._head++] = value
+    this._head &= this._MASK
+    this._size++
 
     // Notify pending writers there is more data
     this.writeSignal.notify()
@@ -250,7 +250,7 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
     timeout?: Duration,
   ): Promise<number> {
     // We can't add more values that the size of our array...
-    if (minValues !== undefined && minValues > this.#capacity) {
+    if (minValues !== undefined && minValues > this._capacity) {
       return 0
     }
 
@@ -264,8 +264,8 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
     // Try to wait for the amount of space we need to show up
     while (this.available < (minValues ?? 1)) {
       if (
-        this.#closed ||
-        !(await this.#readSignal.wait(
+        this._closed ||
+        !(await this._readSignal.wait(
           expiration !== Number.MAX_VALUE
             ? Duration.fromMilli(Math.max(1, Date.now() - expiration))
             : undefined,
@@ -280,9 +280,9 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
     let rem = Math.max(this.available, minValues ?? 1)
     let idx = 0
     while (rem-- > 0) {
-      this.#buffer[this.#head++] = values[idx++]
-      this.#head &= this.#MASK
-      this.#size++
+      this._buffer[this._head++] = values[idx++]
+      this._head &= this._MASK
+      this._size++
     }
 
     // Notify pending writers there is more data
@@ -293,60 +293,60 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
 
   tryRemove(): T | undefined {
     // Check size
-    if (this.#size === 0) {
+    if (this._size === 0) {
       return undefined
     }
 
     // Get the next item
-    const ret = this.#buffer[this.#tail++]
-    this.#tail &= this.#MASK
-    this.#size--
+    const ret = this._buffer[this._tail++]
+    this._tail &= this._MASK
+    this._size--
 
     // Notify pending readers there is more room
-    this.#readSignal.notify()
+    this._readSignal.notify()
 
     return ret
   }
 
   tryRemoveRange(maxValues: number): T[] {
     // Check size
-    if (this.#size === 0) {
+    if (this._size === 0) {
       return []
     }
 
     // Clamp at maxValues or current size
-    let rem = Math.min(maxValues, this.#size)
+    let rem = Math.min(maxValues, this._size)
 
     // Add the values to the return array
     // TODO: Better to pre-allocate?
     const ret: T[] = []
     while (rem-- > 0) {
-      ret.push(this.#buffer[this.#tail++])
-      this.#tail &= this.#MASK
-      this.#size--
+      ret.push(this._buffer[this._tail++])
+      this._tail &= this._MASK
+      this._size--
     }
 
     // Notify pending readers there is more room
-    this.#readSignal.notify()
+    this._readSignal.notify()
 
     return ret
   }
 
   async remove(timeout?: Duration): Promise<T | undefined> {
-    while (this.#size == 0) {
+    while (this._size == 0) {
       // If we are closed or can't read, abandon
-      if (this.#closed || !(await this.writeSignal.wait(timeout))) {
+      if (this._closed || !(await this.writeSignal.wait(timeout))) {
         return undefined
       }
     }
 
     // Get the next item
-    const ret = this.#buffer[this.#tail++]
-    this.#tail &= this.#MASK
-    this.#size--
+    const ret = this._buffer[this._tail++]
+    this._tail &= this._MASK
+    this._size--
 
     // Notify pending readers there is more room
-    this.#readSignal.notify()
+    this._readSignal.notify()
 
     return ret
   }
@@ -364,9 +364,9 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
         : Number.MAX_VALUE
 
     // Try to wait for the amount of space we need to show up
-    while (!this.#closed && this.#size < (minValues ?? 1)) {
+    while (!this._closed && this._size < (minValues ?? 1)) {
       if (
-        !(await this.#readSignal.wait(
+        !(await this._readSignal.wait(
           expiration !== Number.MAX_VALUE
             ? Duration.fromMilli(Math.max(1, Date.now() - expiration))
             : undefined,
@@ -378,27 +378,27 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
     }
 
     // Clamp at maxValues or current size
-    let rem = Math.min(maxValues ?? minValues ?? this.#size, this.#size)
+    let rem = Math.min(maxValues ?? minValues ?? this._size, this._size)
 
     // Add the values to the return array
     // TODO: Better to pre-allocate?
     const ret: T[] = []
     while (rem-- > 0) {
-      ret.push(this.#buffer[this.#tail++])
-      this.#tail &= this.#MASK
-      this.#size--
+      ret.push(this._buffer[this._tail++])
+      this._tail &= this._MASK
+      this._size--
     }
 
     // Notify pending readers there is more room
-    this.#readSignal.notify()
+    this._readSignal.notify()
 
     return ret
   }
 
   close(): void {
-    this.#closed = true
+    this._closed = true
 
     this.writeSignal.notifyAll()
-    this.#readSignal.notifyAll()
+    this._readSignal.notifyAll()
   }
 }

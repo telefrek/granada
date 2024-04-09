@@ -10,18 +10,18 @@ import { Duration } from "../time/"
  * correctly across execution contexts
  */
 export class SynchronizedValue<T> {
-  #value: T
+  _value: T
 
   constructor(value: T) {
-    this.#value = value
+    this._value = value
   }
 
   get value(): T {
-    return this.#value
+    return this._value
   }
 
   set value(newValue: T) {
-    this.#value = newValue
+    this._value = newValue
   }
 }
 
@@ -34,8 +34,8 @@ type MutexCallback = (value: MaybeAwaitable<boolean>) => void
  * Class representing a simple mutex
  */
 export class Mutex {
-  #locked = false
-  #callbacks: MutexCallback[] = []
+  _locked = false
+  _callbacks: MutexCallback[] = []
 
   /**
    * Tries to acquire the {@link Mutex} but will not block if unavailable
@@ -43,8 +43,8 @@ export class Mutex {
    * @returns True if the mutex was acquired
    */
   tryAcquire(): boolean {
-    if (!this.#locked) {
-      this.#locked = true
+    if (!this._locked) {
+      this._locked = true
       return true
     }
 
@@ -59,8 +59,8 @@ export class Mutex {
    * @returns A {@link PromiseLike} value for tracking when the mutex is acquired
    */
   acquire(timeout?: Duration): PromiseLike<boolean> | boolean {
-    if (!this.#locked) {
-      this.#locked = true
+    if (!this._locked) {
+      this._locked = true
       return true
     }
 
@@ -79,10 +79,10 @@ export class Mutex {
         // Set the timeout
         timer = setTimeout(() => {
           // Verify our callback is still in the set
-          const idx = this.#callbacks.indexOf(callback)
+          const idx = this._callbacks.indexOf(callback)
           if (idx >= 0) {
             // Remove the callback from being accessed to release memory
-            this.#callbacks.splice(idx, 1)
+            this._callbacks.splice(idx, 1)
 
             // Don't resolve false unless we popped off the stack
             resolve(false)
@@ -90,9 +90,9 @@ export class Mutex {
         }, timeout.milliseconds())
 
         // Add the callback to cancel the timer
-        this.#callbacks.push(callback)
+        this._callbacks.push(callback)
       } else {
-        this.#callbacks.push(resolve)
+        this._callbacks.push(resolve)
       }
     })
   }
@@ -102,13 +102,13 @@ export class Mutex {
    */
   release(): void {
     // Release our hold on the lock...
-    this.#locked = false
+    this._locked = false
 
     // Fire the next callback when ready with a true flag to indicate success
-    if (this.#callbacks.length > 0) {
+    if (this._callbacks.length > 0) {
       // Re-lock the structure
-      this.#locked = true
-      const resolve = this.#callbacks.shift()!
+      this._locked = true
+      const resolve = this._callbacks.shift()!
 
       // Fire the next piece of code right after this since we can't know which phase of the event
       // loop we are currently in
@@ -129,11 +129,11 @@ type SignalCallback = (value: MaybeAwaitable<boolean>) => void
  * Class to allow waiting for a signal from another concurrent execution
  */
 export class Signal {
-  #callbacks: SignalCallback[] = []
-  #waiting: number = 0
+  _callbacks: SignalCallback[] = []
+  _waiting: number = 0
 
   get waiting(): number {
-    return this.#waiting
+    return this._waiting
   }
 
   /**
@@ -144,7 +144,7 @@ export class Signal {
    * @returns A {@link Promise} value that can be used to `await` the underly resource being available
    */
   wait(timeout?: Duration): Promise<boolean> {
-    this.#waiting++
+    this._waiting++
 
     return new Promise<boolean>((resolve) => {
       // Check for timeout
@@ -157,7 +157,7 @@ export class Signal {
           clearTimeout(timer)
 
           // Decrement the waiting count
-          this.#waiting--
+          this._waiting--
 
           resolve(true)
         }
@@ -165,13 +165,13 @@ export class Signal {
         // Set the timeout
         timer = setTimeout(() => {
           // Verify our callback is still in the set
-          const idx = this.#callbacks.indexOf(callback)
+          const idx = this._callbacks.indexOf(callback)
           if (idx >= 0) {
             // Remove the callback from being accessed to release memory
-            this.#callbacks.splice(idx, 1)
+            this._callbacks.splice(idx, 1)
 
             // Decrement the waiting count
-            this.#waiting--
+            this._waiting--
 
             // Don't resolve false unless we popped off the stack
             resolve(false)
@@ -179,9 +179,9 @@ export class Signal {
         }, timeout.milliseconds())
 
         // Add the callback to cancel the timer
-        this.#callbacks.push(callback)
+        this._callbacks.push(callback)
       } else {
-        this.#callbacks.push(resolve)
+        this._callbacks.push(resolve)
       }
     })
   }
@@ -191,8 +191,8 @@ export class Signal {
    */
   notify(): void {
     // Fire the next callback when ready with a true flag to indicate success
-    if (this.#callbacks.length > 0) {
-      const resolve = this.#callbacks.shift()!
+    if (this._callbacks.length > 0) {
+      const resolve = this._callbacks.shift()!
 
       // Fire the next piece of code right after this since we can't know which phase of the event
       // loop we are currently in
@@ -209,8 +209,8 @@ export class Signal {
   notifyAll(): void {
     // Fire the next callback when ready with a true flag to indicate success
 
-    while (this.#callbacks.length > 0) {
-      const resolve = this.#callbacks.shift()!
+    while (this._callbacks.length > 0) {
+      const resolve = this._callbacks.shift()!
 
       // Fire the next piece of code right after this since we can't know which phase of the event
       // loop we are currently in
@@ -229,7 +229,7 @@ const MONITOR_SYMBOL: unique symbol = Symbol()
  * Simple implementation of a monitor
  */
 export class Monitor {
-  #mutex: Mutex = new Mutex()
+  _mutex: Mutex = new Mutex()
 
   /**
    * Wait for the given {@link Monitor} to become available
@@ -239,14 +239,14 @@ export class Monitor {
    * @returns A {@link MutexCallback} value that can be used to `await` the underly resource being available
    */
   wait(timeout?: Duration): PromiseLike<boolean> | boolean {
-    return this.#mutex.acquire(timeout)
+    return this._mutex.acquire(timeout)
   }
 
   /**
    * Notify the next waiter that the {@link Monitor} has become available
    */
   pulse(): void {
-    this.#mutex.release()
+    this._mutex.release()
   }
 }
 
@@ -271,15 +271,15 @@ export function getMonitor(obj: unknown): Monitor {
  * Represents a semaphore that can be used to control concurrent actions
  */
 export class Semaphore {
-  #concurrency: number
-  #running = 0
-  #callbacks: MutexCallback[] = []
+  _concurrency: number
+  _running = 0
+  _callbacks: MutexCallback[] = []
 
   /**
    * @param concurrency The desired concurrency
    */
   constructor(concurrency: number) {
-    this.#concurrency = concurrency
+    this._concurrency = concurrency
   }
 
   /**
@@ -303,8 +303,8 @@ export class Semaphore {
    * @returns True if the semaphore was acquired
    */
   public tryAcquire(): boolean {
-    if (this.#running < this.#concurrency) {
-      this.#running++
+    if (this._running < this._concurrency) {
+      this._running++
       return true
     }
 
@@ -320,8 +320,8 @@ export class Semaphore {
    */
   public acquire(timeout?: Duration): Promise<boolean> | boolean {
     // Go ahead and run
-    if (this.#running < this.#concurrency) {
-      this.#running++
+    if (this._running < this._concurrency) {
+      this._running++
       return true
     }
 
@@ -341,10 +341,10 @@ export class Semaphore {
         // Set the timeout
         timer = setTimeout(() => {
           // Verify our callback is still in the set
-          const idx = this.#callbacks.indexOf(callback)
+          const idx = this._callbacks.indexOf(callback)
           if (idx > 0) {
             // Remove the callback from being accessed to release memory
-            this.#callbacks.splice(idx, 1)
+            this._callbacks.splice(idx, 1)
 
             // Don't resolve false unless we popped off the stack
             resolve(false)
@@ -352,9 +352,9 @@ export class Semaphore {
         }, timeout.milliseconds())
 
         // Add the callback to cancel the timer
-        this.#callbacks.push(callback)
+        this._callbacks.push(callback)
       } else {
-        this.#callbacks.push(resolve)
+        this._callbacks.push(resolve)
       }
     })
   }
@@ -365,12 +365,12 @@ export class Semaphore {
    * NOTE: This is not checked so repeated calling may corrupt the state
    */
   public release() {
-    if (this.#callbacks.length > 0 && this.#running < this.#concurrency) {
+    if (this._callbacks.length > 0 && this._running < this._concurrency) {
       // Fire the mutex to release another unit of work
-      this.#callbacks.shift()!(true)
+      this._callbacks.shift()!(true)
     } else {
       // Decrement the current running count
-      this.#running--
+      this._running--
     }
   }
 
@@ -386,13 +386,13 @@ export class Semaphore {
     }
 
     // Update the concurrency
-    this.#concurrency = newLimit
+    this._concurrency = newLimit
 
     // We only need to signal more work during an increase, the decrease will happen automatically during the release cycle
-    while (this.#concurrency >= this.#running && this.#callbacks.length > 0) {
+    while (this._concurrency >= this._running && this._callbacks.length > 0) {
       // Increase the running count and release one of the waiting callbacks
-      this.#running++
-      this.#callbacks.shift()!(true)
+      this._running++
+      this._callbacks.shift()!(true)
     }
   }
 
@@ -400,13 +400,13 @@ export class Semaphore {
    * @returns The number of available slots in the semaphore
    */
   available(): number {
-    return this.#concurrency - this.#running
+    return this._concurrency - this._running
   }
 
   /**
    * @returns The current concurrency limit
    */
   limit(): number {
-    return this.#concurrency
+    return this._concurrency
   }
 }
