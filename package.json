@@ -7,7 +7,7 @@
     "test:unit": "jest --coverage --coverageProvider=v8 -c jest.unit.config.js",
     "test:integration": "jest --coverage --coverageProvider=v8 --detectOpenHandles -c jest.integration.config.js",
     "format": "npx prettier --write .",
-    "ci": "npm install && turbo lint && npm run test:unit",
+    "ci": "npm install && turbo lint && turbo build && npm run test:unit",
     "upgrade-all": "npx npm-check-updates -u && npm install && npm run upgrade --workspaces --if-present",
     "build": "turbo build",
     "lint": "npm run lint --workspaces --if-present"
