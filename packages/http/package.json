@@ -1,6 +1,6 @@
 {
   "name": "@telefrek/http",
-  "version": "1.0.0-alpha.12",
+  "version": "1.0.0-alpha.13",
   "description": "This package standardizes how HTTP clients and servers interact at a low level",
   "scripts": {
     "clean": "rm -rf ./dist",
@@ -30,7 +30,7 @@
   "author": "nathan@telefrek.com",
   "license": "MIT",
   "dependencies": {
-    "@telefrek/core": "^1.0.0-alpha.12"
+    "@telefrek/core": "^1.0.0-alpha.13"
   },
   "gitHead": "730d8573af6f7e7edf7187ab6f1a082f52d224e0"
 }
