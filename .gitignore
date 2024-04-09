@@ -3,6 +3,7 @@
 **/coverage
 **/.turbo
 **/traces
+**/.npmrc
 
 # Don't store local build cache results
 **/*.tsbuildinfo
