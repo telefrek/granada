@@ -58,7 +58,7 @@ import type {
   RelationalQueryBuilder,
   SQLDataStore,
 } from "@telefrek/query/sql/index"
-import type { PostgresQuery, QueryMaterializer } from ".."
+import type { PostgresQuery, QueryMaterializer } from "."
 
 export function createPostgresQueryBuilder<
   Database extends SQLDataStore,

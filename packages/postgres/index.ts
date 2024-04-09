@@ -2,21 +2,32 @@
  * Basic abstractions for Postgres
  */
 
-import { vegasBuilder } from "@telefrek/core/backpressure/limits/algorithms.js"
+import { vegasBuilder } from "@telefrek/core/backpressure/limits/algorithms"
 import {
   createSimpleLimiter,
   type Limiter,
 } from "@telefrek/core/backpressure/limits/index"
+import { GRANADA_METRICS_METER } from "@telefrek/core/observability/metrics"
 import {
-  DefaultMultiLevelPriorityQueue,
   asTaskPriority,
+  DefaultMultiLevelPriorityQueue,
   type MultiLevelPriorityQueue,
 } from "@telefrek/core/structures/multiLevelQueue"
-import { ExecutionMode, QueryParameters, type RowType } from "@telefrek/query"
-import { Client, type QueryConfig, type QueryResult } from "pg"
+import { makeCaseInsensitive } from "@telefrek/core/type/proxies"
+import {
+  ExecutionMode,
+  QueryParameters,
+  type BoundQuery,
+  type QueryExecutor,
+  type QueryResult,
+  type RowType,
+  type SimpleQuery,
+} from "@telefrek/query"
+import { QueryError } from "@telefrek/query/error"
+import { Client, types, type QueryConfig } from "pg"
 import type { FrameworkPriority } from "../core"
 import type { Pool } from "../core/structures/pool"
-import { Duration } from "../core/time"
+import { Duration, Timer } from "../core/time"
 
 /**
  * Options provided when building a {@link PostgresDatabase}
@@ -29,10 +40,36 @@ export interface PostgresDatabaseOptions {
   defaultTimeoutMilliseconds?: number
 }
 
+const SAFE_INT_REGEX = /^(-)?[0-8]?\d{1,15}$/
+
+const safeBigInt = (v: string) => {
+  return SAFE_INT_REGEX.test(v)
+    ? Number(v) // If number is less than 16 digits that start with a 9 we don't care
+    : (v.startsWith("-") ? v.substring(1) : v) > "9007199254740991"
+      ? BigInt(v)
+      : Number(v)
+}
+
+const PostgresQueryMetrics = {
+  QueryExecutionDuration: GRANADA_METRICS_METER.createHistogram(
+    "query_execution_time",
+    {
+      description: "The amount of time the query took to execute",
+    },
+  ),
+  QueryErrors: GRANADA_METRICS_METER.createCounter("query_error", {
+    description:
+      "The number of errors that have been encountered for the query",
+  }),
+} as const
+
+types.setTypeParser(types.builtins.TIMESTAMP, (v) => (v ? safeBigInt(v) : null))
+types.setTypeParser(types.builtins.INT8, (v) => (v ? safeBigInt(v) : null))
+
 /**
  * Represents a database that can have queries submitted against it
  */
-export interface PostgresDatabase {
+export interface PostgresDatabase extends QueryExecutor {
   /**
    * Submits a query for execution
    *
@@ -72,32 +109,87 @@ export class DefaultPostgresDatabase implements PostgresDatabase {
     this.#queue = new DefaultMultiLevelPriorityQueue(4)
   }
 
+  run<T extends RowType, P extends QueryParameters>(
+    query: SimpleQuery<T> | BoundQuery<T, P>,
+  ): Promise<QueryResult<T>> {
+    if (isPostgresQuery(query)) {
+      return this.submit(query)
+    }
+
+    throw new QueryError("Invalid query submitted for postgres")
+  }
+
   submit<T extends RowType>(query: PostgresQuery): Promise<QueryResult<T>>
   submit<T extends RowType>(
     query: PostgresQuery,
     timeout: Duration,
   ): Promise<QueryResult<T>>
-  submit<T extends RowType>(
+  async submit<T extends RowType>(
     query: PostgresQuery,
     _timeout?: Duration,
   ): Promise<QueryResult<T>> {
     // TODO: Hook in the monitoring of pool errors
-    return this.#queue.queue(
+    const result = await this.#queue.queue(
       {
         priority: asTaskPriority(query.priority ?? 5),
       },
-      async (pool: Pool<Client>, q: PostgresQuery, timeout: Duration) => {
-        const connection = await pool.get(timeout)
-        try {
-          return await connection.item.query<T>(q)
-        } finally {
-          connection.release()
-        }
-      },
-      this.#pool,
+      executeQuery<T>,
       query,
+      this.#pool,
       this.#defaultTimeout,
     )
+
+    return result
+  }
+}
+
+async function executeQuery<T extends RowType>(
+  query: PostgresQuery,
+  pool: Pool<Client>,
+  timeout: Duration,
+): Promise<QueryResult<T>> {
+  const timer = Timer.startNew()
+  const connection = await pool.get(timeout)
+
+  let error: unknown | undefined
+  try {
+    // TODO: Update for cursors...
+    // TODO: How do we want to deal with "named queries..." as well as
+    // tracking duplicates
+    const results = await connection.item.query({
+      ...query,
+      name: undefined,
+    })
+
+    const duration = timer.stop()
+
+    PostgresQueryMetrics.QueryExecutionDuration.record(duration.seconds(), {
+      "query.name": query.name,
+      "query.mode": query.mode,
+    })
+    // Update algorithm...
+
+    // Postgres doesn't care about casing in most places, so we need to
+    // make our results agnostic as well...
+    if (query.mode === ExecutionMode.Normal) {
+      return {
+        mode: query.mode,
+        duration: duration,
+        rows: results.rows.map((r) => makeCaseInsensitive(r as T)),
+      }
+    }
+
+    throw new QueryError("unsupported mode")
+  } catch (err) {
+    PostgresQueryMetrics.QueryErrors.add(1, {
+      "query.name": query.name,
+      "query.mode": query.mode,
+    })
+
+    error = err
+    throw err
+  } finally {
+    connection.release(error)
   }
 }
 

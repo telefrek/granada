@@ -1,7 +1,7 @@
 import type { SQLEnum } from "@telefrek/query/sql/types"
 import { createPostgresQueryBuilder } from "./builder"
 
-import { isPostgresQuery } from ".."
+import { isPostgresQuery } from "."
 import { Category, type TestDatabaseType } from "./testUtils"
 
 describe("Postgres query syntax should be translated correctly", () => {
