@@ -27,7 +27,7 @@ import {
   type RowType,
   type SimpleQuery,
 } from "@telefrek/query/index.js"
-import { Client, types, type QueryConfig } from "pg"
+import { Client, type QueryConfig } from "pg"
 
 /**
  * Options provided when building a {@link PostgresDatabase}
@@ -38,16 +38,6 @@ export interface PostgresDatabaseOptions {
 
   /** The default amount of time to wait for a task to complete (default is 1 second) */
   defaultTimeoutMilliseconds?: number
-}
-
-const SAFE_INT_REGEX = /^(-)?[0-8]?\d{1,15}$/
-
-const safeBigInt = (v: string) => {
-  return SAFE_INT_REGEX.test(v)
-    ? Number(v) // If number is less than 16 digits that start with a 9 we don't care
-    : (v.startsWith("-") ? v.substring(1) : v) > "9007199254740991"
-      ? BigInt(v)
-      : Number(v)
 }
 
 const PostgresQueryMetrics = {
@@ -62,10 +52,6 @@ const PostgresQueryMetrics = {
       "The number of errors that have been encountered for the query",
   }),
 } as const
-
-types.setTypeParser(types.builtins.TIMESTAMP, (v) => (v ? safeBigInt(v) : null))
-types.setTypeParser(types.builtins.INT8, (v) => (v ? safeBigInt(v) : null))
-
 /**
  * Represents a database that can have queries submitted against it
  */
@@ -202,7 +188,6 @@ export type QueryMaterializer = (parameters: QueryParameters) => {
   values?: unknown[]
 }
 
- 
 export interface PostgresQuery<R extends unknown[] = never>
   extends QueryConfig<R> {
   /** The query {@link ExecutionMode} */
