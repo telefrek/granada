@@ -326,7 +326,7 @@ class RouterImpl implements Router {
         }
 
         // Inject this in
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ;(current as any).handlers = handlers
       }
     }
@@ -372,7 +372,7 @@ class RouterImpl implements Router {
         )
       } else {
         // Inject the router
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ;(current as any).router = router
       }
     }
@@ -556,7 +556,7 @@ class RouterImpl implements Router {
       } as RouterNode
 
       // Remove the router from this object
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (current as RouteTrieNode as any).router
     }
 

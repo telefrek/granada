@@ -202,7 +202,7 @@ export type QueryMaterializer = (parameters: QueryParameters) => {
   values?: unknown[]
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+ 
 export interface PostgresQuery<R extends unknown[] = never>
   extends QueryConfig<R> {
   /** The query {@link ExecutionMode} */

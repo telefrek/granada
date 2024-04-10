@@ -65,7 +65,7 @@ abstract class AbstractLimitAlgorithm
  * Fixed limit that never changes
  */
 class FixedLimitAlgorithm extends AbstractLimitAlgorithm {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   protected _update(
     _duration: Duration,
     _inFlight: number,

@@ -377,7 +377,7 @@ function buildArrayFilter<ParameterType extends QueryParameters = never>(
   columnFilter: ArrayFilter,
   parameters?: ParameterType,
 ): (input: SQLDataTable) => boolean {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const value: any =
     columnFilter.type === "parameter"
       ? parameters![columnFilter.name]
@@ -423,7 +423,7 @@ function buildColumnFilter<ParameterType extends QueryParameters = never>(
     return (row) => row[columnFilter.column] === null
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const value: any =
     columnFilter.type === "parameter"
       ? parameters![columnFilter.name]

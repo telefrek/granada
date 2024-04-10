@@ -42,14 +42,14 @@ class CaseInsensitiveProxyHandler<T extends object> implements ProxyHandler<T> {
     if (typeof prop === "string") {
       const key = this._getKey(prop)
       if (key) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+         
         target[key] = newValue
       }
       return key !== undefined
     }
 
     // Allow symbols to be set, we don't know anything about them
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+     
     target[prop as keyof T] = newValue
     return true
   }

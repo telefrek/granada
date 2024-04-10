@@ -98,7 +98,7 @@ describe("Postgres should be able to execute queries", () => {
       .build("updateCustomer")
       .bind({ id: 1, updatedAt: 9n })
 
-    let updateResult = await executor?.run(updateUserQuery)
+    const updateResult = await executor?.run(updateUserQuery)
 
     const updateRows =
       updateResult?.mode === ExecutionMode.Normal ? updateResult.rows : []

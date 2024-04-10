@@ -102,15 +102,15 @@ interface RouteInfo {
 }
 
 interface RoutingData {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   info: RouteInfo[]
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getRoutingData = (proto: any): RoutingData => {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+   
   return (proto[ROUTING_DATA] ??
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+     
     (proto[ROUTING_DATA] = { info: [] })) as RoutingData
 }
 
@@ -124,7 +124,7 @@ type Constructor = new (...args: any[]) => {}
  * @returns An new instance of the class that has been wrapped as a {@link Service} and hooked into the global routing
  */
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/prefer-function-type, @typescript-eslint/ban-types
+ 
 export function routableApi(options: RoutableApiOptions) {
   // Wrap in a legacy decorator until Node supports the Typescript v5 format
   return <ApiClass extends Constructor>(target: ApiClass) => {
@@ -135,7 +135,7 @@ export function routableApi(options: RoutableApiOptions) {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       constructor(...args: any[]) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument
+         
         super(...args)
 
         // Hide our extra properties

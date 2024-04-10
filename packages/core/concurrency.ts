@@ -262,7 +262,7 @@ export function getMonitor(obj: unknown): Monitor {
 
   // Get the monitor or inject it
   return obj[MONITOR_SYMBOL as keyof typeof obj] === undefined
-    ? // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+    ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ((obj as any)[MONITOR_SYMBOL] = new Monitor())
     : (obj[MONITOR_SYMBOL as keyof typeof obj] as Monitor)
 }

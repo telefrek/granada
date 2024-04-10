@@ -9,9 +9,6 @@ const compat = new FlatCompat({
 })
 
 module.exports = [
-  // ESLint recommended flat config.
-  "eslint:recommended",
-
   // Flat config for parsing TypeScript files. Includes rules for TypeScript.
   ...compat.config({
     env: { node: true },
@@ -45,8 +42,6 @@ module.exports = [
       ],
       "no-warning-comments": 1,
     },
-  },
-  {
     ignores: ["eslint.config.js", "**/dist/*", "**/*.integration.ts"],
   },
 ]

@@ -24,7 +24,7 @@
   },
   "scripts": {
     "clean": "rm -rf ./dist",
-    "upgrade": "npx npm-check-updates -u && npm install",
+    "upgrade": "npx npm-check-updates -u && npm install --legacy-peer-deps",
     "build": "tsc",
     "compile": "tsc -p tsconfig.compile.json",
     "lint": "npx eslint . --fix"
