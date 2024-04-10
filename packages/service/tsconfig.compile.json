@@ -9,5 +9,6 @@
     "./dist/**/*",
     "./**/*.test.ts",
     "./**/*.integration.ts"
-  ]
+  ],
+  "references": [{ "path": "../core" }, { "path": "../http" }]
 }

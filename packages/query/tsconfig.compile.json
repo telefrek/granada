@@ -10,5 +10,6 @@
     "./**/*.test.ts",
     "./**/*.integration.ts",
     "./**/testUtils.ts"
-  ]
+  ],
+  "references": [{ "path": "../core" }]
 }
