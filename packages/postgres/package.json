@@ -2,6 +2,26 @@
   "name": "@telefrek/postgres",
   "version": "1.0.0-alpha.17",
   "description": "This package handles abstractions around postgres and interactions with a database",
+  "author": "nathan@telefrek.com",
+  "license": "MIT",
+  "keywords": [
+    "granada",
+    "framework",
+    "postgres"
+  ],
+  "type": "module",
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "dist/**/*.json"
+  ],
+  "types": "./dist/index.d.ts",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./*": "./dist/*.js",
+    "./*.js": "./dist/*.js"
+  },
   "scripts": {
     "clean": "rm -rf ./dist",
     "upgrade": "npx npm-check-updates -u && npm install",
@@ -9,26 +29,6 @@
     "compile": "tsc -p tsconfig.compile.json",
     "lint": "npx eslint . --fix"
   },
-  "keywords": [
-    "granada",
-    "framework",
-    "postgres"
-  ],
-  "files": [
-    "dist/**/*.js",
-    "dist/**/*.d.ts",
-    "dist/**/*.json"
-  ],
-  "exports": {
-    ".": "./dist/index.js",
-    "./*": [
-      "./dist/*/index.js",
-      "./dist/*.js"
-    ],
-    "./*.js": "./dist/*.js"
-  },
-  "author": "nathan@telefrek.com",
-  "license": "MIT",
   "dependencies": {
     "@telefrek/core": "^1.0.0-alpha.17",
     "@telefrek/query": "^1.0.0-alpha.17",

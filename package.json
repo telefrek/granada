@@ -4,7 +4,7 @@
   ],
   "scripts": {
     "test": "jest --coverage --coverageProvider=v8 -c jest.config.js",
-    "test:unit": "jest --coverage --coverageProvider=v8 -c jest.unit.config.js",
+    "test:unit": "NODE_OPTIONS='--experimental-vm-modules' jest --coverage --coverageProvider=v8 -c jest.unit.config.js",
     "test:integration": "jest --coverage --coverageProvider=v8 --detectOpenHandles -c jest.integration.config.js",
     "format": "npx prettier --write .",
     "ci": "npm install && turbo lint && turbo build && npm run test:unit",

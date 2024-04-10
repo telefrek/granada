@@ -1,17 +1,17 @@
-import { ExecutionMode } from "@telefrek/query"
-import type { SQLEnum } from "@telefrek/query/sql/types"
+import { ExecutionMode } from "@telefrek/query/index.js"
+import type { SQLEnum } from "@telefrek/query/sql/types.js"
 import {
   PostgreSqlContainer,
   StartedPostgreSqlContainer,
 } from "@testcontainers/postgresql"
-import { DefaultPostgresDatabase, type PostgresDatabase } from "."
-import { createPostgresQueryBuilder } from "./builder"
-import { PostgresConnectionPool } from "./pool"
+import { createPostgresQueryBuilder } from "./builder.js"
+import { DefaultPostgresDatabase, type PostgresDatabase } from "./index.js"
+import { PostgresConnectionPool } from "./pool.js"
 import {
   Category,
   createTestDatabase,
   type TestDatabaseType,
-} from "./testUtils"
+} from "./testUtils.js"
 
 describe("Postgres should be able to execute queries", () => {
   let postgresContainer: StartedPostgreSqlContainer | undefined

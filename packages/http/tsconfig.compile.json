@@ -1,15 +1,9 @@
 {
   "extends": "../../tsconfig.build.json",
   "compilerOptions": {
-    "baseUrl": "./",
-    "outDir": "./dist/",
-    "paths": {
-      "@telefrek/core": ["../core"],
-      "@telefrek/core/*": ["../core/*"]
-    }
+    "outDir": "./dist/"
   },
-  "references": [{ "path": "../core" }],
-  "include": ["./**/*.ts", "./content/mimeTypes.json"],
+  "include": ["./**/*.ts", "./mimeTypes.json"],
   "exclude": [
     "node_modules",
     "./dist/**/*",

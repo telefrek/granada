@@ -1,4 +1,4 @@
-import { QueryError, isQueryError } from "./error"
+import { QueryError, isQueryError } from "./error.js"
 
 describe("query errors should function as expected", () => {
   it("should be detectable via type guards", () => {

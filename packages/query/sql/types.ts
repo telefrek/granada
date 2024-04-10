@@ -2,9 +2,25 @@
  * Types that are supported by SQL and their meanings for this library
  */
 
-import type { PropertyOfType } from "@telefrek/core/type/utils"
-import type { QueryParameters } from "../index"
-import type { SQLDataTable } from "./index"
+import type { PropertyOfType } from "@telefrek/core/type/utils.js"
+import type { QueryBuilder, QueryParameters, RowType } from "../index.js"
+/**
+ * Represents a table schema which can have named columns and values
+ */
+export type SQLDataTable = RowType
+
+/**
+ * Represents a relational data store that has a collection of tables and other
+ * objects that can be useful for describing data sources and building valid queries
+ */
+export interface SQLDataStore {
+  tables: Record<string, SQLDataTable>
+}
+
+/** Sentinel indicator for all columns */
+export type STAR = "*"
+
+export type RelationalQueryBuilder<_D extends SQLDataStore> = QueryBuilder
 
 /**
  * Helper class for building type definitions

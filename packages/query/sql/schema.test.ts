@@ -1,5 +1,5 @@
-import { TestDatabase } from "./testUtils"
-import { SQLColumnType } from "./types"
+import { TestDatabase } from "./testUtils.js"
+import { SQLColumnType } from "./types.js"
 
 describe("The type system should allow translation between types", () => {
   it("should map correctly between TS and SQL schema objects", () => {

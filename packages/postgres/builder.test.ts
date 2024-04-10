@@ -1,8 +1,8 @@
-import type { SQLEnum } from "@telefrek/query/sql/types"
-import { createPostgresQueryBuilder } from "./builder"
+import type { SQLEnum } from "@telefrek/query/sql/types.js"
+import { createPostgresQueryBuilder } from "./builder.js"
 
-import { isPostgresQuery } from "."
-import { Category, type TestDatabaseType } from "./testUtils"
+import { isPostgresQuery } from "./index.js"
+import { Category, type TestDatabaseType } from "./testUtils.js"
 
 describe("Postgres query syntax should be translated correctly", () => {
   it("Should create a valid query from a builder", () => {

@@ -2,13 +2,13 @@
  * Testing Multi Level Queue behaviors
  */
 
-import { TimeoutError } from "../errors"
-import { delay } from "../time"
+import { TimeoutError } from "../errors.js"
+import { delay } from "../time.js"
 import {
   DefaultMultiLevelPriorityQueue,
   TaskPriority,
   type MultiLevelPriorityQueue,
-} from "./multiLevelQueue"
+} from "./multiLevelQueue.js"
 
 describe("Multi level queue should be able to handle generic workloads", () => {
   let queue: MultiLevelPriorityQueue = new DefaultMultiLevelPriorityQueue(1)

@@ -1,16 +1,8 @@
 {
   "extends": "../../tsconfig.build.json",
   "compilerOptions": {
-    "baseUrl": "./",
-    "outDir": "./dist/",
-    "paths": {
-      "@telefrek/core": ["../core"],
-      "@telefrek/core/*": ["../core/*"],
-      "@telefrek/query": ["../query"],
-      "@telefrek/query/*": ["../query/*"]
-    }
+    "outDir": "./dist/"
   },
-  "references": [{ "path": "../core" }, { "path": "../query" }],
   "include": ["./**/*.ts"],
   "exclude": [
     "node_modules",

@@ -1,8 +1,8 @@
-import { SchemaBuilder } from "@telefrek/query/sql/schema/builder"
-import type { SQLDatabaseSchema } from "@telefrek/query/sql/schema/index"
-import { SQLColumnType, SQLColumnTypes } from "@telefrek/query/sql/types"
+import type { SQLDatabaseSchema } from "@telefrek/query/sql/schema.js"
+import { SchemaBuilder } from "@telefrek/query/sql/schemaBuilder.js"
+import { SQLColumnType, SQLColumnTypes } from "@telefrek/query/sql/types.js"
 import pg from "pg"
-import { PostgresColumnTypes } from "./types"
+import { PostgresColumnTypes } from "./types.js"
 
 /**
  * Test utilities for verifying the SQL packages

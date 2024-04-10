@@ -2,9 +2,9 @@
  * Simple package for implementing a basic circuit breaker
  */
 
-import { asPromise, type MaybeAwaitable } from "../../index"
-import { Duration, Timer } from "../../time/index"
-import type { Func } from "../../type/utils"
+import { asPromise, type MaybeAwaitable } from "../../index.js"
+import { Duration, Timer } from "../../time.js"
+import type { Func } from "../../type/utils.js"
 
 /**
  * Represents the state of the {@link CircuitBreaker}

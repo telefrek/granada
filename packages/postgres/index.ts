@@ -2,18 +2,22 @@
  * Basic abstractions for Postgres
  */
 
-import { vegasBuilder } from "@telefrek/core/backpressure/limits/algorithms"
+import { vegasBuilder } from "@telefrek/core/backpressure/algorithms.js"
 import {
   createSimpleLimiter,
   type Limiter,
-} from "@telefrek/core/backpressure/limits/index"
-import { GRANADA_METRICS_METER } from "@telefrek/core/observability/metrics"
+} from "@telefrek/core/backpressure/limits.js"
+import type { FrameworkPriority } from "@telefrek/core/index.js"
+import { GRANADA_METRICS_METER } from "@telefrek/core/observability/metrics.js"
 import {
-  asTaskPriority,
   DefaultMultiLevelPriorityQueue,
+  asTaskPriority,
   type MultiLevelPriorityQueue,
-} from "@telefrek/core/structures/multiLevelQueue"
-import { makeCaseInsensitive } from "@telefrek/core/type/proxies"
+} from "@telefrek/core/structures/multiLevelQueue.js"
+import type { Pool } from "@telefrek/core/structures/pool.js"
+import { Duration, Timer } from "@telefrek/core/time.js"
+import { makeCaseInsensitive } from "@telefrek/core/type/proxies.js"
+import { QueryError } from "@telefrek/query/error.js"
 import {
   ExecutionMode,
   QueryParameters,
@@ -22,12 +26,8 @@ import {
   type QueryResult,
   type RowType,
   type SimpleQuery,
-} from "@telefrek/query"
-import { QueryError } from "@telefrek/query/error"
+} from "@telefrek/query/index.js"
 import { Client, types, type QueryConfig } from "pg"
-import type { FrameworkPriority } from "../core"
-import type { Pool } from "../core/structures/pool"
-import { Duration, Timer } from "../core/time"
 
 /**
  * Options provided when building a {@link PostgresDatabase}

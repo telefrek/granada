@@ -2,7 +2,7 @@
  * Provides the basic structure for query definitions
  */
 
-import { Duration } from "@telefrek/core/time"
+import { Duration } from "@telefrek/core/time.js"
 
 export type BuildableQueryTypes = QueryType.SIMPLE | QueryType.PARAMETERIZED
 

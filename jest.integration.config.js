@@ -15,6 +15,15 @@ module.exports = {
     "/dist",
   ],
   moduleNameMapper: {
-    "^@telefrek/(.*)$": "<rootDir>/packages/$1/",
+    "^@telefrek/(.*)\\.js$": "<rootDir>/packages/$1/",
+    "^(\\.{1,2}/.*)\\.js$": "$1",
+  },
+  transform: {
+    "^.+\\.tsx?$": [
+      "ts-jest",
+      {
+        useESM: true,
+      },
+    ],
   },
 }

@@ -2,7 +2,7 @@
  * Defines error handling for queries
  */
 
-import type { QueryBase, QueryType } from "."
+import type { QueryBase, QueryType } from "./index.js"
 
 /**
  * Extension of {@link ErrorOptions} for query execution

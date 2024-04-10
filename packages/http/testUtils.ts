@@ -14,7 +14,7 @@ import {
   HttpResponse,
   HttpVersion,
   emptyHeaders,
-} from "."
+} from "./index.js"
 
 export class TestRequest extends EventEmitter implements HttpRequest {
   path: HttpPath

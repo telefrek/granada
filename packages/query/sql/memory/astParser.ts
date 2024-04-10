@@ -2,8 +2,14 @@
  * Contains the logic for parsing an {@link SQLQueryNode} AST into a set of in memory operations
  */
 
-import { QueryError } from "../../error"
-import type { QueryParameters } from "../../index"
+import { QueryError } from "../../error.js"
+import type { QueryParameters } from "../../index.js"
+import {
+  InsertNodeManager,
+  JoinNodeManager,
+  SelectNodeManager,
+  hasProjections,
+} from "../../sql/helpers.js"
 import {
   SQLNodeType,
   type CteClause,
@@ -12,14 +18,7 @@ import {
   type SQLQueryNode,
   type SelectClause,
   type TableSQLQueryNode,
-} from "../../sql/ast"
-import {
-  InsertNodeManager,
-  JoinNodeManager,
-  SelectNodeManager,
-  hasProjections,
-} from "../../sql/helpers"
-import type { SQLDataStore, SQLDataTable } from "../../sql/index"
+} from "../ast.js"
 import {
   BooleanOperation,
   ColumnFilteringOperation,
@@ -30,7 +29,7 @@ import {
   type FilterTypes,
   type JoinColumnFilter,
   type StringFilter,
-} from "../ast/filtering"
+} from "../filtering.js"
 import {
   IsArrayFilter,
   isColumnFilter,
@@ -42,8 +41,9 @@ import {
   isSQLQueryNode,
   isSelectClause,
   isStringFilter,
-} from "../ast/typeGuards"
-import type { InMemoryRelationalDataStore } from "./builder"
+} from "../typeGuards.js"
+import type { SQLDataStore, SQLDataTable } from "../types.js"
+import type { InMemoryRelationalDataStore } from "./builder.js"
 
 export function materializeNode<RowType extends SQLDataTable>(
   root: SQLQueryNode<SQLNodeType>,

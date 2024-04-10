@@ -1,7 +1,7 @@
-import { SynchronizedValue } from "../concurrency/index"
-import { type MaybeAwaitable } from "../index"
-import { delay, Duration } from "../time/index"
-import { PoolBase } from "./pool"
+import { SynchronizedValue } from "../concurrency.js"
+import { type MaybeAwaitable } from "../index.js"
+import { delay, Duration } from "../time.js"
+import { PoolBase } from "./pool.js"
 
 type TestObject = {
   name: string

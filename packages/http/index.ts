@@ -2,10 +2,10 @@
  * Core package definitions and interfaces
  */
 
-import { Emitter } from "@telefrek/core/events"
-import { LifecycleEvents } from "@telefrek/core/lifecycle"
+import { Emitter } from "@telefrek/core/events.js"
+import { LifecycleEvents } from "@telefrek/core/lifecycle.js"
 import type { Readable } from "stream"
-import type { MediaType } from "./content"
+import type { MediaType } from "./content.js"
 
 export type StringOrArray = string | string[]
 

@@ -2,15 +2,19 @@
  * Common components used by this package
  */
 
+import { parseMediaType } from "@telefrek/http/content.js"
 import {
   HttpHandler,
   HttpMethod,
   HttpRequest,
   HttpStatus,
   emptyHeaders,
-} from "@telefrek/http"
-import { parseMediaType } from "@telefrek/http/content"
-import { RoutableApi, Router, createRouter } from "@telefrek/http/routing"
+} from "@telefrek/http/index.js"
+import {
+  RoutableApi,
+  Router,
+  createRouter,
+} from "@telefrek/http/server/routing.js"
 import { Readable } from "stream"
 
 /**

@@ -2,8 +2,8 @@
  * Postgres pooling
  */
 
+import { PoolBase, type PoolOptions } from "@telefrek/core/structures/pool.js"
 import { Client, type ClientConfig } from "pg"
-import { PoolBase, type PoolOptions } from "../core/structures/pool"
 
 /**
  * Options for controlling the behavior of a {@link PostgresConnectionPool}

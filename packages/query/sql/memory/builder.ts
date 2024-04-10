@@ -2,8 +2,8 @@
  * Set of utilities to treat in memory collections as a pseudo relational data store
  */
 
-import { Timer } from "@telefrek/core/time/index"
-import type { RelationalQueryBuilder, SQLDataStore, SQLDataTable } from ".."
+import { Timer } from "@telefrek/core/time.js"
+import { QueryError } from "../../error.js"
 import {
   ExecutionMode,
   QueryParameters,
@@ -16,11 +16,15 @@ import {
   type QueryResult,
   type RowType,
   type SimpleQuery,
-} from "../.."
-import { QueryError } from "../../error"
-import { getTreeRoot } from "../../sql/helpers"
-import { isSQLQueryNode } from "../ast/typeGuards"
-import { materializeNode } from "./astParser"
+} from "../../index.js"
+import { getTreeRoot } from "../../sql/helpers.js"
+import { isSQLQueryNode } from "../typeGuards.js"
+import type {
+  RelationalQueryBuilder,
+  SQLDataStore,
+  SQLDataTable,
+} from "../types.js"
+import { materializeNode } from "./astParser.js"
 
 /**
  * Define an in memory table as an array of the given {@link TableType}

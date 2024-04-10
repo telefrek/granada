@@ -3,15 +3,16 @@
  */
 
 import { trace } from "@opentelemetry/api"
-import { Emitter } from "@telefrek/core/events"
-import { LifecycleEvents, registerShutdown } from "@telefrek/core/lifecycle"
+import { Emitter } from "@telefrek/core/events.js"
+import { LifecycleEvents, registerShutdown } from "@telefrek/core/lifecycle.js"
 import {
   CircularArrayBuffer,
   createIterator,
-} from "@telefrek/core/structures/circularBuffer"
+} from "@telefrek/core/structures/circularBuffer.js"
 import EventEmitter from "events"
 import * as http2 from "http2"
 import { Readable, Stream, finished, pipeline } from "stream"
+import { mediaTypeToString } from "./content.js"
 import {
   HttpBody,
   HttpHeaders,
@@ -25,8 +26,7 @@ import {
   HttpVersion,
   emptyHeaders,
   parsePath,
-} from "."
-import { mediaTypeToString } from "./content"
+} from "./index.js"
 
 /**
  * Set of supported events on an {@link HttpServer}

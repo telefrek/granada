@@ -2,6 +2,27 @@
   "name": "@telefrek/service",
   "version": "1.0.0-alpha.17",
   "description": "This package makes creating new services easier than working with the raw HTTP stack",
+  "author": "nathan@telefrek.com",
+  "license": "MIT",
+  "keywords": [
+    "granada",
+    "framework",
+    "service",
+    "REST"
+  ],
+  "type": "module",
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "dist/**/*.json"
+  ],
+  "types": "./dist/index.d.ts",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./*": "./dist/*.js",
+    "./*.js": "./dist/*.js"
+  },
   "scripts": {
     "clean": "rm -rf ./dist",
     "upgrade": "npx npm-check-updates -u && npm install",
@@ -9,27 +30,6 @@
     "compile": "tsc -p tsconfig.compile.json",
     "lint": "npx eslint . --fix"
   },
-  "keywords": [
-    "granada",
-    "framework",
-    "service",
-    "REST"
-  ],
-  "files": [
-    "dist/**/*.js",
-    "dist/**/*.d.ts",
-    "dist/**/*.json"
-  ],
-  "exports": {
-    ".": "./dist/index.js",
-    "./*": [
-      "./dist/*/index.js",
-      "./dist/*.js"
-    ],
-    "./*.js": "./dist/*.js"
-  },
-  "author": "nathan@telefrek.com",
-  "license": "MIT",
   "dependencies": {
     "@telefrek/http": "^1.0.0-alpha.17"
   },

@@ -1,5 +1,5 @@
-import { Duration } from "../time/"
-import { CircularArrayBuffer } from "./circularBuffer"
+import { Duration } from "../time.js"
+import { CircularArrayBuffer } from "./circularBuffer.js"
 
 describe("Circular buffers should behave as infinite lists with fixed memory", () => {
   it("Should map state correctly for sync operations", () => {

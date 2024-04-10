@@ -2,7 +2,7 @@ import {
   SQLColumnType,
   SQLColumnTypes,
   type ColumnDefinition,
-} from "@telefrek/query/sql/types"
+} from "@telefrek/query/sql/types.js"
 
 /**
  * Helpers for building postgres specific types

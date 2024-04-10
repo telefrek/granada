@@ -2,7 +2,7 @@
  * Implementation of the @telefrek/query packages
  */
 
-import { QueryError } from "@telefrek/query/error"
+import { QueryError } from "@telefrek/query/error.js"
 import {
   ExecutionMode,
   QueryType,
@@ -13,7 +13,7 @@ import {
   type QueryParameters,
   type RowType,
   type SimpleQuery,
-} from "@telefrek/query/index"
+} from "@telefrek/query/index.js"
 import {
   type CteClause,
   type DeleteClause,
@@ -24,11 +24,23 @@ import {
   type SelectClause,
   type SetClause,
   type UpdateClause,
-} from "@telefrek/query/sql/ast"
+} from "@telefrek/query/sql/ast.js"
 import {
   type FilterGroup,
   type FilterTypes,
-} from "@telefrek/query/sql/ast/filtering"
+} from "@telefrek/query/sql/filtering.js"
+import {
+  CteNodeManager,
+  DeleteNodeManager,
+  InsertNodeManager,
+  JoinNodeManager,
+  SelectNodeManager,
+  UpdateNodeManager,
+  getTreeRoot,
+  hasProjections,
+} from "@telefrek/query/sql/helpers.js"
+import { DefaultSQLNodeBuilder } from "@telefrek/query/sql/internal.js"
+import type { SQLNodeBuilder } from "@telefrek/query/sql/queryBuilder.js"
 import {
   IsArrayFilter,
   isBranchNode,
@@ -41,24 +53,12 @@ import {
   isSQLQueryNode,
   isSelectClause,
   isUpdateClause,
-} from "@telefrek/query/sql/ast/typeGuards"
-import type { SQLNodeBuilder } from "@telefrek/query/sql/builder/index"
-import { DefaultSQLNodeBuilder } from "@telefrek/query/sql/builder/internal"
-import {
-  CteNodeManager,
-  DeleteNodeManager,
-  InsertNodeManager,
-  JoinNodeManager,
-  SelectNodeManager,
-  UpdateNodeManager,
-  getTreeRoot,
-  hasProjections,
-} from "@telefrek/query/sql/helpers"
+} from "@telefrek/query/sql/typeGuards.js"
 import type {
   RelationalQueryBuilder,
   SQLDataStore,
-} from "@telefrek/query/sql/index"
-import type { PostgresQuery, QueryMaterializer } from "."
+} from "@telefrek/query/sql/types.js"
+import type { PostgresQuery, QueryMaterializer } from "./index.js"
 
 export function createPostgresQueryBuilder<
   Database extends SQLDataStore,

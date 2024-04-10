@@ -10,11 +10,11 @@ import {
   createBreaker,
   type CircuitBreaker,
   type CircuitBreakerOptions,
-} from "../backpressure/circuits/breaker"
-import { Signal } from "../concurrency/index"
-import { type MaybeAwaitable } from "../index"
-import { GRANADA_METRICS_METER } from "../observability/metrics"
-import { Duration, Timer } from "../time/index"
+} from "../backpressure/circuits/breaker.js"
+import { Signal } from "../concurrency.js"
+import { type MaybeAwaitable } from "../index.js"
+import { GRANADA_METRICS_METER } from "../observability/metrics.js"
+import { Duration, Timer } from "../time.js"
 
 /**
  * Custom error raised when there is no value available in the {@link Pool}

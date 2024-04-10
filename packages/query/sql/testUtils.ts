@@ -2,10 +2,10 @@
  * Test utilities for verifying the SQL packages
  */
 
-import { ExecutionMode, type QueryResult, type RowType } from "../index"
-import { SchemaBuilder } from "./schema/builder"
-import type { SQLDatabaseSchema } from "./schema/index"
-import { SQLColumnType, SQLColumnTypes } from "./types"
+import { ExecutionMode, type QueryResult, type RowType } from "../index.js"
+import type { SQLDatabaseSchema } from "./schema.js"
+import { SchemaBuilder } from "./schemaBuilder.js"
+import { SQLColumnType, SQLColumnTypes } from "./types.js"
 
 export const Category = {
   TEST: "test",

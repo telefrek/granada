@@ -2,7 +2,7 @@
  * This package has a set of helper files for manipulating the relational AST objects
  */
 
-import { getDebugInfo } from "@telefrek/core"
+import { getDebugInfo } from "@telefrek/core/index.js"
 import {
   SQLNodeType,
   type CteClause,
@@ -16,7 +16,7 @@ import {
   type TableSQLQueryNode,
   type UpdateClause,
   type WhereClause,
-} from "./ast"
+} from "./ast.js"
 import {
   isBranchNode,
   isColumnAliasClause,
@@ -25,8 +25,8 @@ import {
   isReturningClause,
   isSQLQueryNode,
   isWhereClause,
-} from "./ast/typeGuards"
-import type { STAR } from "./index"
+} from "./typeGuards.js"
+import type { STAR } from "./types.js"
 
 type RNode = SQLQueryNode<SQLNodeType>
 

@@ -2,11 +2,15 @@
  * Multi-Level Priority Queue
  */
 
-import { DeferredPromise, MaybeAwaitable, type FrameworkPriority } from ".."
-import { Signal } from "../concurrency"
-import { TimeoutError } from "../errors"
-import { Duration } from "../time"
-import type { Func } from "../type/utils"
+import { Signal } from "../concurrency.js"
+import { TimeoutError } from "../errors.js"
+import {
+  DeferredPromise,
+  MaybeAwaitable,
+  type FrameworkPriority,
+} from "../index.js"
+import { Duration } from "../time.js"
+import type { Func } from "../type/utils.js"
 
 /**
  * The priority for a given task
