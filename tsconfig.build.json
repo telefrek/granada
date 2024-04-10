@@ -29,7 +29,6 @@
     "strictNullChecks": true,
     "target": "ESNext",
     "baseUrl": "./",
-    "rootDir": "./",
     "paths": {
       "@telefrek/core": ["./packages/core"],
       "@telefrek/core/*": ["./packages/core/*"],
