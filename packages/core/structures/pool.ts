@@ -99,6 +99,11 @@ const PoolMetrics = {
       "Measures long a consumer waits for a pool item to be available",
     valueType: ValueType.DOUBLE,
     unit: "s",
+    advice: {
+      explicitBucketBoundaries: [
+        0.0005, 0.001, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.5, 1,
+      ],
+    },
   }),
   PoolSize: GRANADA_METRICS_METER.createObservableGauge("pool_size", {
     description: "The current size of the pool",
