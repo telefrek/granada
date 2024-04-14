@@ -3,7 +3,8 @@
  */
 
 import opentelemetry, { ValueType, type Meter } from "@opentelemetry/api"
-import type { HeapInfo, HeapSpaceInfo } from "v8"
+import type { EventLoopUtilization } from "perf_hooks"
+import type { HeapSpaceInfo, HeapInfo } from "v8"
 /**
  * Setup our framework metrics
  */
@@ -15,14 +16,18 @@ export const GRANADA_METRICS_METER = opentelemetry.metrics
  * Options for which metrics are enabled
  */
 export interface NodeMetricEnabledOptions {
-  v8: boolean
+  heap: boolean
+  gc: boolean
+  eventLoop: boolean
 }
 
 /**
  * Constant that enables all node metrics
  */
 export const ALL_NODE_METRICS: NodeMetricEnabledOptions = {
-  v8: true,
+  heap: true,
+  gc: true,
+  eventLoop: true,
 }
 
 /**
@@ -38,21 +43,111 @@ export async function enableNodeCoreMetrics(
     .getMeterProvider()
     .getMeter("NodeJS", process.version)
 
-  if (options.v8) {
-    await trackV8Metrics(nodeJSMeter)
+  if (options.heap) {
+    await trackHeapMetrics(nodeJSMeter)
+  }
+
+  if (options.gc) {
+    await trackGC(nodeJSMeter)
+  }
+
+  if (options.eventLoop) {
+    await trackEventLoop(nodeJSMeter)
   }
 }
 
-async function trackV8Metrics(meter: Meter): Promise<void> {
+/** Helper type */
+interface GCDetails {
+  kind: number
+  flags: number
+}
+
+/**
+ * Add GC metrics based on perf_hooks {@link PerformanceObserver}
+ *
+ * @param meter The {@link Meter} to add metrics to
+ */
+async function trackGC(meter: Meter): Promise<void> {
+  const { constants, PerformanceObserver } = await import("perf_hooks")
+
+  const gcTypes = {
+    [constants.NODE_PERFORMANCE_GC_INCREMENTAL]: "incremental",
+    [constants.NODE_PERFORMANCE_GC_MAJOR]: "major",
+    [constants.NODE_PERFORMANCE_GC_MINOR]: "minor",
+    [constants.NODE_PERFORMANCE_GC_WEAKCB]: "weak_callbacks",
+  } as const
+
+  const histogram = meter.createHistogram("node_gc_duration", {
+    description: "Node GC time per collection type",
+    unit: "s",
+    valueType: ValueType.DOUBLE,
+    advice: {
+      explicitBucketBoundaries: [
+        0.001, 0.002, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1,
+      ],
+    },
+  })
+
+  // Start the observer
+  new PerformanceObserver((entries) => {
+    for (const entry of entries.getEntriesByType("gc")) {
+      const details = entry.detail! as GCDetails
+      histogram.record(Number.parseFloat((entry.duration / 1000).toFixed(6)), {
+        kind: gcTypes[details.kind] ?? "unmapped",
+      })
+    }
+  }).observe({ entryTypes: ["gc"] })
+}
+
+/**
+ * Track event loop utilization via the exposed `eventLoopUtilization`
+ * performance method
+ *
+ * @param meter The {@link Meter} to add metrics to
+ */
+async function trackEventLoop(meter: Meter): Promise<void> {
+  const performance = (await import("perf_hooks")).performance
+
+  let previous: EventLoopUtilization | undefined
+
+  meter
+    .createObservableGauge("event_loop_utilization", {
+      description:
+        "A measure of how much the event loop was utilized during the past collection period",
+      valueType: ValueType.DOUBLE,
+    })
+    .addCallback((result) => {
+      const current = performance.eventLoopUtilization()
+
+      // Check if we are calculating a delta
+      if (previous) {
+        const utilization = performance.eventLoopUtilization(previous, current)
+
+        result.observe(utilization.utilization)
+      } else {
+        // Default to the current utilization metrics
+        result.observe(current.utilization)
+      }
+
+      previous = current
+    })
+}
+
+/**
+ * Adds heap information and statistics
+ *
+ * @param meter The {@link Meter} to add metrics to
+ */
+async function trackHeapMetrics(meter: Meter): Promise<void> {
   // Import v8 as needed
-  const v8 = await import("v8")
+  const { getHeapSpaceStatistics, getHeapStatistics } = await import("v8")
 
   // Read these on a cadence since it may be expensive
   let lastHeapValues: HeapSpaceInfo[] = []
   let lastHeapInfo: HeapInfo | undefined
   setInterval(() => {
-    lastHeapValues = v8.getHeapSpaceStatistics()
-    lastHeapInfo = v8.getHeapStatistics()
+    lastHeapValues = getHeapSpaceStatistics()
+    lastHeapInfo = getHeapStatistics()
   }, 15_000)
 
   meter
