@@ -35,6 +35,7 @@ export function hostFolder(
 
   // Return the transform
   return async (request: HttpRequest) => {
+    console.log(`Check hosting at: ${request.path.original}`)
     // Only serve GET requests
     if (request.method === HttpMethod.GET) {
       const target =

@@ -2,20 +2,16 @@
  * Common components used by this package
  */
 
-import { parseMediaType } from "@telefrek/http/content.js"
+import { CommonMediaTypes } from "@telefrek/http/content.js"
 import {
   HttpHandler,
   HttpMethod,
-  HttpRequest,
-  HttpStatus,
-  emptyHeaders,
+  type HttpBody,
+  type HttpStatus,
+  type SegmentValue,
 } from "@telefrek/http/index.js"
-import {
-  RoutableApi,
-  Router,
-  createRouter,
-} from "@telefrek/http/server/routing.js"
 import { Readable } from "stream"
+import type { MaybeAwaitable } from "../core/index.js"
 
 /**
  * The target platform the service will be running on for optimizing some operations
@@ -40,7 +36,7 @@ export enum SerializationFormat {
 export interface Endpoint {
   pathTemplate: string
   handler: HttpHandler
-  method?: HttpMethod
+  method: HttpMethod
 }
 
 /**
@@ -50,30 +46,86 @@ export interface Service {
   endpoints: Endpoint[]
 }
 
-/**
- * Helper method that translates between a {@link Service} and {@link Router} for HTTP hosting
- *
- * @param service The {@link Service} to translate into a {@link Router}
- * @returns The {@link Router} for the {@link Service}
- */
-export const serviceToRouter = (service: Service): Router => {
-  const router = createRouter()
+/** A service error */
+export interface ServiceError {
+  status: HttpStatus
+  statusMessage?: string
+  body?: HttpBody
+}
 
-  // Add all the endpoints
-  for (const endpoint of service.endpoints) {
-    router.addHandler(endpoint.pathTemplate, endpoint.handler, endpoint.method)
+export function createTextBody(message: string): HttpBody {
+  return {
+    mediaType: CommonMediaTypes.HTML,
+    contents: Readable.from(message),
+  }
+}
+
+export function createJsonBody(body: ServiceResponseType): HttpBody {
+  return {
+    mediaType: CommonMediaTypes.JSON,
+    contents: Readable.from(JSON.stringify(body)),
+  }
+}
+
+/**
+ * Type guard for {@link ServiceError} instances
+ *
+ * @param response The unknown response
+ * @returns True if the response is a {@link ServiceError}
+ */
+export function isServiceError(response: unknown): response is ServiceError {
+  if (
+    typeof response === "object" &&
+    response !== null &&
+    "status" in response &&
+    typeof response.status === "number"
+  ) {
+    if (
+      "statusMessage" in response &&
+      typeof response.statusMessage !== "string"
+    ) {
+      return false
+    }
+
+    if (
+      "body" in response &&
+      !(typeof response.body === "string" || Buffer.isBuffer(response.body))
+    ) {
+      return false
+    }
+
+    return true
   }
 
-  // Return the router
-  return router
+  return false
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type ServiceResponseType = any | any[]
+
+/** A type that is either an object or {@link ServiceError} */
+export type ServiceResponse<T extends ServiceResponseType> = T | ServiceError
+
+/** Custom type definition for a method that is routable */
+export type RoutableMethod<T> = (
+  ...args: unknown[]
+) => MaybeAwaitable<ServiceResponse<T>>
+
+/**
+ * A service route
+ */
+export interface ServiceRouteInfo<T> {
+  /** The {@link RouteOptions} for the route */
+  options: RouteOptions
+  /** The name of the route */
+  name: string
+  /** The {@link RoutableMethod} */
+  method: RoutableMethod<T>
 }
 
 // ------------------------------------------
 // Custom Routing decorators
 // ------------------------------------------
-
-// Use an internal unique symbol that won't show up in mapping
-const ROUTING_DATA: unique symbol = Symbol()
 
 export type RouteParameter = string
 
@@ -86,165 +138,29 @@ export interface RoutableApiOptions {
 }
 
 /**
+ * Allows for mapping of parameters
+ */
+export type ParameterMapping = <T = unknown>(
+  parameters: Map<string, SegmentValue>,
+  body?: T,
+) => unknown[]
+
+export type ServiceErrorHandler = (error: unknown) => ServiceError
+
+/**
  * Options for controlling a specific {@link RoutableApi} route behavior
  */
 export interface RouteOptions {
+  /** The template string for the routing */
   template: string
-  method?: HttpMethod
+  /** The {@link HttpMethod} this route handles */
+  method: HttpMethod
+  /** The {@link SerializationFormat} for the body/response */
   format?: SerializationFormat
-  parameters?: string[]
-}
-
-interface RouteInfo {
-  options: RouteOptions
-  // eslint-disable-next-line @typescript-eslint/ban-types
-  method: Function
-}
-
-interface RoutingData {
-   
-  info: RouteInfo[]
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const getRoutingData = (proto: any): RoutingData => {
-   
-  return (proto[ROUTING_DATA] ??
-     
-    (proto[ROUTING_DATA] = { info: [] })) as RoutingData
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/ban-types
-type Constructor = new (...args: any[]) => {}
-
-/**
- * This decorator will translate the class into a {@link Service} and register it for handling calls
- *
- * @param pathPrefix The optional path prefix
- * @returns An new instance of the class that has been wrapped as a {@link Service} and hooked into the global routing
- */
-
- 
-export function routableApi(options: RoutableApiOptions) {
-  // Wrap in a legacy decorator until Node supports the Typescript v5 format
-  return <ApiClass extends Constructor>(target: ApiClass) => {
-    // Return the new class cast as a RoutableApi that can be passed into a pipeline
-    return class extends target implements RoutableApi {
-      router: Router
-      prefix: string | undefined
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      constructor(...args: any[]) {
-         
-        super(...args)
-
-        // Hide our extra properties
-        Object.defineProperty(this, "router", { enumerable: false })
-        Object.defineProperty(this, "prefix", { enumerable: false })
-
-        // Get the routing data
-        const routingData = getRoutingData(target.prototype)
-
-        if (routingData.info.length > 0) {
-          // Build the service route info
-          const service: Service = {
-            endpoints: [],
-          }
-
-          for (const info of routingData.info) {
-            service.endpoints.push({
-              pathTemplate: info.options.template,
-              method: info.options.method,
-              handler: async (request: HttpRequest): Promise<void> => {
-                try {
-                  // Create a storage location for the parameter mapping
-                  const args: unknown[] = []
-
-                  // Check for body contents and push those to the contents
-                  if (request.body?.contents) {
-                    const bodyArgs: unknown[] = []
-                    for await (const obj of request.body.contents) {
-                      bodyArgs.push(obj)
-                    }
-
-                    if (bodyArgs.length === 1) {
-                      args.push(bodyArgs[0])
-                    } else if (bodyArgs.length > 0) {
-                      args.push(bodyArgs)
-                    }
-                  }
-
-                  // Check for parameters
-                  if (request.path.parameters && info.options.parameters) {
-                    args.push(
-                      ...info.options.parameters.map(
-                        (p) => request.path.parameters!.get(p) ?? undefined,
-                      ),
-                    )
-                  }
-
-                  // Invoke the method
-                  const resp: unknown = await info.method.call(
-                    this,
-                    args.length === 1 ? args[0] : args,
-                  )
-
-                  if (
-                    resp &&
-                    (typeof resp === "object" || Array.isArray(resp))
-                  ) {
-                    request.respond({
-                      status: HttpStatus.OK,
-                      headers: emptyHeaders(),
-                      body: {
-                        mediaType: parseMediaType("application/json"),
-                        contents: Readable.from(
-                          Buffer.from(JSON.stringify(resp), "utf-8"),
-                        ),
-                      },
-                    })
-                  } else {
-                    request.respond({
-                      status: HttpStatus.OK,
-                      headers: emptyHeaders(),
-                    })
-                  }
-                } catch (err) {
-                  console.log(`Error: ${JSON.stringify(err)}`)
-                  request.respond({
-                    status: HttpStatus.INTERNAL_SERVER_ERROR,
-                    headers: emptyHeaders(),
-                  })
-                }
-
-                return
-              },
-            })
-          }
-
-          this.router = serviceToRouter(service)
-          this.prefix = options.pathPrefix
-        } else this.router = createRouter()
-      }
-    }
-  }
-}
-
-export function route(options: RouteOptions) {
-  return (
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    classPrototype: any,
-    methodName: string,
-    descriptor: PropertyDescriptor,
-  ): void => {
-    // Check to see if our symbol is already loaded
-    const data = getRoutingData(classPrototype)
-    // eslint-disable-next-line @typescript-eslint/ban-types
-    const method = descriptor.value as Function
-
-    data.info.push({
-      options,
-      method,
-    })
-  }
+  /** the {@link ParameterMapping} for calling this method */
+  mapping?: ParameterMapping
+  /** The status code to return on success */
+  statusCode?: HttpStatus
+  /** Optional error handler */
+  errorHandler?: ServiceErrorHandler
 }

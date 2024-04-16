@@ -28,6 +28,14 @@ export type TopLevelMediaTypes =
 export type MediaTreeTypes = "vnd" | "prs" | "x"
 
 /**
+ * Common media types for fast access
+ */
+export const CommonMediaTypes = {
+  HTML: parseMediaType("text/html"),
+  JSON: parseMediaType("application/json"),
+} as const
+
+/**
  * Attempts to validate and parse the media type
  *
  * @param mediaType The string to parse

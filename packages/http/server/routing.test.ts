@@ -18,15 +18,14 @@ describe("verify router", () => {
 
     expect(() => router.addHandler("/", handler)).toThrow()
     expect(() => router.addHandler("/...", handler)).toThrow()
-    expect(() => router.addHandler("/{parameter", handler)).toThrow()
-    expect(() => router.addHandler("/{{parameter}}", handler)).toThrow()
-    expect(() => router.addHandler("/invlid{parameter}", handler)).toThrow()
+    expect(() => router.addHandler("/para:meter", handler)).toThrow()
+    expect(() => router.addHandler("/parameter:", handler)).toThrow()
     expect(() => router.addHandler("/ /is/not/valid", handler)).toThrow()
     expect(() => router.addHandler("/cannot/**/terminate", handler)).toThrow()
     expect(() => router.addHandler("/*t", handler)).toThrow()
     expect(() => router.addHandler("/t*", handler)).toThrow()
 
-    router.addHandler("/one/{two}/three", handler)
+    router.addHandler("/one/:two/three", handler)
     expect(() => router.addHandler("/one/*/three", handler)).toThrow()
   })
 
@@ -36,9 +35,9 @@ describe("verify router", () => {
 
     router.addHandler("/valid", handler)
     router.addHandler("/this/is/a/valid/handler/", handler)
-    router.addHandler("/{parameter}/should/work", handler)
+    router.addHandler("/:parameter/should/work", handler)
     router.addHandler("/terminal/**", handler)
-    router.addHandler("/wildcards/*/should/be/{accepted}/**", handler)
+    router.addHandler("/wildcards/*/should/be/:accepted/**", handler)
 
     expect(router.lookup(request("/valid"))).not.toBeUndefined()
   })

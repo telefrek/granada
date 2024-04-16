@@ -5,6 +5,7 @@
 import { trace } from "@opentelemetry/api"
 import { Emitter } from "@telefrek/core/events.js"
 import { LifecycleEvents, registerShutdown } from "@telefrek/core/lifecycle.js"
+import { DefaultLogger, Logger, NoopLogWriter } from "@telefrek/core/logging.js"
 import {
   CircularArrayBuffer,
   createIterator,
@@ -103,6 +104,17 @@ export interface HttpServerBuilder {
   }): HttpServerBuilder
 
   /**
+   * Allow HTTP1
+   */
+  allowHttp1(): HttpServerBuilder
+
+  /**
+   * Specify the logger to use (default is {@link DefaultLogger} with {@link NoopLogWriter})
+   * @param logger The {@link Logger} to use for the server
+   */
+  withLogger(logger: Logger): HttpServerBuilder
+
+  /**
    * Builds a {@link HttpServer} from the parameters given
    *
    * @returns A fully initialized {@link HttpServer}
@@ -122,8 +134,11 @@ export function getDefaultBuilder(): HttpServerBuilder {
  * Default implementation of a {@link HttpServerBuilder}
  */
 class HttpServerBuilderImpl implements HttpServerBuilder {
-  options: http2.SecureServerOptions = {
+  options: HttpServerOptions = {
     allowHTTP1: true,
+    logger: new DefaultLogger({
+      writer: NoopLogWriter,
+    }),
   }
 
   withTls(details: {
@@ -141,9 +156,25 @@ class HttpServerBuilderImpl implements HttpServerBuilder {
     return this
   }
 
+  allowHttp1(): HttpServerBuilder {
+    this.options.allowHTTP1 = true
+
+    return this
+  }
+
+  withLogger(logger: Logger): HttpServerBuilder {
+    this.options.logger = logger
+
+    return this
+  }
+
   build(): HttpServer {
     return new HttpServerImpl(this.options)
   }
+}
+
+interface HttpServerOptions extends http2.SecureServerOptions {
+  logger: Logger
 }
 
 /**
@@ -153,21 +184,26 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
   _server: http2.Http2Server
   _tracer = trace.getTracer("Granada.HttpServer")
   _sessions: http2.ServerHttp2Session[] = []
+  _logger: Logger
 
-  constructor(options: http2.SecureServerOptions) {
+  constructor(options: HttpServerOptions) {
     super()
 
     Stream.Duplex.setMaxListeners(200)
 
-    // TODO: Start looking at options for more configurations.  If no TLS, HTTP 1.1, etc.
+    this._logger = options.logger
+
     this._server = http2.createSecureServer(options)
 
     this._server.on("session", (session) => {
+      this._logger.debug("New session created", session)
+
       this._sessions.push(session)
       session.once("close", () => {
         const idx = this._sessions.indexOf(session)
         if (idx >= 0) {
           this._sessions.splice(idx, 1)
+          this._logger.debug("Session closed", session)
         }
       })
     })
@@ -184,8 +220,11 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
     const buffer = new CircularArrayBuffer<HttpRequest>({ highWaterMark: 256 })
 
     this.on("request", (request: HttpRequest) => {
+      this._logger.debug(`New request received: ${request.path.original}`)
+
       // If we can't add to the buffer, need to reject
       if (!buffer.tryAdd(request)) {
+        this._logger.warn("Failed to enqueue request, shedding load")
         const headers = emptyHeaders()
 
         // TODO: Make this configurable...
@@ -209,6 +248,8 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
       throw new Error("Server is already listening on another port")
     }
 
+    this._logger.info(`Server listening on ${port}`)
+
     return new Promise((resolve) => {
       this.once("finished", resolve)
     })
@@ -216,12 +257,15 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
 
   close(): Promise<void> {
     return new Promise((resolve, reject) => {
+      this._logger.info("close invoked")
+
       if (this._server.listening) {
         this.emit("stopping")
 
         // Close the server to stop accepting new streams
         this._server.close((err) => {
           this.emit("finished")
+          this._logger.info("server closed")
           if (err) {
             this.emit("error", err)
             reject(err)
@@ -240,7 +284,7 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
 
   _setupRequestMapping(): void {
     this._server.on("error", (err) => {
-      console.error("error...")
+      this._logger.error(`Error: ${err}`, err)
       this.emit("error", err)
     })
     this._server.on("request", (req, resp) => {
@@ -342,6 +386,8 @@ class Http2Request extends EventEmitter implements HttpRequest {
 
       // Verify headers weren't sent
       if (!this._response.headersSent) {
+        // TODO: Need to handle headers...
+
         // Write the head section
         if (response.body?.mediaType) {
           this._response.writeHead(response.status, {

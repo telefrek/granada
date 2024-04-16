@@ -52,9 +52,9 @@ export type Rejector = (reason: unknown) => void
  * corresponding `resolve` and `reject` methods
  */
 export class DeferredPromise<T> implements Promise<T> {
-  _resolver: Resolver<T>
-  _rejector: Rejector
-  _promise: Promise<T>
+  private _resolver: Resolver<T>
+  private _rejector: Rejector
+  private _promise: Promise<T>
 
   constructor() {
     let resolver: Resolver<T> | undefined

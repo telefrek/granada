@@ -74,6 +74,48 @@ export class Timer {
   }
 }
 
+/**
+ * Simple timestamp class to track timings at sub millisecond precision
+ */
+export class Timestamp {
+  private static OFFSET: bigint = process.hrtime.bigint()
+  private static START_UTC: number = Date.now()
+
+  private _nano: bigint
+
+  /**
+   * Calculate the difference between the start and end
+   *
+   * @param begin The starting {@link Timestamp}
+   * @param end The ending {@link Timestamp}
+   * @returns The {@link Duration} between the stamps or {@link Duration.ZERO}
+   * if negative
+   */
+  static duration(begin: Timestamp, end: Timestamp): Duration {
+    const elapsed = end._nano - begin._nano
+    if (elapsed < 0n) {
+      return Duration.ZERO
+    }
+
+    return Duration.fromNano(elapsed)
+  }
+
+  constructor(timestamp?: bigint) {
+    this._nano = timestamp ?? process.hrtime.bigint()
+  }
+
+  /**
+   *
+   * @returns The {@link Timestamp} in ISO format
+   */
+  toISOString() {
+    const elapsed = this._nano - Timestamp.OFFSET
+    return new Date(
+      Timestamp.START_UTC + Number((elapsed * 1_000n) / NANO_PER_SECOND),
+    ).toISOString()
+  }
+}
+
 /** Factors for translating nanoseconds -> microseconds */
 const NANO_PER_SECOND = 1_000_000_000n
 const MICRO_PER_SECOND = 1_000_000
@@ -83,7 +125,7 @@ const MICRO_PER_MILLI = 1_000
  * Represents a duration of time
  */
 export class Duration {
-  _microseconds: number
+  private _microseconds: number
 
   private constructor(nanoseconds: bigint) {
     this._microseconds = Number((nanoseconds * 1_000_000n) / NANO_PER_SECOND)
@@ -113,6 +155,10 @@ export class Duration {
     return this._microseconds
   }
 
+  /**
+   *
+   * @returns The {@link Duration} formatted as seconds
+   */
   public toString(): string {
     return `${this.seconds()}`
   }
@@ -143,12 +189,15 @@ export class Duration {
   static ZERO: Duration = Duration.fromNano(0n)
 }
 
+/**
+ * A clock that can be used to track time at sub-millisecond precision
+ */
 export class HiResClock {
-  private static readonly INIT: bigint = process.hrtime.bigint()
-
-  public static timestamp(): string {
-    return Duration.fromNano(
-      process.hrtime.bigint() - HiResClock.INIT,
-    ).toString()
+  /**
+   *
+   * @returns The current {@link Timestamp}
+   */
+  public static timestamp(): Timestamp {
+    return new Timestamp(process.hrtime.bigint())
   }
 }

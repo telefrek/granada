@@ -14,6 +14,7 @@ import EventEmitter from "events"
 import { Readable, Writable, pipeline } from "stream"
 import { promisify } from "util"
 import { HttpStatus, emptyHeaders, type HttpRequest } from "../index.js"
+import { CONTENT_PARSING_TRANSFORM } from "../parsers.js"
 import { Router, createRouter, isRoutableApi } from "./routing.js"
 
 /**
@@ -199,8 +200,10 @@ export type UnhandledRequestConsumer = (
  * @param request The unhandled {@link HttpRequest}
  * @returns A {@link UnhandledRequestConsumer} that responds as 404
  */
-export const NOT_FOUND_CONSUMER: UnhandledRequestConsumer = (request) =>
+export const NOT_FOUND_CONSUMER: UnhandledRequestConsumer = (request) => {
+  console.log(`Unhandled request: ${request.path.original}`)
   request.respond({ status: HttpStatus.NOT_FOUND, headers: emptyHeaders() })
+}
 
 /**
  *
@@ -228,6 +231,11 @@ class DefaultPipeline extends EventEmitter implements HttpPipeline {
     this._reader = Readable.from(source)
     let transform: HttpPipelineTransform | undefined
 
+    // If no custom content parsing use the default
+    if (stages.contentParsing === undefined) {
+      stages.contentParsing = CONTENT_PARSING_TRANSFORM
+    }
+
     // Combine the transforms in order
     for (const key of Object.values(PipelineStage)) {
       if (stages[key] !== undefined) {
@@ -254,9 +262,9 @@ class DefaultPipeline extends EventEmitter implements HttpPipeline {
       this._pipelineCompletion = promisify(pipeline)(
         this._reader.on("error", (err) => this.emit("error", err)),
 
-        createTransform(transform).once("error", (err) =>
-          this.emit("error", err),
-        ),
+        createTransform(transform).once("error", (err) => {
+          this.emitError(err)
+        }),
         unhandled,
         {
           signal: this._abort.signal,
@@ -280,11 +288,37 @@ class DefaultPipeline extends EventEmitter implements HttpPipeline {
       // Wait for the pipeline to complete
       await this._pipelineCompletion
     } catch (err) {
-      // Emit any errors
-      this.emit("error", err)
+      this.emitError(err)
     }
 
     // Emit our finished event
     this.emit("finished")
   }
+
+  /**
+   * Conditionally emits errors that aren't expected
+   *
+   * @param err The error to emit
+   */
+  private emitError(err: unknown): void {
+    // Filter out abort errors, those are expected
+    if (!isAbortError(err)) {
+      this.emit("error", err)
+    }
+  }
+}
+
+/**
+ * Filter for abort errors
+ *
+ * @param err The unknown error
+ * @returns True if this is an abort error
+ */
+function isAbortError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    err.code === "ABORT_ERR"
+  )
 }

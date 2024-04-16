@@ -654,7 +654,7 @@ class RouterImpl implements Router {
           // Push the parameter
           routeSegments.push({
             info: RouteSegmentInfo.Parameter,
-            parameter: segment.slice(1, -1),
+            parameter: segment.slice(1),
           })
           break
         case TERMINATOR === segment:
@@ -696,9 +696,8 @@ class RouterImpl implements Router {
 const WILDCARD = "*"
 const TERMINATOR = "**"
 const URI_SEGMENT_REGEX = /^[a-zA-Z0-9-]+$/
-const PARAMETER_REGEX = /^\{[a-zA-Z_$][0-9a-zA-Z_$]*\}$/
-const TEMPLATE_REGEX =
-  /(?:\/(?:[a-zA-Z0-9-]+|\{[a-zA-Z_$][0-9a-zA-Z_$]*\}|\*+)+)+/
+const PARAMETER_REGEX = /^:[a-zA-Z_$][0-9a-zA-Z_$]*$/
+const TEMPLATE_REGEX = /(?:\/(?:[a-zA-Z0-9-]+|:[a-zA-Z_$][0-9a-zA-Z_$]*|\*+)+)+/
 
 /**
  * Internal enum to track {@link RouteTrieNode} state information
