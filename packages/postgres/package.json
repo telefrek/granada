@@ -35,7 +35,7 @@
     "pg": "^8.11.5"
   },
   "devDependencies": {
-    "@testcontainers/postgresql": "^10.8.1",
+    "@testcontainers/postgresql": "^10.8.2",
     "@types/pg": "^8.11.5"
   },
   "gitHead": "1be6bb3a61aab8ae5361827b54f8428682b9d536"
