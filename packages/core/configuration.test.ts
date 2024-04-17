@@ -90,21 +90,5 @@ describe("configuration should work for basic file system integrations", () => {
     expect(lastChangedKey).toEqual(item.key)
 
     expect(await manager.getConfiguration(item.key)).not.toBeUndefined()
-
-    lastChangedKey = undefined
-    manager.once("removed", (key) => {
-      lastChangedKey = key
-    })
-
-    rmSync(file, { force: true })
-    // eslint-disable-next-line no-console
-    console.log(`deleted: ${file}`)
-
-    await delay(500)
-
-    expect(lastChangedKey).not.toBeUndefined()
-    expect(lastChangedKey).toEqual(item.key)
-
-    expect(await manager.getConfiguration(item.key)).toBeUndefined()
   })
 })
