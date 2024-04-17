@@ -4,10 +4,11 @@
 
 import EventEmitter from "events"
 import type { Emitter } from "./events.js"
-import { DeferredPromise, type MaybeAwaitable } from "./index.js"
+import { DeferredPromise, getDebugInfo, type MaybeAwaitable } from "./index.js"
 
 import fs from "fs"
 import path, { join } from "path"
+import { fileExists } from "./fileSystem.js"
 import {
   DefaultLogger,
   type LogLevel,
@@ -149,20 +150,14 @@ export class FileSystemConfigurationManager
           fileName = join(this._configDirectory, fileName)
           switch (event) {
             case "rename":
-              if (
-                fs.existsSync(fileName) &&
-                fs.statSync(fileName, { throwIfNoEntry: false })
-              ) {
+              if (fileExists(fileName)) {
                 this._loadConfig(fileName)
               } else {
                 this._clearConfig(fileName)
               }
               break
             case "change":
-              if (
-                fs.existsSync(fileName) &&
-                fs.statSync(fileName, { throwIfNoEntry: false })
-              ) {
+              if (fileExists(fileName)) {
                 this._loadConfig(fileName)
               } else {
                 this._clearConfig(fileName)
@@ -179,8 +174,6 @@ export class FileSystemConfigurationManager
     this._watcher.on("error", (err: Error) => {
       this._logger.error(`Error: ${err}`, err)
     })
-
-    this._watcher.on("change", (e, f) => this._logger.debug(`chg: ${e} ${f}`))
 
     // Start the configuration loading process
     this._initialize()
@@ -254,7 +247,9 @@ export class FileSystemConfigurationManager
    * @param fileName The file to load
    */
   private _loadConfig(fileName: string): void {
-    if (fs.statSync(fileName).isFile()) {
+    const stats = fs.statSync(fileName)
+    this._logger.info(`${fileName}: ${getDebugInfo(stats)}`)
+    if (stats.isFile()) {
       fs.readFile(
         fileName,
         "utf8",
