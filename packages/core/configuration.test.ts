@@ -4,6 +4,7 @@ import {
   FileSystemConfigurationManager,
   type ConfigurationItem,
 } from "./configuration.js"
+import { DeferredPromise } from "./index.js"
 import { ConsoleLogWriter, LogLevel } from "./logging.js"
 import { delay } from "./time.js"
 
@@ -92,9 +93,12 @@ describe("configuration should work for basic file system integrations", () => {
       lastChangedKey = key
     })
 
-    rm(join(directory, "foo.json"), { force: true }, (_) => {})
+    const deferred = new DeferredPromise()
+    rm(join(directory, "foo.json"), { force: true }, (_) => {
+      deferred.resolve(undefined)
+    })
 
-    await delay(150)
+    await deferred
 
     expect(lastChangedKey).not.toBeUndefined()
     expect(lastChangedKey).toEqual(item.key)
