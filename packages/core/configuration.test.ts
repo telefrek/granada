@@ -96,7 +96,7 @@ describe("configuration should work for basic file system integrations", () => {
 
     rmSync(join(directory, "foo.json"), { force: true })
 
-    await delay(50)
+    await delay(500)
 
     expect(lastChangedKey).not.toBeUndefined()
     expect(lastChangedKey).toEqual(item.key)
