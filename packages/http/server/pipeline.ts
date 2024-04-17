@@ -201,7 +201,6 @@ export type UnhandledRequestConsumer = (
  * @returns A {@link UnhandledRequestConsumer} that responds as 404
  */
 export const NOT_FOUND_CONSUMER: UnhandledRequestConsumer = (request) => {
-  console.log(`Unhandled request: ${request.path.original}`)
   request.respond({ status: HttpStatus.NOT_FOUND, headers: emptyHeaders() })
 }
 
@@ -248,7 +247,6 @@ class DefaultPipeline extends EventEmitter implements HttpPipeline {
 
     const unhandled = new Writable({
       async write(chunk, _encoding, callback) {
-        console.log("unhandled handler executing")
         try {
           await unhandledRequest(chunk as HttpRequest)
           callback()

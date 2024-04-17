@@ -3,6 +3,7 @@
  */
 
 import { MaybeAwaitable } from "./index.js"
+import { error, info } from "./logging.js"
 
 /**
  * Set of supported events on an object with a defined lifecycle
@@ -46,9 +47,9 @@ const shutdownHooks: (() => MaybeAwaitable<unknown>)[] = []
 const shutdown = () => {
   // Fire all the hooks and hope for the best...
   Promise.all(shutdownHooks.map(async (s) => await s())).then(
-    () => console.log("shutdown finished"),
+    () => info("shutdown finished"),
     (err) => {
-      console.error(`error: ${err}`)
+      error(`error: ${err}`)
     },
   )
 }

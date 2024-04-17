@@ -3,6 +3,7 @@ import {
   ConsoleLogWriter,
   DefaultLogger,
   LogLevel,
+  error,
 } from "@telefrek/core/logging.js"
 import { HttpMethod, HttpStatus } from "@telefrek/http/index.js"
 import { CONTENT_PARSING_TRANSFORM } from "@telefrek/http/parsers.js"
@@ -56,7 +57,7 @@ describe("Basic HTTP server functionality should work", () => {
       .build()
 
     pipeline.on("error", (err) => {
-      console.log(`pipeline error: ${getDebugInfo(err)}`)
+      error(`pipeline error: ${getDebugInfo(err)}`)
     })
 
     const port = ~~(10000 + 1000 * Math.random())
@@ -109,7 +110,7 @@ describe("Basic HTTP server functionality should work", () => {
       ca: fs.readFileSync(join(dir, "./test/cert.pem")),
     })
     client.on("error", (err) => {
-      console.error(err)
+      error(err)
     })
 
     try {

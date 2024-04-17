@@ -5,11 +5,17 @@
 import { trace } from "@opentelemetry/api"
 import { Emitter } from "@telefrek/core/events.js"
 import { LifecycleEvents, registerShutdown } from "@telefrek/core/lifecycle.js"
-import { DefaultLogger, Logger, NoopLogWriter } from "@telefrek/core/logging.js"
+import {
+  DefaultLogger,
+  Logger,
+  NoopLogWriter,
+  error,
+} from "@telefrek/core/logging.js"
 import {
   CircularArrayBuffer,
   createIterator,
 } from "@telefrek/core/structures/circularBuffer.js"
+import assert from "assert"
 import EventEmitter from "events"
 import * as http2 from "http2"
 import { Readable, Stream, finished, pipeline } from "stream"
@@ -357,7 +363,7 @@ class Http2Request extends EventEmitter implements HttpRequest {
     finished(response, (_err) => {
       this.emit("finished")
       if (_err) {
-        console.log(`error on finish ${JSON.stringify(_err)}`)
+        error(`error on finish ${JSON.stringify(_err)}`)
       }
     })
 
@@ -370,15 +376,11 @@ class Http2Request extends EventEmitter implements HttpRequest {
 
   respond(response: HttpResponse): void {
     try {
-      if (this._id !== undefined) {
-        console.log(`id before inc: ${this._id}`)
-      }
-
       this._id = counter++
-      switch (true) {
-        case this.state === HttpRequestState.COMPLETED:
-          console.log(`BAD MONKEY!! ${this._id}  ${JSON.stringify(this.path)}`)
-      }
+      assert(
+        this.state !== HttpRequestState.COMPLETED,
+        "request has already seen a response",
+      )
 
       // We're now writing
       this.state = HttpRequestState.WRITING
@@ -402,7 +404,7 @@ class Http2Request extends EventEmitter implements HttpRequest {
         if (response.body?.contents && !this._response.writableEnded) {
           pipeline(response.body.contents, this._response.stream, (err) => {
             if (err) {
-              console.log(
+              error(
                 `not good...${JSON.stringify(err)} at ${JSON.stringify(
                   this.path,
                 )}`,
@@ -417,7 +419,7 @@ class Http2Request extends EventEmitter implements HttpRequest {
         }
       }
     } catch (err) {
-      console.trace(`error during response ${JSON.stringify(err)}`)
+      error(`error during response ${JSON.stringify(err)}`)
       if (!this._response.writableEnded) {
         this._response.end()
       }

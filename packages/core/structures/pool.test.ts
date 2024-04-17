@@ -16,12 +16,9 @@ class TestPool extends PoolBase<TestObject> {
     return item.count++ < 25 && reason === undefined
   }
 
-  override recycleItem(_item: TestObject): void {
-    //console.log(`Recycling item ${item.id}`)
-  }
+  override recycleItem(_item: TestObject): void {}
 
   override createItem(): MaybeAwaitable<TestObject> {
-    //console.log(`Creating item ${TestPool.ITEM_ID}`)
     return {
       name: "test object",
       id: TestPool.ITEM_ID++,

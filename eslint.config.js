@@ -32,6 +32,7 @@ module.exports = [
   {
     rules: {
       "no-unused-vars": "off",
+      "no-console": "error",
       "@typescript-eslint/no-unused-vars": [
         "error",
         {
@@ -42,6 +43,6 @@ module.exports = [
       ],
       "no-warning-comments": 1,
     },
-    ignores: ["eslint.config.js", "**/dist/*", "**/*.integration.ts"],
+    ignores: ["**/*.config.js", "**/dist", "**/*.integration.ts", "**/*.d.ts"],
   },
 ]

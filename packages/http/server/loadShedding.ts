@@ -7,6 +7,7 @@ import {
   Limiter,
   createSimpleLimiter,
 } from "@telefrek/core/backpressure/limits.js"
+import { info } from "@telefrek/core/logging.js"
 import { Timer } from "@telefrek/core/time.js"
 import { HttpStatus, emptyHeaders, type HttpRequest } from "../index.js"
 import { HttpPipelineTransform } from "./pipeline.js"
@@ -22,7 +23,7 @@ export function enableLoadShedding(
       vegasBuilder(10)
         .build()
         .on("changed", (l: number) => {
-          console.log(`new limit: ${l}`)
+          info(`new limit: ${l}`)
         }),
       10,
     )
@@ -35,14 +36,14 @@ export function enableLoadShedding(
         const end = timer.stop()
         if (end.milliseconds() > thresholdMs) {
           l.dropped()
-          console.log("dropped due to exceeding timeout")
+          info("dropped due to exceeding timeout")
         } else {
           l.success()
         }
       })
       return request
     } else {
-      console.log(`failed to get... ${limit.limit}`)
+      info(`failed to get... ${limit.limit}`)
       // Load shedding...
       request.respond({
         status: HttpStatus.SERVICE_UNAVAILABLE,

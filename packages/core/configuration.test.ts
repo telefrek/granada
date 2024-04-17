@@ -70,7 +70,6 @@ describe("configuration should work for basic file system integrations", () => {
     let lastChangedKey: string | undefined
 
     manager.once("added", (key) => {
-      console.log(`received add: ${key}`)
       lastChangedKey = key
     })
 
@@ -93,13 +92,7 @@ describe("configuration should work for basic file system integrations", () => {
       lastChangedKey = key
     })
 
-    rm(join(directory, "foo.json"), (err) => {
-      if (err) {
-        console.log(`Error during delete ${err}`)
-      } else {
-        console.log("deleted file")
-      }
-    })
+    rm(join(directory, "foo.json"), (_) => {})
 
     await delay(150)
 
