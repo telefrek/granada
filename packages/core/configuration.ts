@@ -326,6 +326,7 @@ export class FileSystemConfigurationManager
     defaultValue?: T,
   ): MaybeAwaitable<T | undefined> {
     if (this._lazyLoading) {
+      this._logger.info("lazy loading...")
       const fileName = this._configMap.get(configKey) as string
       if (fileName && fs.existsSync(fileName)) {
         const promise = new DeferredPromise<T | undefined>()
@@ -351,7 +352,11 @@ export class FileSystemConfigurationManager
       return defaultValue
     }
 
-    return (this._configMap.get(configKey) as T) ?? defaultValue
+    this._logger.info(`Getting ${configKey}...`)
+    const value = this._configMap.get(configKey)
+    this._logger.info(`Value: ${value ? getDebugInfo(value) : "undefined"}`)
+
+    return (value as T) ?? defaultValue
   }
 
   /**
