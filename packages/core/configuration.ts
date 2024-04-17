@@ -131,7 +131,7 @@ export class FileSystemConfigurationManager
       this._configDirectory,
       {
         encoding: "utf8",
-        recursive: true, // Related to https://github.com/nodejs/node/issues/49995 (https://github.com/nodejs/node/blob/59d6725ef24877db2ade3d0c26bec8b40bcee529/lib/fs.js#L1654)   https://github.com/nodejs/node/blob/59d6725ef24877db2ade3d0c26bec8b40bcee529/lib/internal/fs/recursive_watch.js#L160
+        recursive: false, // TODO: Related to https://github.com/nodejs/node/issues/49995, need fix before recursive
         persistent: true,
         signal: this._abortController.signal,
       },
