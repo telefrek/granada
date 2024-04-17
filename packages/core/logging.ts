@@ -2,7 +2,7 @@
  * Logging interfaces
  */
 
-import { EventEmitter } from "stream"
+import { EventEmitter } from "events"
 import type { Emitter } from "./events.js"
 import { HiResClock, type Timestamp } from "./time.js"
 

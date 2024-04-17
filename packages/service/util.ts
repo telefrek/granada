@@ -1,3 +1,4 @@
+import { DeferredPromise } from "@telefrek/core/index.js"
 import {
   DefaultHttpMethodStatus,
   HttpStatus,
@@ -6,7 +7,6 @@ import {
 } from "@telefrek/http/index.js"
 import { createRouter, type Router } from "@telefrek/http/server/routing.js"
 import type { Readable } from "stream"
-import { DeferredPromise } from "../core/index.js"
 import {
   SerializationFormat,
   createJsonBody,
