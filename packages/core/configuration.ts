@@ -4,7 +4,7 @@
 
 import EventEmitter from "events"
 import type { Emitter } from "./events.js"
-import { DeferredPromise, getDebugInfo, type MaybeAwaitable } from "./index.js"
+import { DeferredPromise, type MaybeAwaitable } from "./index.js"
 
 import fs from "fs"
 import path, { join } from "path"
@@ -167,6 +167,8 @@ export class FileSystemConfigurationManager
               this._logger.error(`Unknown FSWatcher event: ${event}`)
               break
           }
+        } else {
+          this._logger.error(`nope: ${fileName}`)
         }
       },
     )
@@ -207,7 +209,6 @@ export class FileSystemConfigurationManager
             // Filter to only allow json files
             if (f.isFile() && path.extname(f.name).endsWith("json")) {
               const fileName = path.join(f.path, f.name)
-              this._logger.debug(`Loading ${fileName}`)
 
               try {
                 this._loadConfig(fileName)
@@ -247,9 +248,7 @@ export class FileSystemConfigurationManager
    * @param fileName The file to load
    */
   private _loadConfig(fileName: string): void {
-    const stats = fs.statSync(fileName)
-    this._logger.info(`${fileName}: ${getDebugInfo(stats)}`)
-    if (stats.isFile()) {
+    if (fs.statSync(fileName).isFile()) {
       fs.readFile(
         fileName,
         "utf8",
@@ -257,7 +256,6 @@ export class FileSystemConfigurationManager
           if (err) {
             this._logger.error(`Failed to load file ${fileName}: ${err}`, err)
           } else {
-            this._logger.info(`Loading ${fileName}`)
             try {
               // Parse the contents
               const contents = this.contentsAsItemArray(data)

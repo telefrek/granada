@@ -92,7 +92,7 @@ describe("configuration should work for basic file system integrations", () => {
       lastChangedKey = key
     })
 
-    rm(join(directory, "foo.json"), (_) => {})
+    rm(join(directory, "foo.json"), { force: true }, (_) => {})
 
     await delay(150)
 
