@@ -4,7 +4,7 @@
 
 import EventEmitter from "events"
 import type { Emitter } from "./events.js"
-import { DeferredPromise, type MaybeAwaitable } from "./index.js"
+import { DeferredPromise, getDebugInfo, type MaybeAwaitable } from "./index.js"
 
 import fs from "fs"
 import path, { join } from "path"
@@ -155,24 +155,24 @@ export class FileSystemConfigurationManager
         // Check if there is a valid name here
         if (fileName && path.extname(fileName).endsWith("json")) {
           fileName = join(this._configDirectory, fileName)
-          this._logger.debug("checking ${fileName")
+          this._logger.debug(`checking ${fileName}`)
 
           switch (event) {
             case "rename":
               if (fileExists(fileName)) {
-                this._logger.debug("loadConfig ${fileName")
+                this._logger.debug(`loadConfig ${fileName}`)
                 this._loadConfig(fileName)
               } else {
-                this._logger.debug("clearConfig ${fileName")
+                this._logger.debug(`clearConfig ${fileName}`)
                 this._clearConfig(fileName)
               }
               break
             case "change":
               if (fileExists(fileName)) {
-                this._logger.debug("loadConfig ${fileName")
+                this._logger.debug(`loadConfig ${fileName}`)
                 this._loadConfig(fileName)
               } else {
-                this._logger.debug("clearConfig ${fileName")
+                this._logger.debug(`clearConfig ${fileName}`)
                 this._clearConfig(fileName)
               }
               break
@@ -271,6 +271,10 @@ export class FileSystemConfigurationManager
             try {
               // Parse the contents
               const contents = this.contentsAsItemArray(data)
+
+              this._logger.info(
+                `${fileName} contents: ${getDebugInfo(contents)}`,
+              )
 
               // Update the mapping for the objects in this file
               this._configLocations.set(
