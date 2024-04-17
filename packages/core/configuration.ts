@@ -22,27 +22,29 @@ export interface ConfigurationEvents {
    *
    * @param key The key that changed
    */
-  changed(key: string): void
+  changed: (key: string) => void
 
   /**
    * Event fired when a configuration key is removed
    *
    * @param key The key that was removed
    */
-  removed(key: string): void
+  removed: (key: string) => void
 
   /**
    * Event fired when a configuration key is added
    *
    * @param key The key that was added
    */
-  added(key: string): void
+  added: (key: string) => void
 }
 
 /**
  * Manages configuration values
  */
-export interface ConfigurationManager extends Emitter<ConfigurationEvents> {
+export interface ConfigurationManager
+  extends Emitter<ConfigurationEvents>,
+    Disposable {
   /**
    * Iterate over the known keys
    */
@@ -58,6 +60,11 @@ export interface ConfigurationManager extends Emitter<ConfigurationEvents> {
     configKey: string,
     defaultValue?: T,
   ): MaybeAwaitable<T | undefined>
+
+  /**
+   * Release resources
+   */
+  close(): void
 }
 
 /**
@@ -91,7 +98,7 @@ export interface FileSystemConfigurationManagerOptions {
  */
 export class FileSystemConfigurationManager
   extends EventEmitter
-  implements ConfigurationManager, Disposable
+  implements ConfigurationManager
 {
   private readonly _configDirectory: string
   private readonly _abortController: AbortController
@@ -236,7 +243,6 @@ export class FileSystemConfigurationManager
     if (this._configLocations.delete(fileName)) {
       for (const key of keys) {
         if (this._configMap.delete(key)) {
-          this._logger.debug(`Removed ${key}`)
           this.emit("removed", key)
         }
       }
@@ -279,7 +285,6 @@ export class FileSystemConfigurationManager
                   this._lazyLoading ? fileName : item.item,
                 )
 
-                this._logger.debug(`${item.key} => ${event}`)
                 // Emit the update
                 this.emit(event, item.key)
               }

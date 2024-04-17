@@ -3,13 +3,20 @@ import { join } from "path"
 import {
   FileSystemConfigurationManager,
   type ConfigurationItem,
+  type ConfigurationManager,
 } from "./configuration.js"
-import { ConsoleLogWriter, LogLevel } from "./logging.js"
+import { ConsoleLogWriter, DefaultLogger, LogLevel } from "./logging.js"
 import { delay } from "./time.js"
+
+const logger = new DefaultLogger({
+  writer: new ConsoleLogWriter(),
+  source: "configTest",
+  level: LogLevel.DEBUG,
+})
 
 describe("configuration should work for basic file system integrations", () => {
   let directory: string = "/this/dir/should/not/exist"
-  let manager: FileSystemConfigurationManager | undefined
+  let manager: ConfigurationManager | undefined
 
   beforeAll(() => {
     directory = mkdtempSync("granada-test", "utf8")
@@ -72,6 +79,7 @@ describe("configuration should work for basic file system integrations", () => {
     let lastChangedKey: string | undefined
 
     manager.once("added", (key) => {
+      logger.info(`added: ${key}`)
       lastChangedKey = key
     })
 
@@ -90,5 +98,21 @@ describe("configuration should work for basic file system integrations", () => {
     expect(lastChangedKey).toEqual(item.key)
 
     expect(await manager.getConfiguration(item.key)).not.toBeUndefined()
+
+    lastChangedKey = undefined
+    manager.once("removed", (key) => {
+      logger.info(`removed: ${key}`)
+      lastChangedKey = key
+    })
+
+    rmSync(file, { force: true })
+    logger.info(`Deleted ${file}`)
+
+    await delay(500)
+
+    expect(lastChangedKey).not.toBeUndefined()
+    expect(lastChangedKey).toEqual(item.key)
+
+    expect(await manager.getConfiguration(item.key)).toBeUndefined()
   })
 })
