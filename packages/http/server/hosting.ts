@@ -2,6 +2,7 @@
  * Expose the ability to host a folder on a given path
  */
 
+import { DefaultLogger, type LoggerOptions } from "@telefrek/core/logging"
 import { createReadStream, existsSync } from "fs"
 import { join, resolve } from "path"
 import {
@@ -15,6 +16,11 @@ import {
 import { fileToMediaType } from "../media.js"
 import { HttpPipelineTransform } from "./pipeline.js"
 
+export interface HostingOptions extends LoggerOptions {
+  baseDir: string
+  defaultFile?: string
+}
+
 /**
  * Create a {@link HttpPipelineTransform} for hosting a folder
  *
@@ -22,16 +28,19 @@ import { HttpPipelineTransform } from "./pipeline.js"
  * @param defaultFile The file to send if requesting `/` (default is `index.html`)
  * @returns A new {@link HttpPipelineTransform}
  */
-export function hostFolder(
-  baseDir: string,
-  defaultFile = "index.html",
-): HttpPipelineTransform {
-  if (!existsSync(baseDir)) {
-    throw new Error(`${baseDir} does not exist`)
+export function hostFolder(options: HostingOptions): HttpPipelineTransform {
+  if (!existsSync(options.baseDir)) {
+    throw new Error(`${options.baseDir} does not exist`)
   }
 
   // Sanitize our base directory
-  const sanitizedBaseDir = resolve(baseDir)
+  const sanitizedBaseDir = resolve(options.baseDir)
+
+  // Set the default file
+  const defaultFile = options.defaultFile ?? "index.html"
+
+  // Create a logger
+  const logger = new DefaultLogger(options)
 
   // Return the transform
   return async (request: HttpRequest) => {
@@ -44,11 +53,13 @@ export function hostFolder(
 
       // See if we can find the file
       const filePath = resolve(join(sanitizedBaseDir, target))
+      logger.debug(`Web hosting resolve: ${target}`)
 
       // Ensure we didn't try to traverse out...
       if (filePath.startsWith(sanitizedBaseDir)) {
         request.respond(await createFileContentResponse(filePath))
       } else {
+        logger.debug(`${target} not found`)
         request.respond({
           status: HttpStatus.NOT_FOUND,
           headers: emptyHeaders(),
