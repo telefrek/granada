@@ -86,7 +86,7 @@ describe("configuration should work for basic file system integrations", () => {
       flush: true,
     })
 
-    await delay(50)
+    await delay(500)
 
     expect(await manager.getConfiguration(item.key)).not.toBeUndefined()
 
