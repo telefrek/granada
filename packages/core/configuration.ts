@@ -149,14 +149,20 @@ export class FileSystemConfigurationManager
           fileName = join(this._configDirectory, fileName)
           switch (event) {
             case "rename":
-              if (fs.existsSync(fileName)) {
+              if (
+                fs.existsSync(fileName) &&
+                fs.statSync(fileName, { throwIfNoEntry: false })
+              ) {
                 this._loadConfig(fileName)
               } else {
                 this._clearConfig(fileName)
               }
               break
             case "change":
-              if (fs.existsSync(fileName)) {
+              if (
+                fs.existsSync(fileName) &&
+                fs.statSync(fileName, { throwIfNoEntry: false })
+              ) {
                 this._loadConfig(fileName)
               } else {
                 this._clearConfig(fileName)
