@@ -1,8 +1,15 @@
 {
-  "extends": "./tsconfig.json",
+  "extends": "../../tsconfig.build.json",
   "compilerOptions": {
     "outDir": "./dist/"
   },
-  "include": ["**/*.ts"],
-  "exclude": ["./dist/**/*", "./testUtils.ts", "./**/*.test.ts"]
+  "include": ["./**/*.ts", "./mimeTypes.json"],
+  "exclude": [
+    "node_modules",
+    "./dist/**/*",
+    "./**/*.test.ts",
+    "./**/*.integration.ts",
+    "./testUtils.ts"
+  ],
+  "references": [{ "path": "../core" }]
 }

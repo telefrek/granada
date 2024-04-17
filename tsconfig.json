@@ -1,6 +1,15 @@
 {
   "extends": "./tsconfig.build.json",
   "compilerOptions": {
-    "baseUrl": "./"
+    "outDir": "./dist/",
+    "disableSourceOfProjectReferenceRedirect": true
+  },
+  "include": ["./**/*.ts", "./packages/http/mimeTypes.json"],
+  "exclude": ["node_modules", "dist"],
+  "watchOptions": {
+    "excludeDirectories": ["**/dist", "**/node_modules"]
+  },
+  "buildOptions": {
+    "incremental": true
   }
 }

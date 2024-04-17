@@ -3,15 +3,23 @@
  */
 
 import { trace } from "@opentelemetry/api"
-import { Emitter } from "@telefrek/core/events"
-import { LifecycleEvents, registerShutdown } from "@telefrek/core/lifecycle"
+import { Emitter } from "@telefrek/core/events.js"
+import { LifecycleEvents, registerShutdown } from "@telefrek/core/lifecycle.js"
+import {
+  DefaultLogger,
+  Logger,
+  NoopLogWriter,
+  error,
+} from "@telefrek/core/logging.js"
 import {
   CircularArrayBuffer,
   createIterator,
-} from "@telefrek/core/structures/circularBuffer"
+} from "@telefrek/core/structures/circularBuffer.js"
+import assert from "assert"
 import EventEmitter from "events"
 import * as http2 from "http2"
 import { Readable, Stream, finished, pipeline } from "stream"
+import { mediaTypeToString } from "./content.js"
 import {
   HttpBody,
   HttpHeaders,
@@ -25,8 +33,7 @@ import {
   HttpVersion,
   emptyHeaders,
   parsePath,
-} from "."
-import { mediaTypeToString } from "./content"
+} from "./index.js"
 
 /**
  * Set of supported events on an {@link HttpServer}
@@ -103,6 +110,17 @@ export interface HttpServerBuilder {
   }): HttpServerBuilder
 
   /**
+   * Allow HTTP1
+   */
+  allowHttp1(): HttpServerBuilder
+
+  /**
+   * Specify the logger to use (default is {@link DefaultLogger} with {@link NoopLogWriter})
+   * @param logger The {@link Logger} to use for the server
+   */
+  withLogger(logger: Logger): HttpServerBuilder
+
+  /**
    * Builds a {@link HttpServer} from the parameters given
    *
    * @returns A fully initialized {@link HttpServer}
@@ -122,8 +140,11 @@ export function getDefaultBuilder(): HttpServerBuilder {
  * Default implementation of a {@link HttpServerBuilder}
  */
 class HttpServerBuilderImpl implements HttpServerBuilder {
-  options: http2.SecureServerOptions = {
+  options: HttpServerOptions = {
     allowHTTP1: true,
+    logger: new DefaultLogger({
+      writer: NoopLogWriter,
+    }),
   }
 
   withTls(details: {
@@ -141,33 +162,54 @@ class HttpServerBuilderImpl implements HttpServerBuilder {
     return this
   }
 
+  allowHttp1(): HttpServerBuilder {
+    this.options.allowHTTP1 = true
+
+    return this
+  }
+
+  withLogger(logger: Logger): HttpServerBuilder {
+    this.options.logger = logger
+
+    return this
+  }
+
   build(): HttpServer {
     return new HttpServerImpl(this.options)
   }
+}
+
+interface HttpServerOptions extends http2.SecureServerOptions {
+  logger: Logger
 }
 
 /**
  * Default implementation of the {@link HttpServer} using the node `http2` package
  */
 class HttpServerImpl extends EventEmitter implements HttpServer {
-  #server: http2.Http2Server
-  #tracer = trace.getTracer("Granada.HttpServer")
-  #sessions: http2.ServerHttp2Session[] = []
+  _server: http2.Http2Server
+  _tracer = trace.getTracer("Granada.HttpServer")
+  _sessions: http2.ServerHttp2Session[] = []
+  _logger: Logger
 
-  constructor(options: http2.SecureServerOptions) {
+  constructor(options: HttpServerOptions) {
     super()
 
     Stream.Duplex.setMaxListeners(200)
 
-    // TODO: Start looking at options for more configurations.  If no TLS, HTTP 1.1, etc.
-    this.#server = http2.createSecureServer(options)
+    this._logger = options.logger
 
-    this.#server.on("session", (session) => {
-      this.#sessions.push(session)
+    this._server = http2.createSecureServer(options)
+
+    this._server.on("session", (session) => {
+      this._logger.debug("New session created", session)
+
+      this._sessions.push(session)
       session.once("close", () => {
-        const idx = this.#sessions.indexOf(session)
+        const idx = this._sessions.indexOf(session)
         if (idx >= 0) {
-          this.#sessions.splice(idx, 1)
+          this._sessions.splice(idx, 1)
+          this._logger.debug("Session closed", session)
         }
       })
     })
@@ -176,7 +218,7 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
     registerShutdown(() => this.close())
 
     // Make sure to map requests
-    this.#setupRequestMapping()
+    this._setupRequestMapping()
   }
 
   [Symbol.asyncIterator](): AsyncIterator<HttpRequest, void, never> {
@@ -184,8 +226,11 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
     const buffer = new CircularArrayBuffer<HttpRequest>({ highWaterMark: 256 })
 
     this.on("request", (request: HttpRequest) => {
+      this._logger.debug(`New request received: ${request.path.original}`)
+
       // If we can't add to the buffer, need to reject
       if (!buffer.tryAdd(request)) {
+        this._logger.warn("Failed to enqueue request, shedding load")
         const headers = emptyHeaders()
 
         // TODO: Make this configurable...
@@ -201,13 +246,15 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
   }
 
   listen(port: number): Promise<void> {
-    if (!this.#server.listening) {
+    if (!this._server.listening) {
       this.emit("started")
-      this.#server.listen(port, "0.0.0.0")
+      this._server.listen(port, "0.0.0.0")
       this.emit("listening", port)
     } else {
       throw new Error("Server is already listening on another port")
     }
+
+    this._logger.info(`Server listening on ${port}`)
 
     return new Promise((resolve) => {
       this.once("finished", resolve)
@@ -216,12 +263,15 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
 
   close(): Promise<void> {
     return new Promise((resolve, reject) => {
-      if (this.#server.listening) {
+      this._logger.info("close invoked")
+
+      if (this._server.listening) {
         this.emit("stopping")
 
         // Close the server to stop accepting new streams
-        this.#server.close((err) => {
+        this._server.close((err) => {
           this.emit("finished")
+          this._logger.info("server closed")
           if (err) {
             this.emit("error", err)
             reject(err)
@@ -231,19 +281,19 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
         })
 
         // Close all existing streams
-        this.#sessions.map((s) => s.close())
+        this._sessions.map((s) => s.close())
       } else {
         resolve()
       }
     })
   }
 
-  #setupRequestMapping(): void {
-    this.#server.on("error", (err) => {
-      console.error("error...")
+  _setupRequestMapping(): void {
+    this._server.on("error", (err) => {
+      this._logger.error(`Error: ${err}`, err)
       this.emit("error", err)
     })
-    this.#server.on("request", (req, resp) => {
+    this._server.on("request", (req, resp) => {
       this.emit("request", new Http2Request(req, resp))
     })
   }
@@ -256,7 +306,7 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
  * @returns The mapped {@link HttpHeaders}
  */
 function parseHttp2Headers(
-  incomingHeaders: http2.IncomingHttpHeaders
+  incomingHeaders: http2.IncomingHttpHeaders,
 ): HttpHeaders {
   const headers = emptyHeaders()
 
@@ -288,14 +338,14 @@ class Http2Request extends EventEmitter implements HttpRequest {
 
   query: HttpQuery | undefined
   body: HttpBody | undefined
-  #status: number | undefined
+  _status: number | undefined
 
-  #response: http2.Http2ServerResponse
-  #id: number | undefined
+  _response: http2.Http2ServerResponse
+  _id: number | undefined
 
   constructor(
     request: http2.Http2ServerRequest,
-    response: http2.Http2ServerResponse
+    response: http2.Http2ServerResponse,
   ) {
     super()
     const { path, query } = parsePath(request.url)
@@ -307,73 +357,71 @@ class Http2Request extends EventEmitter implements HttpRequest {
     this.method = request.method.toUpperCase() as HttpMethod
     this.body = { contents: request as Readable }
 
-    this.#response = response
+    this._response = response
 
     // Ensure we track the response completion event
     finished(response, (_err) => {
       this.emit("finished")
       if (_err) {
-        console.log(`error on finish ${JSON.stringify(_err)}`)
+        error(`error on finish ${JSON.stringify(_err)}`)
       }
     })
 
     request.setTimeout(5000, () => {
       this.state = HttpRequestState.TIMEOUT
-      this.#response.writeHead(503)
-      this.#response.end()
+      this._response.writeHead(503)
+      this._response.end()
     })
   }
 
   respond(response: HttpResponse): void {
     try {
-      if (this.#id !== undefined) {
-        console.log(`id before inc: ${this.#id}`)
-      }
-
-      this.#id = counter++
-      switch (true) {
-        case this.state === HttpRequestState.COMPLETED:
-          console.log(`BAD MONKEY!! ${this.#id}  ${JSON.stringify(this.path)}`)
-      }
+      this._id = counter++
+      assert(
+        this.state !== HttpRequestState.COMPLETED,
+        "request has already seen a response",
+      )
 
       // We're now writing
       this.state = HttpRequestState.WRITING
-      this.#status = response.status
+      this._status = response.status
 
       // Verify headers weren't sent
-      if (!this.#response.headersSent) {
+      if (!this._response.headersSent) {
+        // TODO: Need to handle headers...
+
         // Write the head section
         if (response.body?.mediaType) {
-          this.#response.writeHead(response.status, {
+          this._response.writeHead(response.status, {
             "Content-Type": mediaTypeToString(response.body.mediaType),
           })
         } else {
-          this.#response.writeHead(response.status)
+          this._response.writeHead(response.status)
         }
 
         // Write the body
 
-        if (response.body?.contents && !this.#response.writableEnded) {
-          pipeline(response.body.contents, this.#response.stream, (err) => {
+        if (response.body?.contents && !this._response.writableEnded) {
+          pipeline(response.body.contents, this._response.stream, (err) => {
             if (err) {
-              console.log(
+              error(
                 `not good...${JSON.stringify(err)} at ${JSON.stringify(
-                  this.path
-                )}`
+                  this.path,
+                )}`,
               )
             }
-            this.#response.end()
+            this._response.end()
             this.state = HttpRequestState.COMPLETED
           })
         } else {
-          this.#response.end()
+          this._response.end()
           this.state = HttpRequestState.COMPLETED
         }
       }
     } catch (err) {
-      console.trace(`error during response ${JSON.stringify(err)}`)
-      if (!this.#response.writableEnded) {
-        this.#response.end()
+      error(`error during response ${JSON.stringify(err)}`)
+      if (!this._response.writableEnded) {
+        this._response.end()
       }
       this.state = HttpRequestState.ERROR
     }

@@ -1,34 +1,37 @@
 {
   "name": "@telefrek/service",
-  "version": "1.0.0-alpha.12",
+  "version": "1.0.0-alpha.25",
   "description": "This package makes creating new services easier than working with the raw HTTP stack",
-  "scripts": {
-    "compile": "rm -rf dist/* && tsc -p tsconfig.compile.json",
-    "upgrade": "npx npm-check-updates -u && npm install"
-  },
+  "author": "nathan@telefrek.com",
+  "license": "MIT",
   "keywords": [
     "granada",
     "framework",
     "service",
     "REST"
   ],
+  "type": "module",
   "files": [
     "dist/**/*.js",
     "dist/**/*.d.ts",
     "dist/**/*.json"
   ],
+  "types": "./dist/index.d.ts",
+  "main": "./dist/index.js",
   "exports": {
     ".": "./dist/index.js",
-    "./*": [
-      "./dist/*/index.js",
-      "./dist/*.js"
-    ],
+    "./*": "./dist/*.js",
     "./*.js": "./dist/*.js"
   },
-  "author": "nathan@telefrek.com",
-  "license": "MIT",
-  "dependencies": {
-    "@telefrek/http": "*"
+  "scripts": {
+    "clean": "rm -rf ./dist",
+    "upgrade": "npx npm-check-updates -u && npm install --legacy-peer-deps",
+    "build": "tsc",
+    "compile": "tsc -p tsconfig.compile.json",
+    "lint": "npx eslint . --fix"
   },
-  "gitHead": "730d8573af6f7e7edf7187ab6f1a082f52d224e0"
+  "dependencies": {
+    "@telefrek/http": "^1.0.0-alpha.25"
+  },
+  "gitHead": "1be6bb3a61aab8ae5361827b54f8428682b9d536"
 }

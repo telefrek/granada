@@ -3,7 +3,7 @@ import {
   PostgresColumnTypes,
   PostgresTable,
   Schema,
-} from "./schema"
+} from "./schema.js"
 
 describe("Postgres schemas should be easily defined in code", () => {
   it("Should allow validating of postgres schemas for simple query", () => {

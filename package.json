@@ -3,30 +3,36 @@
     "./packages/*"
   ],
   "scripts": {
-    "test": "jest --coverage",
+    "test": "jest --coverage --coverageProvider=v8 -c jest.config.js",
+    "test:unit": "jest --coverage --coverageProvider=v8 -c jest.unit.config.js",
+    "test:integration": "jest --coverage --coverageProvider=v8 --detectOpenHandles -c jest.integration.config.js",
     "format": "npx prettier --write .",
-    "package": "npm run upgrade-all & npm run test & npm run compile --workspaces --if-present",
-    "upgrade-all": "npx npm-check-updates -u & npm install & npm run upgrade --workspaces --if-present",
-    "tsc-diagnostics": "tsc --extendedDiagnostics --diagnostics"
-  },
-  "jest": {
-    "projects": [
-      "<rootDir>/jest.node.config.js"
-    ]
+    "ci": "npm install --legacy-peer-deps && turbo lint && turbo build && npm run test:unit",
+    "upgrade-all": "npx npm-check-updates -u && npm install --legacy-peer-deps && npm run upgrade --workspaces --if-present",
+    "build": "turbo build",
+    "lint": "npm run lint --workspaces --if-present"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.0.2",
+    "@eslint/js": "^9.0.0",
     "@types/jest": "^29.5.12",
-    "@types/node": "^20.11.16",
-    "@typescript-eslint/eslint-plugin": "^6.20.0",
-    "@typescript-eslint/parser": "^6.20.0",
-    "eslint": "^8.56.0",
+    "@types/node": "^20.12.7",
+    "@typescript-eslint/eslint-plugin": "^7.7.0",
+    "@typescript-eslint/parser": "^7.7.0",
+    "@typescript/analyze-trace": "^0.10.1",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.1.3",
     "identity-obj-proxy": "^3.0.0",
     "jest": "^29.7.0",
-    "jest-environment-jsdom": "^29.7.0",
-    "lerna": "^8.0.2",
+    "lerna": "^8.1.2",
+    "prettier": "^3.2.5",
     "ts-jest": "^29.1.2",
     "ts-node": "^10.9.2",
-    "typescript": "^5.3.3"
+    "turbo": "^1.13.2",
+    "typescript": "^5.4.5"
   },
-  "dependencies": {}
+  "dependencies": {
+    "typescript": "^5.4.5"
+  }
 }

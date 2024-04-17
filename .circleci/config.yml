@@ -4,7 +4,7 @@ version: 2.1
 
 # Adding the node orb
 orbs:
-  node: circleci/node@5.0.2
+  node: circleci/node@5.2.0
 
 # Define a job to be invoked later in a workflow.
 # See: https://circleci.com/docs/configuration-reference/#jobs
@@ -13,14 +13,9 @@ jobs:
     executor: node/default # use the default executor defined within the orb
     steps:
       - checkout
-      - node/install-packages:
-          pkg-manager: npm
       - run:
-          command: npm run test
-          name: Run tests
-      - run:
-          command: npm run package
-          name: Build app
+          command: npm run ci
+          name: Build app for publishing
       - persist_to_workspace:
           root: ~/project
           paths:

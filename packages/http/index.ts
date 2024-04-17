@@ -2,10 +2,10 @@
  * Core package definitions and interfaces
  */
 
-import { Emitter } from "@telefrek/core/events"
-import { LifecycleEvents } from "@telefrek/core/lifecycle"
+import { Emitter } from "@telefrek/core/events.js"
+import { LifecycleEvents } from "@telefrek/core/lifecycle.js"
 import type { Readable } from "stream"
-import type { MediaType } from "./content"
+import type { MediaType } from "./content.js"
 
 export type StringOrArray = string | string[]
 
@@ -15,24 +15,26 @@ export type SegmentValue = string | number | boolean
  * Supported methods for HTTP operations
  */
 export enum HttpMethod {
-  GET = "GET",
-  PUT = "PUT",
-  POST = "POST",
-  PATCH = "PATCH",
   DELETE = "DELETE",
+  GET = "GET",
+  HEAD = "HEAD",
   OPTIONS = "OPTIONS",
+  PATCH = "PATCH",
+  POST = "POST",
+  PUT = "PUT",
 }
 
 /**
  * Valid {@link HttpMethod} values as an array
  */
 export const HTTP_METHODS = [
-  HttpMethod.GET,
-  HttpMethod.PUT,
-  HttpMethod.POST,
-  HttpMethod.PATCH,
   HttpMethod.DELETE,
+  HttpMethod.GET,
+  HttpMethod.HEAD,
   HttpMethod.OPTIONS,
+  HttpMethod.PATCH,
+  HttpMethod.POST,
+  HttpMethod.PUT,
 ] as HttpMethod[]
 
 /**
@@ -189,10 +191,28 @@ export enum HttpStatus {
  * An interface defining the shape of an HTTP Response
  */
 export interface HttpResponse {
+  /** The {@link HttpStatus} to return */
   status: HttpStatus
-  headers: HttpHeaders
+  /** The {@link HttpHeaders} to include in the response */
+  headers?: HttpHeaders
+  /** The optional status message to return */
+  statusMessage?: string
+  /** The {@link HttpBody} to return */
   body?: HttpBody
 }
+
+/**
+ * Default {@link HttpStatus} for each {@link HttpMethod}
+ */
+export const DefaultHttpMethodStatus = {
+  [HttpMethod.DELETE]: HttpStatus.NO_CONTENT,
+  [HttpMethod.GET]: HttpStatus.OK,
+  [HttpMethod.HEAD]: HttpStatus.NO_CONTENT,
+  [HttpMethod.OPTIONS]: HttpStatus.OK,
+  [HttpMethod.PATCH]: HttpStatus.ACCEPTED,
+  [HttpMethod.POST]: HttpStatus.CREATED,
+  [HttpMethod.PUT]: HttpStatus.ACCEPTED,
+} as const
 
 /**
  * Utility method to check for {@link FileContentResponse} objects
@@ -201,7 +221,7 @@ export interface HttpResponse {
  * @returns True if the response is a {@link FileContentResponse}
  */
 export function isFileContent(
-  response: HttpResponse
+  response: HttpResponse,
 ): response is FileContentResponse {
   return (
     response !== undefined &&

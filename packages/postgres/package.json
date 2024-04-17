@@ -1,37 +1,42 @@
 {
   "name": "@telefrek/postgres",
-  "version": "1.0.0-alpha.12",
+  "version": "1.0.0-alpha.25",
   "description": "This package handles abstractions around postgres and interactions with a database",
-  "scripts": {
-    "compile": "rm -rf dist/* && tsc -p tsconfig.compile.json",
-    "upgrade": "npx npm-check-updates -u && npm install"
-  },
+  "author": "nathan@telefrek.com",
+  "license": "MIT",
   "keywords": [
     "granada",
     "framework",
     "postgres"
   ],
+  "type": "module",
   "files": [
     "dist/**/*.js",
     "dist/**/*.d.ts",
     "dist/**/*.json"
   ],
+  "types": "./dist/index.d.ts",
+  "main": "./dist/index.js",
   "exports": {
     ".": "./dist/index.js",
-    "./*": [
-      "./dist/*/index.js",
-      "./dist/*.js"
-    ],
+    "./*": "./dist/*.js",
     "./*.js": "./dist/*.js"
   },
-  "author": "nathan@telefrek.com",
-  "license": "MIT",
+  "scripts": {
+    "clean": "rm -rf ./dist",
+    "upgrade": "npx npm-check-updates -u && npm install --legacy-peer-deps",
+    "build": "tsc",
+    "compile": "tsc -p tsconfig.compile.json",
+    "lint": "npx eslint . --fix"
+  },
   "dependencies": {
-    "@telefrek/core": "*",
-    "pg": "8.11.3"
+    "@telefrek/core": "^1.0.0-alpha.25",
+    "@telefrek/query": "^1.0.0-alpha.25",
+    "pg": "^8.11.5"
   },
   "devDependencies": {
-    "@types/pg": "8.11.0"
+    "@testcontainers/postgresql": "^10.8.2",
+    "@types/pg": "^8.11.5"
   },
-  "gitHead": "730d8573af6f7e7edf7187ab6f1a082f52d224e0"
+  "gitHead": "1be6bb3a61aab8ae5361827b54f8428682b9d536"
 }

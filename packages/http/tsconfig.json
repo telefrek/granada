@@ -1,3 +1,8 @@
 {
-  "extends": "../../tsconfig.build.json"
+  "extends": "../../tsconfig.build.json",
+  "compilerOptions": {
+    "outDir": "./dist/"
+  },
+  "include": ["./**/*.ts", "./mimeTypes.json"],
+  "references": [{ "path": "../core" }]
 }

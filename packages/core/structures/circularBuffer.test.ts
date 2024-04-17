@@ -1,5 +1,5 @@
-import { Duration } from "../time/"
-import { CircularArrayBuffer } from "./circularBuffer"
+import { Duration } from "../time.js"
+import { CircularArrayBuffer } from "./circularBuffer.js"
 
 describe("Circular buffers should behave as infinite lists with fixed memory", () => {
   it("Should map state correctly for sync operations", () => {
@@ -56,7 +56,7 @@ describe("Circular buffers should behave as infinite lists with fixed memory", (
   })
 
   it("should map state correctly for async operations", async () => {
-    const buffer = new CircularArrayBuffer<Number>({ highWaterMark: 32 })
+    const buffer = new CircularArrayBuffer<number>({ highWaterMark: 32 })
 
     expect(buffer.size).toBe(0)
     expect(buffer.available).toBe(32)
@@ -99,7 +99,7 @@ describe("Circular buffers should behave as infinite lists with fixed memory", (
   }, 2_000)
 
   it("Should allow iteration", async () => {
-    const buffer = new CircularArrayBuffer<Number>({ highWaterMark: 4 })
+    const buffer = new CircularArrayBuffer<number>({ highWaterMark: 4 })
 
     // Setup a chain to write values
     const writer = async (): Promise<void> => {
@@ -111,7 +111,7 @@ describe("Circular buffers should behave as infinite lists with fixed memory", (
     }
 
     // Read the values from the iterator
-    const reader = async (): Promise<Number> => {
+    const reader = async (): Promise<number> => {
       let n = 0
       for await (const value of buffer) {
         n += Number(value)
@@ -127,7 +127,7 @@ describe("Circular buffers should behave as infinite lists with fixed memory", (
 
   it("Should be able to run substantially more items than the size", async () => {
     // Create an array
-    const buffer = new CircularArrayBuffer<Number>({ highWaterMark: 4 })
+    const buffer = new CircularArrayBuffer<number>({ highWaterMark: 4 })
 
     // Create a writer function
     const writer = async (): Promise<void> => {
@@ -155,7 +155,7 @@ describe("Circular buffers should behave as infinite lists with fixed memory", (
 
   it("Should allow waiting for batches", async () => {
     //  Use a non-power of 2 size for kicks
-    const buffer = new CircularArrayBuffer<Number>({ highWaterMark: 37 })
+    const buffer = new CircularArrayBuffer<number>({ highWaterMark: 37 })
 
     const writer = async (): Promise<void> => {
       for (let n = 0; n < 20; ++n) {
