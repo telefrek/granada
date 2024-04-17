@@ -296,6 +296,8 @@ export class FileSystemConfigurationManager
                   this._lazyLoading ? fileName : item.item,
                 )
 
+                this._logger.info(`configmap: ${getDebugInfo(this._configMap)}`)
+
                 // Emit the update
                 this._logger.info(`emitting ${item.key}`)
                 this.emit(event, item.key)
