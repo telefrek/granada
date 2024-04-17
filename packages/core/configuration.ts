@@ -155,18 +155,24 @@ export class FileSystemConfigurationManager
         // Check if there is a valid name here
         if (fileName && path.extname(fileName).endsWith("json")) {
           fileName = join(this._configDirectory, fileName)
+          this._logger.debug("checking ${fileName")
+
           switch (event) {
             case "rename":
               if (fileExists(fileName)) {
+                this._logger.debug("loadConfig ${fileName")
                 this._loadConfig(fileName)
               } else {
+                this._logger.debug("clearConfig ${fileName")
                 this._clearConfig(fileName)
               }
               break
             case "change":
               if (fileExists(fileName)) {
+                this._logger.debug("loadConfig ${fileName")
                 this._loadConfig(fileName)
               } else {
+                this._logger.debug("clearConfig ${fileName")
                 this._clearConfig(fileName)
               }
               break
