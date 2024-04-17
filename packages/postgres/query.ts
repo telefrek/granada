@@ -1,4 +1,4 @@
-import { PostgresColumnType, PostgresTable } from "./schema"
+import { PostgresColumnType, PostgresTable } from "./schema.js"
 
 /**
  * Defines a row of a given {@link PostgresTable}
