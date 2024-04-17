@@ -7,8 +7,13 @@ import type { Emitter } from "./events.js"
 import { DeferredPromise, type MaybeAwaitable } from "./index.js"
 
 import fs from "fs"
-import path from "path"
-import { DefaultLogger, type LogWriter, type Logger } from "./logging.js"
+import path, { join } from "path"
+import {
+  DefaultLogger,
+  type LogLevel,
+  type LogWriter,
+  type Logger,
+} from "./logging.js"
 
 export interface ConfigurationEvents {
   /**
@@ -40,7 +45,7 @@ export interface ConfigurationManager extends Emitter<ConfigurationEvents> {
   /**
    * Iterate over the known keys
    */
-  getKeys(): Iterator<string>
+  getKeys(): IterableIterator<string>
 
   /**
    * Gets the configuration value associated with the given key or undefined
@@ -75,6 +80,8 @@ export interface FileSystemConfigurationManagerOptions {
   logWriter?: LogWriter
   /** Flag to load configurations on demand to reduce memory (default is false) */
   lazyLoad?: boolean
+  /** The default logging level for this component */
+  logLevel?: LogLevel
 }
 
 /**
@@ -83,7 +90,7 @@ export interface FileSystemConfigurationManagerOptions {
  */
 export class FileSystemConfigurationManager
   extends EventEmitter
-  implements ConfigurationManager
+  implements ConfigurationManager, Disposable
 {
   private readonly _configDirectory: string
   private readonly _abortController: AbortController
@@ -115,6 +122,7 @@ export class FileSystemConfigurationManager
     this._logger = new DefaultLogger({
       source: "FileSystemConfigurationManager",
       writer: options.logWriter,
+      level: options.logLevel,
     })
 
     this._lazyLoading = options.lazyLoad ?? false
@@ -123,13 +131,14 @@ export class FileSystemConfigurationManager
       this._configDirectory,
       {
         encoding: "utf8",
-        recursive: true,
+        recursive: true, // Related to https://github.com/nodejs/node/issues/49995 (https://github.com/nodejs/node/blob/59d6725ef24877db2ade3d0c26bec8b40bcee529/lib/fs.js#L1654)   https://github.com/nodejs/node/blob/59d6725ef24877db2ade3d0c26bec8b40bcee529/lib/internal/fs/recursive_watch.js#L160
         persistent: true,
         signal: this._abortController.signal,
       },
       (event: fs.WatchEventType, file: string | Buffer | null): void => {
+        this._logger.debug(`${file} => ${event}`)
         // Get the fileName and check if it exists to map state
-        const fileName = Buffer.isBuffer(file)
+        let fileName = Buffer.isBuffer(file)
           ? file.toString("utf8")
           : typeof file === "string"
             ? file
@@ -137,16 +146,21 @@ export class FileSystemConfigurationManager
 
         // Check if there is a valid name here
         if (fileName && path.extname(fileName).endsWith("json")) {
+          fileName = join(this._configDirectory, fileName)
           switch (event) {
             case "rename":
-              ;(fs.existsSync(fileName) ? this._loadConfig : this._clearConfig)(
-                fileName,
-              )
+              if (fs.existsSync(fileName)) {
+                this._loadConfig(fileName)
+              } else {
+                this._clearConfig(fileName)
+              }
               break
             case "change":
-              ;(fs.existsSync(fileName) ? this._loadConfig : this._clearConfig)(
-                fileName,
-              )
+              if (fs.existsSync(fileName)) {
+                this._loadConfig(fileName)
+              } else {
+                this._clearConfig(fileName)
+              }
               break
             default:
               this._logger.error(`Unknown FSWatcher event: ${event}`)
@@ -160,8 +174,20 @@ export class FileSystemConfigurationManager
       this._logger.error(`Error: ${err}`, err)
     })
 
+    this._watcher.on("change", (e, f) => this._logger.debug(`chg: ${e} ${f}`))
+
     // Start the configuration loading process
     this._initialize()
+  }
+
+  [Symbol.dispose](): void {
+    this.close()
+  }
+
+  close(): void {
+    if (!this._abortController.signal.aborted) {
+      this._abortController.abort("closing the manager")
+    }
   }
 
   /**
@@ -205,10 +231,12 @@ export class FileSystemConfigurationManager
    * @param fileName The file to clear
    */
   private _clearConfig(fileName: string): void {
+    this._logger.debug(`Clearing: ${fileName}`)
     const keys = this._configLocations.get(fileName) ?? []
     if (this._configLocations.delete(fileName)) {
       for (const key of keys) {
         if (this._configMap.delete(key)) {
+          this._logger.debug(`Removed ${key}`)
           this.emit("removed", key)
         }
       }
@@ -228,6 +256,7 @@ export class FileSystemConfigurationManager
           if (err) {
             this._logger.error(`Failed to load file ${fileName}: ${err}`, err)
           } else {
+            this._logger.info(`Loading ${fileName}`)
             try {
               // Parse the contents
               const contents = this.contentsAsItemArray(data)
@@ -251,6 +280,7 @@ export class FileSystemConfigurationManager
                   this._lazyLoading ? fileName : item.item,
                 )
 
+                this._logger.debug(`${item.key} => ${event}`)
                 // Emit the update
                 this.emit(event, item.key)
               }
@@ -269,7 +299,7 @@ export class FileSystemConfigurationManager
     }
   }
 
-  getKeys(): Iterator<string> {
+  getKeys(): IterableIterator<string> {
     return this._configMap.keys()
   }
 
