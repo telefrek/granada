@@ -75,8 +75,10 @@ describe("configuration should work for basic file system integrations", () => {
       lastChangedKey = key
     })
 
+    const file = join(directory, "foo.json")
+
     // Create the file
-    writeFileSync(join(directory, "foo.json"), JSON.stringify(item), {
+    writeFileSync(file, JSON.stringify(item), {
       encoding: "utf8",
       flush: true,
     })
@@ -94,7 +96,8 @@ describe("configuration should work for basic file system integrations", () => {
       lastChangedKey = key
     })
 
-    rmSync(join(directory, "foo.json"), { force: true })
+    rmSync(file, { force: true })
+    console.log(`deleted: ${file}`)
 
     await delay(500)
 
