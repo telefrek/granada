@@ -246,6 +246,7 @@ export class FileSystemConfigurationManager
   private _clearConfig(fileName: string): void {
     this._logger.debug(`Clearing: ${fileName}`)
     const keys = this._configLocations.get(fileName) ?? []
+    this._logger.debug(`Affected keys: ${getDebugInfo(keys)}`)
     if (this._configLocations.delete(fileName)) {
       for (const key of keys) {
         if (this._configMap.delete(key)) {
@@ -296,6 +297,7 @@ export class FileSystemConfigurationManager
                 )
 
                 // Emit the update
+                this._logger.info(`emitting ${item.key}`)
                 this.emit(event, item.key)
               }
             } catch (parseErr) {

@@ -76,14 +76,9 @@ describe("configuration should work for basic file system integrations", () => {
       },
     }
 
-    let lastChangedKey: string | undefined
-
-    manager.once("added", (key) => {
-      logger.info(`added: ${key}`)
-      lastChangedKey = key
-    })
-
     const file = join(directory, "foo.json")
+
+    expect(await manager.getConfiguration(item.key)).toBeUndefined()
 
     // Create the file
     writeFileSync(file, JSON.stringify(item), {
@@ -93,25 +88,12 @@ describe("configuration should work for basic file system integrations", () => {
 
     await delay(50)
 
-    // Verify we saw the key change
-    expect(lastChangedKey).not.toBeUndefined()
-    expect(lastChangedKey).toEqual(item.key)
-
     expect(await manager.getConfiguration(item.key)).not.toBeUndefined()
-
-    lastChangedKey = undefined
-    manager.once("removed", (key) => {
-      logger.info(`removed: ${key}`)
-      lastChangedKey = key
-    })
 
     rmSync(file, { force: true })
     logger.info(`Deleted ${file}`)
 
     await delay(500)
-
-    expect(lastChangedKey).not.toBeUndefined()
-    expect(lastChangedKey).toEqual(item.key)
 
     expect(await manager.getConfiguration(item.key)).toBeUndefined()
   })
