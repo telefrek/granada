@@ -97,6 +97,7 @@ describe("configuration should work for basic file system integrations", () => {
     })
 
     rmSync(file, { force: true })
+    // eslint-disable-next-line no-console
     console.log(`deleted: ${file}`)
 
     await delay(500)
