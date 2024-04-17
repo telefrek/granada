@@ -5,6 +5,7 @@ import {
   type ConfigurationItem,
   type ConfigurationManager,
 } from "./configuration.js"
+import { DeferredPromise } from "./index.js"
 import { ConsoleLogWriter, DefaultLogger, LogLevel } from "./logging.js"
 import { delay } from "./time.js"
 
@@ -80,20 +81,31 @@ describe("configuration should work for basic file system integrations", () => {
 
     expect(await manager.getConfiguration(item.key)).toBeUndefined()
 
+    let deferred = new DeferredPromise()
+
+    manager.once("added", (_) => {
+      deferred.resolve(undefined)
+    })
+
     // Create the file
     writeFileSync(file, JSON.stringify(item), {
       encoding: "utf8",
       flush: true,
     })
 
-    await delay(500)
+    await deferred
 
     expect(await manager.getConfiguration(item.key)).not.toBeUndefined()
+    deferred = new DeferredPromise()
+
+    manager.once("removed", (_) => {
+      deferred.resolve(undefined)
+    })
 
     rmSync(file, { force: true })
     logger.info(`Deleted ${file}`)
 
-    await delay(500)
+    await deferred
 
     expect(await manager.getConfiguration(item.key)).toBeUndefined()
   })
