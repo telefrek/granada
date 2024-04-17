@@ -42,14 +42,13 @@ class CaseInsensitiveProxyHandler<T extends object> implements ProxyHandler<T> {
     if (typeof prop === "string") {
       const key = this._getKey(prop)
       if (key) {
-         
         target[key] = newValue
       }
       return key !== undefined
     }
 
     // Allow symbols to be set, we don't know anything about them
-     
+
     target[prop as keyof T] = newValue
     return true
   }

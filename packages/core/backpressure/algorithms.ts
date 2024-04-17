@@ -65,7 +65,6 @@ abstract class AbstractLimitAlgorithm
  * Fixed limit that never changes
  */
 class FixedLimitAlgorithm extends AbstractLimitAlgorithm {
-   
   protected _update(
     _duration: Duration,
     _inFlight: number,

@@ -26,7 +26,7 @@ export type PostgresEnum<T extends Record<string | number, string>> = T[keyof T]
  * as well as the typing system
  */
 export interface PostgresColumn {
-  // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   type: PostgresColumnTypes | PostgresEnum<any> | PostgresArray<any> | undefined
   defaultValue?: unknown
 }
