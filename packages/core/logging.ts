@@ -25,7 +25,7 @@ export interface LogData {
   message: string
   timestamp?: Timestamp
   source?: string
-  context?: object
+  context?: unknown
 }
 
 export type LogFormatter = (data: LogData) => string
@@ -90,7 +90,7 @@ export interface Logger {
    * @param message The message to log
    * @param context The additional context for the message
    */
-  debug(message: string, context?: object): void
+  debug(message: string, context?: unknown): void
 
   /**
    * Writes a {@link LogLevel.INFO} event
@@ -98,7 +98,7 @@ export interface Logger {
    * @param message The message to log
    * @param context The additional context for the message
    */
-  info(message: string, context?: object): void
+  info(message: string, context?: unknown): void
 
   /**
    * Writes a {@link LogLevel.WARN} event
@@ -106,7 +106,7 @@ export interface Logger {
    * @param message The message to log
    * @param context The additional context for the message
    */
-  warn(message: string, context?: object): void
+  warn(message: string, context?: unknown): void
 
   /**
    * Writes a {@link LogLevel.ERROR} event
@@ -114,7 +114,7 @@ export interface Logger {
    * @param message The message to log
    * @param context The additional context for the message
    */
-  error(message: string, context?: object): void
+  error(message: string, context?: unknown): void
 
   /**
    * Writes a {@link LogLevel.FATAL} event
@@ -122,7 +122,7 @@ export interface Logger {
    * @param message The message to log
    * @param context The additional context for the message
    */
-  fatal(message: string, context?: object): void
+  fatal(message: string, context?: unknown): void
 }
 
 /**
@@ -217,7 +217,7 @@ export class DefaultLogger implements Logger {
     this._level = level
   }
 
-  debug(message: string, context?: object): void {
+  debug(message: string, context?: unknown): void {
     if (this._level >= LogLevel.DEBUG) {
       this._writer.log({
         source: this.source,
@@ -229,7 +229,7 @@ export class DefaultLogger implements Logger {
     }
   }
 
-  info(message: string, context?: object): void {
+  info(message: string, context?: unknown): void {
     if (this._level >= LogLevel.INFO) {
       this._writer.log({
         source: this.source,
@@ -241,7 +241,7 @@ export class DefaultLogger implements Logger {
     }
   }
 
-  warn(message: string, context?: object): void {
+  warn(message: string, context?: unknown): void {
     if (this._level >= LogLevel.WARN) {
       this._writer.log({
         source: this.source,
@@ -253,7 +253,7 @@ export class DefaultLogger implements Logger {
     }
   }
 
-  error(message: string, context?: object): void {
+  error(message: string, context?: unknown): void {
     if (this._level >= LogLevel.ERROR) {
       this._writer.log({
         source: this.source,
@@ -265,7 +265,7 @@ export class DefaultLogger implements Logger {
     }
   }
 
-  fatal(message: string, context?: object): void {
+  fatal(message: string, context?: unknown): void {
     if (this._level >= LogLevel.FATAL) {
       this._writer.log({
         source: this.source,
