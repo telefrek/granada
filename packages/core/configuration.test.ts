@@ -1,10 +1,9 @@
-import { existsSync, mkdtempSync, rm, rmSync, writeFileSync } from "fs"
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "fs"
 import { join } from "path"
 import {
   FileSystemConfigurationManager,
   type ConfigurationItem,
 } from "./configuration.js"
-import { DeferredPromise } from "./index.js"
 import { ConsoleLogWriter, LogLevel } from "./logging.js"
 import { delay } from "./time.js"
 
@@ -16,7 +15,7 @@ describe("configuration should work for basic file system integrations", () => {
     directory = mkdtempSync("granada-test", "utf8")
   })
 
-  afterAll(() => {
+  afterAll(async () => {
     // Release the resources
     if (manager) {
       manager.close()
@@ -28,6 +27,8 @@ describe("configuration should work for basic file system integrations", () => {
         force: true,
       })
     }
+
+    await delay(50)
   })
 
   async function verifyEmpty(): Promise<void> {
@@ -93,12 +94,9 @@ describe("configuration should work for basic file system integrations", () => {
       lastChangedKey = key
     })
 
-    const deferred = new DeferredPromise()
-    rm(join(directory, "foo.json"), { force: true }, (_) => {
-      deferred.resolve(undefined)
-    })
+    rmSync(join(directory, "foo.json"), { force: true })
 
-    await deferred
+    await delay(50)
 
     expect(lastChangedKey).not.toBeUndefined()
     expect(lastChangedKey).toEqual(item.key)
