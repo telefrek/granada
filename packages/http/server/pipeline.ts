@@ -5,7 +5,11 @@
 import { isAbortError } from "@telefrek/core/errors.js"
 import { Emitter } from "@telefrek/core/events.js"
 import { DeferredPromise, MaybeAwaitable } from "@telefrek/core/index.js"
-import { LifecycleEvents } from "@telefrek/core/lifecycle.js"
+import {
+  LifecycleEvents,
+  registerShutdown,
+  removeShutdown,
+} from "@telefrek/core/lifecycle.js"
 import {
   DefaultLogger,
   LogLevel,
@@ -272,6 +276,9 @@ export class DefaultHttpPipeline extends EventEmitter implements HttpPipeline {
     this._abortController = new AbortController()
     this._shedOnPause = options.shedOnPause ?? false
 
+    // Register the shutdown
+    registerShutdown(this.stop.bind(this))
+
     if (this._shedOnPause) {
       this._shedding = new Writable({
         objectMode: true,
@@ -429,6 +436,9 @@ export class DefaultHttpPipeline extends EventEmitter implements HttpPipeline {
   }
 
   stop(): MaybeAwaitable<void> {
+    // Remove the hook so we can release this object
+    removeShutdown(this.stop.bind(this))
+
     if (
       this.state === HttpPipelineState.COMPLETED ||
       this._abortController.signal.aborted
