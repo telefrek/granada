@@ -1,3 +1,4 @@
+import type { Optional } from "@telefrek/core/type/utils.js"
 import { ExecutionMode } from "@telefrek/query/index.js"
 import type { SQLEnum } from "@telefrek/query/sql/types.js"
 import {
@@ -14,9 +15,9 @@ import {
 } from "./testUtils.js"
 
 describe("Postgres should be able to execute queries", () => {
-  let postgresContainer: StartedPostgreSqlContainer | undefined
-  let pool: PostgresConnectionPool | undefined
-  let executor: PostgresDatabase | undefined
+  let postgresContainer: Optional<StartedPostgreSqlContainer>
+  let pool: Optional<PostgresConnectionPool>
+  let executor: Optional<PostgresDatabase>
   beforeAll(async () => {
     postgresContainer = await new PostgreSqlContainer().start()
     pool = new PostgresConnectionPool({

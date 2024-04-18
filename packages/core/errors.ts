@@ -12,3 +12,18 @@ export class TimeoutError extends Error {
     )
   }
 }
+
+/**
+ * Filter for abort errors
+ *
+ * @param err The unknown error
+ * @returns True if this is an abort error
+ */
+export function isAbortError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    err.code === "ABORT_ERR"
+  )
+}

@@ -15,6 +15,7 @@ import {
   type LogWriter,
   type Logger,
 } from "./logging.js"
+import type { Optional } from "./type/utils.js"
 
 export interface ConfigurationEvents {
   /**
@@ -59,7 +60,7 @@ export interface ConfigurationManager
   getConfiguration<T>(
     configKey: string,
     defaultValue?: T,
-  ): MaybeAwaitable<T | undefined>
+  ): MaybeAwaitable<Optional<T>>
 
   /**
    * Release resources
@@ -128,7 +129,7 @@ export class FileSystemConfigurationManager
     this._configDirectory = configDirectory
     this._abortController = new AbortController()
     this._logger = new DefaultLogger({
-      source: "FileSystemConfigurationManager",
+      name: "FileSystemConfigurationManager",
       writer: options.logWriter,
       level: options.logLevel,
     })
@@ -324,12 +325,12 @@ export class FileSystemConfigurationManager
   getConfiguration<T>(
     configKey: string,
     defaultValue?: T,
-  ): MaybeAwaitable<T | undefined> {
+  ): MaybeAwaitable<Optional<T>> {
     if (this._lazyLoading) {
       this._logger.info("lazy loading...")
       const fileName = this._configMap.get(configKey) as string
       if (fileName && fs.existsSync(fileName)) {
-        const promise = new DeferredPromise<T | undefined>()
+        const promise = new DeferredPromise<Optional<T>>()
         fs.readFile(
           fileName,
           "utf8",

@@ -2,13 +2,15 @@
  * Simple DI framework that is optional to use
  */
 
+import type { Optional } from "./type/utils.js"
+
 type ValueProvider<T> = () => T
 
 export interface Container {
   register<T>(identifier: string, provider: ValueProvider<T>): boolean
   deregister(identifier: string): boolean
 
-  resolve(identifier: string): unknown | undefined
+  resolve(identifier: string): Optional<unknown>
 }
 
 export class DefaultContainer implements Container {
@@ -27,7 +29,7 @@ export class DefaultContainer implements Container {
     return this._providers.delete(identifier)
   }
 
-  resolve(identifier: string): unknown | undefined {
+  resolve(identifier: string): Optional<unknown> {
     const provider = this._providers.get(identifier)
     return provider ? provider() : undefined
   }
@@ -67,7 +69,7 @@ export function inject(identifier: string): FieldDecorator {
   ) {
     // Check if prototype
     if (typeof target === "object" && target) {
-      let metadata: InjectableFieldMetadata | undefined =
+      let metadata: Optional<InjectableFieldMetadata> =
         target[INJECTABLE_FIELDS]
       if (metadata === undefined) {
         target[INJECTABLE_FIELDS] = metadata = new Map<string, string>()
@@ -104,7 +106,7 @@ function _register(
     let provider: ValueProvider<T> = () => new (proto[MODIFIED_CTOR] ?? ctor)()
 
     if (options?.singleton) {
-      let singleton: T | undefined
+      let singleton: Optional<T>
       provider = () => {
         if (singleton === undefined) {
           singleton = new (proto[MODIFIED_CTOR] ?? ctor)()

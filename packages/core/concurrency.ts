@@ -4,6 +4,7 @@
 
 import { MaybeAwaitable } from "./index.js"
 import { Duration } from "./time.js"
+import type { Optional } from "./type/utils.js"
 
 /**
  * This is a wrapper around a value that allows it to be changed and reflect
@@ -68,7 +69,7 @@ export class Mutex {
       // Check for timeout
       if (timeout !== undefined) {
         // eslint-disable-next-line prefer-const
-        let timer: NodeJS.Timeout | undefined
+        let timer: Optional<NodeJS.Timeout>
 
         // Have to create the callback before the timeout
         const callback: MutexCallback = (v) => {
@@ -150,7 +151,7 @@ export class Signal {
       // Check for timeout
       if (timeout !== undefined) {
         // eslint-disable-next-line prefer-const
-        let timer: NodeJS.Timeout | undefined
+        let timer: Optional<NodeJS.Timeout>
 
         // Have to create the callback before the timeout
         const callback: SignalCallback = () => {
@@ -330,7 +331,7 @@ export class Semaphore {
       // Check for timeout
       if (timeout !== undefined) {
         // eslint-disable-next-line prefer-const
-        let timer: NodeJS.Timeout | undefined
+        let timer: Optional<NodeJS.Timeout>
 
         // Have to create the callback before the timeout
         const callback: MutexCallback = (v) => {

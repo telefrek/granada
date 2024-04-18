@@ -2,6 +2,8 @@
  * This package defines the shape of postgres table and object schemas
  */
 
+import type { Optional } from "@telefrek/core/type/utils"
+
 /**
  * Defines the types of columns that are allowed
  */
@@ -42,7 +44,7 @@ export interface PostgresArray<T extends PostgresColumnTypes> {
  * Utility type for indicating a table schema as a column name and {@link PostgresColumn} definition
  */
 export interface PostgresTable {
-  columns: Record<string, PostgresColumn | undefined>
+  columns: Record<string, Optional<PostgresColumn>>
 }
 /**
  * Represents the definition for a given schema (collection of objects)
@@ -72,7 +74,7 @@ interface PostgresTypeMapping {
 /**
  * Utility type for mapping a {@link PostgresColumn} to it's {@link PostgresTypeMapping}
  */
-export type PostgresColumnType<T extends PostgresColumn | undefined> =
+export type PostgresColumnType<T extends Optional<PostgresColumn>> =
   T extends PostgresColumn
     ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
       T["type"] extends PostgresArray<any>

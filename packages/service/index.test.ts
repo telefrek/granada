@@ -5,11 +5,13 @@ import {
   LogLevel,
   error,
 } from "@telefrek/core/logging.js"
+import type { Optional } from "@telefrek/core/type/utils.js"
 import { HttpMethod, HttpStatus } from "@telefrek/http/index.js"
-import { CONTENT_PARSING_TRANSFORM } from "@telefrek/http/parsers.js"
 import { getDefaultBuilder, type HttpServer } from "@telefrek/http/server.js"
 import {
-  createPipeline,
+  httpPipelineBuilder,
+  setPipelineLogLevel,
+  setPipelineWriter,
   type HttpPipeline,
 } from "@telefrek/http/server/pipeline.js"
 import * as fs from "fs"
@@ -19,19 +21,30 @@ import { TestService, type TestItem } from "./testUtils.js"
 
 const dir = __dirname
 
+// Enable console logging for the pipeline
+setPipelineWriter(new ConsoleLogWriter())
+setPipelineLogLevel(LogLevel.INFO)
+
+const logger = new DefaultLogger({
+  name: "testLog",
+  writer: new ConsoleLogWriter(),
+  level: LogLevel.DEBUG,
+  includeTimestamps: true,
+})
+
 describe("Basic HTTP server functionality should work", () => {
-  let server: HttpServer | undefined
-  let pipeline: HttpPipeline | undefined
+  let server: Optional<HttpServer>
+  let pipeline: Optional<HttpPipeline>
 
   afterEach(async () => {
-    // Stop the pipeline
-    if (pipeline) {
-      await pipeline.stop()
-    }
-
     // Stop the server
     if (server) {
       await server.close()
+    }
+
+    // Stop the pipeline
+    if (pipeline) {
+      await pipeline.stop()
     }
   })
 
@@ -45,24 +58,27 @@ describe("Basic HTTP server functionality should work", () => {
         new DefaultLogger({
           level: LogLevel.INFO,
           writer: new ConsoleLogWriter(),
-          source: "http",
+          name: "http",
           includeTimestamps: true,
         }),
       )
       .build()
 
-    pipeline = createPipeline(server)
+    logger.info("Building pipeline")
+    pipeline = httpPipelineBuilder(server)
+      .withDefaults()
       .withApi(new TestService())
-      .withContentParsing(CONTENT_PARSING_TRANSFORM)
       .build()
 
     pipeline.on("error", (err) => {
       error(`pipeline error: ${getDebugInfo(err)}`)
     })
 
+    logger.info("starting server")
     const port = ~~(10000 + 1000 * Math.random())
     void server.listen(port)
 
+    logger.info("sending request")
     let response = await getResponse<TestItem>(
       port,
       "/test/items",
@@ -70,6 +86,7 @@ describe("Basic HTTP server functionality should work", () => {
       JSON.stringify({ name: "foo" }),
     )
 
+    logger.info("checking response")
     expect(response.status).toBe(HttpStatus.CREATED)
     expect(response.contents).not.toBeUndefined()
     expect(response.contents?.name).toEqual("foo")
@@ -133,7 +150,7 @@ describe("Basic HTTP server functionality should work", () => {
 
       req.on("end", () => {
         client.close()
-        deferred.resolve(undefined)
+        deferred.resolve()
       })
       req.end()
 
@@ -141,7 +158,7 @@ describe("Basic HTTP server functionality should work", () => {
 
       return {
         status,
-        contents: JSON.parse(data) as T,
+        contents: data.length > 0 ? (JSON.parse(data) as T) : undefined,
       }
     } finally {
       client.close()

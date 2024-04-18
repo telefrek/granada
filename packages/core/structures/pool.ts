@@ -15,6 +15,7 @@ import { Signal } from "../concurrency.js"
 import { type MaybeAwaitable } from "../index.js"
 import { GRANADA_METRICS_METER } from "../observability/metrics.js"
 import { Duration, Timer } from "../time.js"
+import type { Optional } from "../type/utils.js"
 
 /**
  * Custom error raised when there is no value available in the {@link Pool}
@@ -50,7 +51,7 @@ export interface Pool<T> {
   /**
    * Try to get another item from the pool immediately
    */
-  getNow(): PoolItem<T> | undefined
+  getNow(): Optional<PoolItem<T>>
 
   /**
    * Get the next item from the pool, waiting up to the default timeout
@@ -178,7 +179,7 @@ export abstract class PoolBase<T> implements Pool<T> {
 
   static counter: number = 0
 
-  getNow(): PoolItem<T> | undefined {
+  getNow(): Optional<PoolItem<T>> {
     // Check to see if others are waiting, if so get in line
     if (this._signal.waiting === 0) {
       // Try to get the next item from the available set

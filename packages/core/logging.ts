@@ -124,7 +124,7 @@ export interface LoggerOptions {
   /** Optional {@link LogLevel} for initial logging, default is {@link LogLevel.ERROR} */
   level?: LogLevel
   /** Optional source for the logs */
-  source?: string
+  name?: string
   /** Optional {@link LogWriter} with default of {@link NoopLogWriter} */
   writer?: LogWriter
   /** Flat to indicate if timestamps should be collected (default is true) */
@@ -160,7 +160,7 @@ export class DefaultLogger implements Logger {
     this._level = options?.level ?? LogLevel.ERROR
     this._writer = options?.writer ?? NoopLogWriter
     this._injectTimestamp = options?.includeTimestamps ?? true
-    this.source = options?.source
+    this.source = options?.name
 
     // Bind to the global log changes
     GLOBAL_LOG_EVENTS.on("levelChanged", this.setLevel.bind(this))
@@ -344,6 +344,6 @@ export function fatal(message: string, context?: unknown) {
 }
 
 let GLOBAL_LOGGER: Logger = new DefaultLogger({
-  source: "global",
+  name: "global",
   writer: NoopLogWriter,
 })

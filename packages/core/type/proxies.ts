@@ -1,3 +1,5 @@
+import type { Optional } from "./utils.js"
+
 /**
  * Helper function to create a {@link Proxy} that makes object property access
  * pseudo case insensitive
@@ -21,7 +23,7 @@ class CaseInsensitiveProxyHandler<T extends object> implements ProxyHandler<T> {
     this._lowerCaseKeys = this._keys.map((k) => k.toLowerCase())
   }
 
-  _getKey(property: string): keyof T | undefined {
+  _getKey(property: string): Optional<keyof T> {
     const idx = this._lowerCaseKeys.indexOf(property.toLowerCase())
     return idx >= 0 ? (this._keys.at(idx) as keyof T) : undefined
   }

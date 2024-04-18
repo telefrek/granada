@@ -1,3 +1,4 @@
+import type { Optional } from "@telefrek/core/type/utils"
 import {
   createRouter,
   type RoutableApi,
@@ -40,7 +41,7 @@ export function routableApi(options: RoutableApiOptions) {
     // Return the new class cast as a RoutableApi that can be passed into a pipeline
     return class extends target implements RoutableApi {
       router: Router
-      prefix: string | undefined
+      prefix: Optional<string>
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       constructor(...args: any[]) {

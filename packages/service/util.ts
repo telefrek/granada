@@ -1,4 +1,5 @@
 import { DeferredPromise } from "@telefrek/core/index.js"
+import type { Optional } from "@telefrek/core/type/utils"
 import {
   DefaultHttpMethodStatus,
   HttpStatus,
@@ -45,7 +46,7 @@ async function readBody(reader: Readable): Promise<unknown[]> {
   })
 
   reader.on("end", () => {
-    deferred.resolve(undefined)
+    deferred.resolve()
   })
 
   reader.on("error", (err) => {
@@ -62,7 +63,7 @@ export function buildHandler<T>(
   serviceRoute: ServiceRouteInfo<T>,
 ): HttpHandler {
   return async (request: HttpRequest): Promise<void> => {
-    let args: unknown[] | undefined
+    let args: Optional<unknown[]>
 
     // Read the body
     const body = request.body
@@ -78,7 +79,7 @@ export function buildHandler<T>(
       args = [body]
     }
 
-    let response: ServiceResponse<T> | undefined
+    let response: Optional<ServiceResponse<T>>
 
     try {
       response = await (args

@@ -1,5 +1,6 @@
 import util from "util"
 import { isPromise } from "util/types"
+import type { Optional } from "./type/utils.js"
 
 /**
  * Simple numeric to represent priority values (pseudo "niceness" score) where
@@ -20,7 +21,7 @@ export function getDebugInfo(target: unknown, depth = 25): string {
 }
 
 /** Simple type representing `void | PromiseLike<void>` */
-export type MaybeAwaitable<T> = T | PromiseLike<T>
+export type MaybeAwaitable<T = void> = T | PromiseLike<T>
 
 /**
  * Ensure the {@link MaybeAwaitable} is a {@link Promise}
@@ -51,14 +52,14 @@ export type Rejector = (reason: unknown) => void
  * has the {@link Resolver} and {@link Rejector} objects exposed via the
  * corresponding `resolve` and `reject` methods
  */
-export class DeferredPromise<T> implements Promise<T> {
+export class DeferredPromise<T = void> implements Promise<T> {
   private _resolver: Resolver<T>
   private _rejector: Rejector
   private _promise: Promise<T>
 
   constructor() {
-    let resolver: Resolver<T> | undefined
-    let rejector: Rejector | undefined
+    let resolver: Optional<Resolver<T>>
+    let rejector: Optional<Rejector>
 
     this._promise = new Promise<T>((resolve: Resolver<T>, reject: Rejector) => {
       resolver = resolve

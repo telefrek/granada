@@ -3,10 +3,10 @@
  */
 
 import { MaybeAwaitable } from "@telefrek/core/index.js"
+import type { Optional } from "@telefrek/core/type/utils"
 import { Readable } from "stream"
 import { MediaType, TopLevelMediaTypes, parseMediaType } from "./content.js"
-import { HttpBody, HttpHeaders, HttpRequest, StringOrArray } from "./index.js"
-import { HttpPipelineTransform } from "./server/pipeline.js"
+import { HttpBody, HttpHeaders, StringOrArray } from "./index.js"
 
 /**
  * The content type header
@@ -18,8 +18,8 @@ export const CONTENT_TYPE_HEADER = "content-type"
  * @param headers The {@link HttpHeaders} to examine
  * @returns The content type header or undefined
  */
-export function getContentType(headers: HttpHeaders): MediaType | undefined {
-  let value: StringOrArray | undefined
+export function getContentType(headers: HttpHeaders): Optional<MediaType> {
+  let value: Optional<StringOrArray>
 
   // Fast path is that we have it already lowercase
   if (headers.has(CONTENT_TYPE_HEADER)) {
@@ -100,33 +100,4 @@ export const JSON_CONTENT_PARSER: ContentTypeParser = (
 
     body.contents = Readable.from(bodyReader())
   }
-}
-
-/**
- * {@link HttpPipelineTransform} for handling content parsing
- *
- * @param readable The {@link ReadableStream} of {@link HttpRequest}
- * @returns A {@link ReadableStream} of {@link HttpRequest} where body contents are parsed
- */
-export const CONTENT_PARSING_TRANSFORM: HttpPipelineTransform = async (
-  request: HttpRequest,
-) => {
-  // Check if there is a body and if so process the contents
-  if (request.body) {
-    // Parse out the media type
-    request.body.mediaType = getContentType(request.headers)
-
-    // If we know how to decode this, go ahead
-    if (request.body.mediaType) {
-      // Get the parser
-      const parser = CONTENT_PARSERS[request.body.mediaType.type]
-
-      // If found, let it do it's thing
-      if (parser) {
-        await parser(request.body)
-      }
-    }
-  }
-
-  return request
 }

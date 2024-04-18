@@ -1,5 +1,6 @@
 import { Semaphore } from "../concurrency.js"
 import { Timer } from "../time.js"
+import type { Optional } from "../type/utils.js"
 import { LimitAlgorithm, LimitedOperation, Limiter } from "./limits.js"
 
 /**
@@ -40,7 +41,7 @@ abstract class AbstractLimiter implements Limiter {
     return this._limit
   }
 
-  tryAcquire(): LimitedOperation | undefined {
+  tryAcquire(): Optional<LimitedOperation> {
     return
   }
 
@@ -139,7 +140,7 @@ class SimpleLimiter extends AbstractLimiter {
     this._semaphore = new Semaphore(initialLimit)
   }
 
-  override tryAcquire(): LimitedOperation | undefined {
+  override tryAcquire(): Optional<LimitedOperation> {
     // Use the non-blocking version
     if (this._semaphore.tryAcquire()) {
       return new this.SimpleLimitedOperation(

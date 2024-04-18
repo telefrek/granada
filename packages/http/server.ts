@@ -4,6 +4,7 @@
 
 import { trace } from "@opentelemetry/api"
 import { Emitter } from "@telefrek/core/events.js"
+import { DeferredPromise, type MaybeAwaitable } from "@telefrek/core/index.js"
 import { LifecycleEvents, registerShutdown } from "@telefrek/core/lifecycle.js"
 import {
   DefaultLogger,
@@ -15,6 +16,7 @@ import {
   CircularArrayBuffer,
   createIterator,
 } from "@telefrek/core/structures/circularBuffer.js"
+import type { Optional } from "@telefrek/core/type/utils.js"
 import assert from "assert"
 import EventEmitter from "events"
 import * as http2 from "http2"
@@ -77,7 +79,7 @@ export interface HttpServer extends Emitter<HttpServerEvents> {
   /**
    * Closes the server, rejecting any further calls
    */
-  close(): Promise<void>
+  close(): MaybeAwaitable<void>
 
   /**
    * Allow iterating over the {@link HttpRequest} that are received
@@ -151,8 +153,8 @@ class HttpServerBuilderImpl implements HttpServerBuilder {
     cert: string | Buffer
     key: string | Buffer
     passphrase?: string
-    caFile?: string | undefined
-    mutualAuth?: boolean | undefined
+    caFile?: Optional<string | Buffer>
+    mutualAuth?: Optional<boolean>
   }): HttpServerBuilder {
     this.options = {
       ...this.options,
@@ -214,9 +216,6 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
       })
     })
 
-    // Register the shutdown hook
-    registerShutdown(() => this.close())
-
     // Make sure to map requests
     this._setupRequestMapping()
   }
@@ -242,6 +241,11 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
       }
     })
 
+    // Shut down the buffer when we detect it is stopping
+    this.on("stopping", () => {
+      buffer.close()
+    })
+
     return createIterator(buffer)
   }
 
@@ -250,6 +254,9 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
       this.emit("started")
       this._server.listen(port, "0.0.0.0")
       this.emit("listening", port)
+
+      // Register the shutdown hook
+      registerShutdown(this.close.bind(this))
     } else {
       throw new Error("Server is already listening on another port")
     }
@@ -261,31 +268,31 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
     })
   }
 
-  close(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this._logger.info("close invoked")
+  close(): MaybeAwaitable<void> {
+    this._logger.info("close invoked")
 
-      if (this._server.listening) {
-        this.emit("stopping")
+    if (this._server.listening) {
+      this.emit("stopping")
+      const deferred = new DeferredPromise()
 
-        // Close the server to stop accepting new streams
-        this._server.close((err) => {
-          this.emit("finished")
-          this._logger.info("server closed")
-          if (err) {
-            this.emit("error", err)
-            reject(err)
-          } else {
-            resolve()
-          }
-        })
+      // Close the server to stop accepting new streams
+      this._server.close((err) => {
+        this.emit("finished")
+        this._logger.info("server closed")
+        if (err) {
+          this.emit("error", err)
+          deferred.reject(err)
+        } else {
+          deferred.resolve()
+        }
+      })
 
-        // Close all existing streams
-        this._sessions.map((s) => s.close())
-      } else {
-        resolve()
-      }
-    })
+      // Close all existing streams
+      this._sessions.map((s) => s.close())
+
+      // Return the promise
+      return deferred
+    }
   }
 
   _setupRequestMapping(): void {
@@ -294,7 +301,12 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
       this.emit("error", err)
     })
     this._server.on("request", (req, resp) => {
-      this.emit("request", new Http2Request(req, resp))
+      this.emit(
+        "request",
+        new Http2Request(req, resp).on("finished", () => {
+          this._logger.debug(`Request finished`)
+        }),
+      )
     })
   }
 }
@@ -336,12 +348,12 @@ class Http2Request extends EventEmitter implements HttpRequest {
   version: HttpVersion
   state: HttpRequestState
 
-  query: HttpQuery | undefined
-  body: HttpBody | undefined
-  _status: number | undefined
+  query: Optional<HttpQuery>
+  body: Optional<HttpBody>
+  _status: Optional<number>
 
   _response: http2.Http2ServerResponse
-  _id: number | undefined
+  _id: Optional<number>
 
   constructor(
     request: http2.Http2ServerRequest,
@@ -361,7 +373,7 @@ class Http2Request extends EventEmitter implements HttpRequest {
 
     // Ensure we track the response completion event
     finished(response, (_err) => {
-      this.emit("finished")
+      ;(this as HttpRequest).emit("finished")
       if (_err) {
         error(`error on finish ${JSON.stringify(_err)}`)
       }

@@ -3,6 +3,7 @@
  */
 
 import { Duration } from "@telefrek/core/time.js"
+import type { Optional } from "@telefrek/core/type/utils"
 
 export type BuildableQueryTypes = QueryType.SIMPLE | QueryType.PARAMETERIZED
 
@@ -51,7 +52,7 @@ export type RowType = Record<string, any>
 export function makeChild(
   parent: QueryNode,
   child: QueryNode,
-): QueryNode | undefined {
+): Optional<QueryNode> {
   const previous = child.parent
 
   child.parent = parent

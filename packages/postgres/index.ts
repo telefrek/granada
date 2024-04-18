@@ -17,6 +17,7 @@ import {
 import type { Pool } from "@telefrek/core/structures/pool.js"
 import { Duration, Timer } from "@telefrek/core/time.js"
 import { makeCaseInsensitive } from "@telefrek/core/type/proxies.js"
+import type { Optional } from "@telefrek/core/type/utils"
 import { QueryError } from "@telefrek/query/error.js"
 import {
   ExecutionMode,
@@ -137,7 +138,7 @@ async function executeQuery<T extends RowType>(
   const timer = Timer.startNew()
   const connection = await pool.get(timeout)
 
-  let error: unknown | undefined
+  let error: Optional<unknown>
   try {
     // TODO: Update for cursors...
     // TODO: How do we want to deal with "named queries..." as well as

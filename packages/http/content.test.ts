@@ -2,7 +2,7 @@ import { delay } from "@telefrek/core/time.js"
 import { Readable } from "stream"
 import { parseMediaType } from "./content.js"
 import { HttpMethod, parsePath } from "./index.js"
-import { CONTENT_PARSING_TRANSFORM } from "./parsers.js"
+import { ContentParsingTransform } from "./server/pipeline.js"
 import { TestRequest } from "./testUtils.js"
 
 describe("Verify parsing is appropriately delayed", () => {
@@ -26,7 +26,7 @@ describe("Verify parsing is appropriately delayed", () => {
     })
 
     // Pump it through the transform
-    const outputRequest = await CONTENT_PARSING_TRANSFORM(request)
+    const outputRequest = await new ContentParsingTransform().transform(request)
 
     // Add some delay since we have to wait for event loop to schedule streaming, etc.
     await delay(50)

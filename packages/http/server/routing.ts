@@ -2,6 +2,7 @@
  * Package containing all of the routing information for associating a given path/method combination with a handler
  */
 
+import type { Optional } from "@telefrek/core/type/utils"
 import {
   HTTP_METHODS,
   HttpHandler,
@@ -72,7 +73,7 @@ export interface Router {
    *
    * @returns A {@link RouteInfo} object that best matches the {@link LookupRequest} if found
    */
-  lookup(request: LookupRequest): RouteInfo | undefined
+  lookup(request: LookupRequest): Optional<RouteInfo>
 
   /**
    * Register the given {@link HttpHandler} with the template and optionally {@link HttpMethod}.
@@ -111,7 +112,7 @@ export function createRouter(): Router {
 /**
  * Represents the route handler information for a given request
  */
-type RouteHandler = Partial<Record<HttpMethod, HttpHandler | undefined>>
+type RouteHandler = Partial<Record<HttpMethod, Optional<HttpHandler>>>
 
 const parseParameter = (s: string): SegmentValue => {
   switch (true) {
@@ -134,11 +135,11 @@ class RouterImpl implements Router {
     info: RouteSegmentInfo.None,
   }
 
-  lookup(request: LookupRequest): RouteInfo | undefined {
+  lookup(request: LookupRequest): Optional<RouteInfo> {
     let current = this._root
     let remainder = request.path
 
-    let parameters: Map<string, SegmentValue> | undefined
+    let parameters: Optional<Map<string, SegmentValue>>
     let nextSlash = -1
     let children = this._root.children
     let info = this._root.info
@@ -256,7 +257,7 @@ class RouterImpl implements Router {
   addHandler(
     template: string,
     handler: HttpHandler,
-    method?: HttpMethod | undefined,
+    method?: Optional<HttpMethod>,
   ): void {
     // Verify the template and get the set of segments
     const segments = this._verifyRoute(template)
@@ -490,7 +491,7 @@ class RouterImpl implements Router {
               : ""
         }
 
-        let covering: RouteTrieNode | undefined
+        let covering: Optional<RouteTrieNode>
         let lcp = 0
         for (const child of current.children.filter(
           (child) => child.info === RouteSegmentInfo.None,

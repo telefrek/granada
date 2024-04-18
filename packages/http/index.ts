@@ -4,12 +4,16 @@
 
 import { Emitter } from "@telefrek/core/events.js"
 import { LifecycleEvents } from "@telefrek/core/lifecycle.js"
+import type { TransformFunc } from "@telefrek/core/streams.js"
 import type { Readable } from "stream"
 import type { MediaType } from "./content.js"
 
 export type StringOrArray = string | string[]
 
 export type SegmentValue = string | number | boolean
+
+// TODO: Replace references with this for parameters...
+export type ParameterMap = Map<string, SegmentValue>
 
 /**
  * Supported methods for HTTP operations
@@ -241,6 +245,8 @@ export interface FileContentResponse extends HttpResponse {
  * Simple type for contracting the async model for an HTTP request/response operation
  */
 export type HttpHandler = (request: HttpRequest) => Promise<void>
+
+export type HttpTransform = TransformFunc<HttpRequest, HttpRequest>
 
 /**
  * Parse the path string into it's corresponding {@link HttpPath} and {@link HttpQuery}

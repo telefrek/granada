@@ -1,10 +1,11 @@
 import { Stream, TransformCallback } from "stream"
 import { MaybeAwaitable } from "./index.js"
+import type { Optional } from "./type/utils.js"
 
 /**
  * Custom type allowing mapping a type through a {@link MaybeAwaitable} to a new value
  */
-export type TransformFunc<T, U> = (data: T) => MaybeAwaitable<U | undefined>
+export type TransformFunc<T, U> = (data: T) => MaybeAwaitable<Optional<U>>
 
 /**
  * Create a generic {@link Stream.Transform} using a {@link TransformFunc}

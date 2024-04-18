@@ -3,6 +3,7 @@
  */
 
 import { Timer } from "@telefrek/core/time.js"
+import type { Optional } from "@telefrek/core/type/utils"
 import { QueryError } from "../../error.js"
 import {
   ExecutionMode,
@@ -99,7 +100,7 @@ type InMemoryQuerySourceMaterializer<
 > = (
   store: InMemoryRelationalDataStore<DataStoreType>,
   parameters?: QueryParameters,
-) => RowType[] | undefined
+) => Optional<RowType[]>
 
 type InMemoryQuery<D extends SQLDataStore, R extends SQLDataTable> = {
   source: InMemoryQuerySourceMaterializer<D, R>

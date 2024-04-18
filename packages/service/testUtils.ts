@@ -2,6 +2,7 @@
  * Service definition and tooling for tests
  */
 
+import type { Optional } from "@telefrek/core/type/utils"
 import { HttpMethod, type SegmentValue } from "@telefrek/http/index.js"
 import { routableApi, route } from "./decorators.js"
 import { SerializationFormat, type ServiceResponse } from "./index.js"
@@ -57,7 +58,7 @@ export class TestService {
       return [parameters.get("itemId")]
     },
   })
-  getItem(itemId: number): TestItem | undefined {
+  getItem(itemId: number): Optional<TestItem> {
     return this.items.get(itemId)
   }
 

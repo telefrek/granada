@@ -3,6 +3,7 @@
  */
 
 import { getDebugInfo } from "@telefrek/core/index.js"
+import type { Optional } from "@telefrek/core/type/utils"
 import {
   SQLNodeType,
   type CteClause,
@@ -45,7 +46,7 @@ export function getTreeRoot(node: RNode): RNode {
   return current
 }
 
-export function getChildBranches(node: RNode): RNode[] | undefined {
+export function getChildBranches(node: RNode): Optional<RNode[]> {
   return node.children?.filter(isSQLQueryNode).filter(isBranchNode)
 }
 
@@ -97,7 +98,7 @@ abstract class RelationalASTNodeManager<NodeType extends RNode> {
   /**
    * Get the {@link SQLQueryNode} that is a child of this query
    */
-  get children(): RNode[] | undefined {
+  get children(): Optional<RNode[]> {
     return getChildBranches(this.node)
   }
 
@@ -111,13 +112,13 @@ abstract class TableNodeManager<
     return this.node.tableName
   }
 
-  get tableAlias(): string | undefined {
+  get tableAlias(): Optional<string> {
     return this.node.alias
   }
 }
 
 export class InsertNodeManager extends TableNodeManager<InsertClause> {
-  get columns(): string[] | undefined {
+  get columns(): Optional<string[]> {
     return this.node.columns
   }
 
@@ -138,7 +139,7 @@ export class UpdateNodeManager extends TableNodeManager<UpdateClause> {
   /**
    * Get the {@link WhereClause} if present
    */
-  get where(): WhereClause | undefined {
+  get where(): Optional<WhereClause> {
     return this.node.children?.filter(isWhereClause).at(0)
   }
 }
@@ -151,7 +152,7 @@ export class DeleteNodeManager extends TableNodeManager<DeleteClause> {
   /**
    * Get the {@link WhereClause} if present
    */
-  get where(): WhereClause | undefined {
+  get where(): Optional<WhereClause> {
     return this.node.children?.filter(isWhereClause).at(0)
   }
 }
@@ -177,7 +178,7 @@ export class SelectNodeManager extends TableNodeManager<SelectClause> {
   /**
    * Get the {@link WhereClause} if present
    */
-  get where(): WhereClause | undefined {
+  get where(): Optional<WhereClause> {
     return this.node.children?.filter(isWhereClause).at(0)
   }
 }
@@ -187,7 +188,7 @@ export class CteNodeManager extends RelationalASTNodeManager<CteClause> {
     return this.node.source
   }
 
-  override get children(): RNode[] | undefined {
+  override get children(): Optional<RNode[]> {
     return this.node.children
       ?.filter(isSQLQueryNode)
       .filter((c) => c !== this.source)

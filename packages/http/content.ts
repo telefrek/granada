@@ -1,3 +1,5 @@
+import type { Optional } from "@telefrek/core/type/utils"
+
 /**
  * Represents valid MediaType values including parameters
  */
@@ -39,9 +41,9 @@ export const CommonMediaTypes = {
  * Attempts to validate and parse the media type
  *
  * @param mediaType The string to parse
- * @returns A valid {@link MediaType} or undefined
+ * @returns An {@link Optional} valid {@link MediaType}
  */
-export function parseMediaType(mediaType: string): MediaType | undefined {
+export function parseMediaType(mediaType: string): Optional<MediaType> {
   // Verify we didn't get null
   if (mediaType) {
     // Try to parse the media type

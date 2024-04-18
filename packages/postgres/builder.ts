@@ -2,6 +2,7 @@
  * Implementation of the @telefrek/query packages
  */
 
+import type { Optional } from "@telefrek/core/type/utils.js"
 import { QueryError } from "@telefrek/query/error.js"
 import {
   ExecutionMode,
@@ -109,7 +110,7 @@ export class PostgresQueryBuilder<D extends SQLDataStore>
         text: (context as PostgresStaticContext).queryString!,
       }
 
-      let parameterized: ParametizedPostgresQuery<R, P> | undefined
+      let parameterized: Optional<ParametizedPostgresQuery<R, P>>
 
       if (context.materializer === "static") {
         // Do we need parameters?
@@ -175,7 +176,7 @@ function bindQuery<R extends RowType, P extends QueryParameters>(
   }
 }
 
-export function cleanQuery(query?: string): string | undefined {
+export function cleanQuery(query?: string): Optional<string> {
   return query?.trim().replace(/\s\s+/g, " ")
 }
 
@@ -321,7 +322,7 @@ function extractProjections(root: SQLQueryNode<SQLNodeType>): ProjectionInfo {
     aliasing: new Map(),
   }
 
-  let current: SQLQueryNode<SQLNodeType> | undefined = root
+  let current: Optional<SQLQueryNode<SQLNodeType>> = root
   while (current) {
     if (isCteClause(current)) {
       info.projections.push(current)

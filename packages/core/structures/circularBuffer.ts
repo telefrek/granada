@@ -4,6 +4,7 @@
 
 import { Signal } from "../concurrency.js"
 import { Duration } from "../time.js"
+import type { Optional } from "../type/utils.js"
 
 /**
  * Represents a circular buffer that uses fixed memory space to provide an "infinite" set of values.
@@ -61,9 +62,9 @@ export interface CircularBuffer<T> extends AsyncIterable<T> {
   /**
    * Tries to read the next value from the buffer
    *
-   * @returns A value or `undefined` if none was available
+   * @returns An {@link Optional} value of T
    */
-  tryRemove(): T | undefined
+  tryRemove(): Optional<T>
 
   /**
    * Tries to read the next `maxValues` off the buffer
@@ -81,7 +82,7 @@ export interface CircularBuffer<T> extends AsyncIterable<T> {
    *
    * @returns A promise that will fire when the operation has completed or timed out
    */
-  remove(timeout?: Duration): Promise<T | undefined>
+  remove(timeout?: Duration): Promise<Optional<T>>
 
   /**
    * Tries to read the next `maxValues` from the buffer, waiting until the timeout expires or `minValues` were available
@@ -291,7 +292,7 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
     return idx
   }
 
-  tryRemove(): T | undefined {
+  tryRemove(): Optional<T> {
     // Check size
     if (this._size === 0) {
       return undefined
@@ -318,7 +319,6 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
     let rem = Math.min(maxValues, this._size)
 
     // Add the values to the return array
-    // TODO: Better to pre-allocate?
     const ret: T[] = []
     while (rem-- > 0) {
       ret.push(this._buffer[this._tail++])
@@ -332,7 +332,7 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
     return ret
   }
 
-  async remove(timeout?: Duration): Promise<T | undefined> {
+  async remove(timeout?: Duration): Promise<Optional<T>> {
     while (this._size == 0) {
       // If we are closed or can't read, abandon
       if (this._closed || !(await this.writeSignal.wait(timeout))) {

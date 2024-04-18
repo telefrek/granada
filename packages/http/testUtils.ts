@@ -2,6 +2,7 @@
  * Set of classes that are used for testing only
  */
 
+import type { Optional } from "@telefrek/core/type/utils"
 import EventEmitter from "events"
 import {
   HttpBody,
@@ -22,8 +23,8 @@ export class TestRequest extends EventEmitter implements HttpRequest {
   state: HttpRequestState
   headers: HttpHeaders = emptyHeaders()
   version: HttpVersion
-  query?: HttpQuery | undefined
-  body?: HttpBody | undefined
+  query?: Optional<HttpQuery>
+  body?: Optional<HttpBody>
   respond(response: HttpResponse): void {
     this.emit("response", response)
   }

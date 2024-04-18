@@ -2,9 +2,10 @@
  * Package for handling media type operations
  */
 
+import type { Optional } from "@telefrek/core/type/utils"
 import { MediaType, parseMediaType } from "./content.js"
 
-let EXTENSION_MAP: Record<string, MediaType> | undefined
+let EXTENSION_MAP: Optional<Record<string, MediaType>>
 
 /**
  * Attempts to map the file extension to a {@link MediaType}
@@ -14,7 +15,7 @@ let EXTENSION_MAP: Record<string, MediaType> | undefined
  */
 export const fileToMediaType = async (
   filename: string,
-): Promise<MediaType | undefined> => {
+): Promise<Optional<MediaType>> => {
   // Load the map the first time through
   if (EXTENSION_MAP === undefined) {
     const entry = await import("./mimeTypes.json", { with: { type: "json" } })

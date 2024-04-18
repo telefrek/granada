@@ -2,6 +2,7 @@
  * Contains the logic for parsing an {@link SQLQueryNode} AST into a set of in memory operations
  */
 
+import type { Optional } from "@telefrek/core/type/utils"
 import { QueryError } from "../../error.js"
 import type { QueryParameters } from "../../index.js"
 import {
@@ -49,7 +50,7 @@ export function materializeNode<RowType extends SQLDataTable>(
   root: SQLQueryNode<SQLNodeType>,
   store: InMemoryRelationalDataStore<SQLDataStore>,
   parameters?: QueryParameters,
-): RowType[] | undefined {
+): Optional<RowType[]> {
   const context = new MaterializerContext(store)
 
   const current = hasProjections(root)
@@ -117,7 +118,7 @@ function materializeInsert(
   insert: InsertClause,
   context: MaterializerContext,
   parameters: QueryParameters,
-): SQLDataTable[] | undefined {
+): Optional<SQLDataTable[]> {
   const manager = new InsertNodeManager(insert)
 
   context.store[manager.tableName].push(parameters)
@@ -271,7 +272,7 @@ function materializeCte(
   cte: CteClause,
   context: MaterializerContext,
   parameters?: QueryParameters,
-): SQLQueryNode<SQLNodeType> | undefined {
+): Optional<SQLQueryNode<SQLNodeType>> {
   if (isSelectClause(cte.source)) {
     context.set(
       cte.tableName,

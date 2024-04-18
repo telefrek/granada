@@ -4,6 +4,7 @@ import type {
   ArrayProperty,
   MatchingProperty,
   MergedNonOverlappingType,
+  Optional,
   PropertyOfType,
 } from "@telefrek/core/type/utils.js"
 import { QueryError } from "../error.js"
@@ -77,7 +78,7 @@ interface SQLNodeBuilderContext<
   A extends keyof D["tables"] = never,
 > extends SQLNodeBuilder<D, Q, R, P, A> {
   queryType: Q
-  context: SQLQueryNode<SQLNodeType> | undefined
+  context: Optional<SQLQueryNode<SQLNodeType>>
   tableAlias: TableAlias
   queryBuilder: QueryBuilder
 }
@@ -94,7 +95,7 @@ export class DefaultSQLNodeBuilder<
   _tableAlias: TableAlias
 
   // Only all the context to transit to the next node in the chain
-  get context(): SQLQueryNode<SQLNodeType> | undefined {
+  get context(): Optional<SQLQueryNode<SQLNodeType>> {
     const current = this._context
     this._context = undefined
 
@@ -246,7 +247,7 @@ export class DefaultSQLNodeBuilder<
   select<T extends keyof D["tables"]>(
     tableName: T,
   ): SelectBuilder<D, T, D["tables"][T], P, Q> {
-    const alias: keyof D["tables"] | undefined =
+    const alias: Optional<keyof D["tables"]> =
       tableName in this._tableAlias
         ? this._tableAlias[tableName as string]
         : undefined

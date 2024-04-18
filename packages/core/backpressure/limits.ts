@@ -4,6 +4,7 @@
 
 import { Emitter } from "../events.js"
 import { Duration } from "../time.js"
+import type { Optional } from "../type/utils.js"
 import { fixedLimit } from "./algorithms.js"
 import { simpleLimiter } from "./limiters.js"
 
@@ -72,9 +73,9 @@ export interface LimitedOperation {
  */
 export interface Limiter {
   /**
-   * Attempt to acquire a {@link LimitedOperation}
+   * Attempt to acquire an {@link Optional} {@link LimitedOperation}
    */
-  tryAcquire(): LimitedOperation | undefined
+  tryAcquire(): Optional<LimitedOperation>
 
   /**
    * Retrieve the current limit

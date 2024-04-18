@@ -10,7 +10,7 @@ import {
   type FrameworkPriority,
 } from "../index.js"
 import { Duration } from "../time.js"
-import type { Func } from "../type/utils.js"
+import type { Func, Optional } from "../type/utils.js"
 
 /**
  * The priority for a given task
@@ -153,7 +153,7 @@ export class DefaultMultiLevelPriorityQueue implements MultiLevelPriorityQueue {
       Args,
       MaybeAwaitable<T>
     >
-    let a: Args | undefined
+    let a: Optional<Args>
 
     if (typeof options === "object") {
       f = work! as Func<Args, MaybeAwaitable<T>>
@@ -243,7 +243,7 @@ class MultiLevelWorkerThread implements MultiLevelWorker {
     }
   }
 
-  _next(): MultiLevelQueueTask_T | undefined {
+  _next(): Optional<MultiLevelQueueTask_T> {
     for (let p = 0; p < 4; ++p) {
       const task = this._queue[p as TaskPriority].shift()
       if (task) {

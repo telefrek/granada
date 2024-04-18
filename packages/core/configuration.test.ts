@@ -8,16 +8,17 @@ import {
 import { DeferredPromise } from "./index.js"
 import { ConsoleLogWriter, DefaultLogger, LogLevel } from "./logging.js"
 import { delay } from "./time.js"
+import type { Optional } from "./type/utils.js"
 
 const logger = new DefaultLogger({
   writer: new ConsoleLogWriter(),
-  source: "configTest",
+  name: "configTest",
   level: LogLevel.DEBUG,
 })
 
 describe("configuration should work for basic file system integrations", () => {
   let directory: string = "/this/dir/should/not/exist"
-  let manager: ConfigurationManager | undefined
+  let manager: Optional<ConfigurationManager>
 
   beforeAll(() => {
     directory = mkdtempSync("granada-test", "utf8")
@@ -84,7 +85,7 @@ describe("configuration should work for basic file system integrations", () => {
     let deferred = new DeferredPromise()
 
     manager.once("added", (_) => {
-      deferred.resolve(undefined)
+      deferred.resolve()
     })
 
     // Create the file
@@ -99,7 +100,7 @@ describe("configuration should work for basic file system integrations", () => {
     deferred = new DeferredPromise()
 
     manager.once("removed", (_) => {
-      deferred.resolve(undefined)
+      deferred.resolve()
     })
 
     rmSync(file, { force: true })

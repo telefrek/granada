@@ -4,7 +4,8 @@
 
 import opentelemetry, { ValueType, type Meter } from "@opentelemetry/api"
 import type { EventLoopUtilization } from "perf_hooks"
-import type { HeapSpaceInfo, HeapInfo } from "v8"
+import type { HeapInfo, HeapSpaceInfo } from "v8"
+import type { Optional } from "../type/utils.js"
 /**
  * Setup our framework metrics
  */
@@ -108,7 +109,7 @@ async function trackGC(meter: Meter): Promise<void> {
 async function trackEventLoop(meter: Meter): Promise<void> {
   const performance = (await import("perf_hooks")).performance
 
-  let previous: EventLoopUtilization | undefined
+  let previous: Optional<EventLoopUtilization>
 
   meter
     .createObservableGauge("event_loop_utilization", {
@@ -144,7 +145,7 @@ async function trackHeapMetrics(meter: Meter): Promise<void> {
 
   // Read these on a cadence since it may be expensive
   let lastHeapValues: HeapSpaceInfo[] = []
-  let lastHeapInfo: HeapInfo | undefined
+  let lastHeapInfo: Optional<HeapInfo>
   setInterval(() => {
     lastHeapValues = getHeapSpaceStatistics()
     lastHeapInfo = getHeapStatistics()
