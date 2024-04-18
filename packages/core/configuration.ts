@@ -4,7 +4,7 @@
 
 import EventEmitter from "events"
 import type { Emitter } from "./events.js"
-import { DeferredPromise, getDebugInfo, type MaybeAwaitable } from "./index.js"
+import { DeferredPromise, type MaybeAwaitable } from "./index.js"
 
 import fs from "fs"
 import path, { join } from "path"
@@ -161,19 +161,15 @@ export class FileSystemConfigurationManager
           switch (event) {
             case "rename":
               if (fileExists(fileName)) {
-                this._logger.debug(`loadConfig ${fileName}`)
                 this._loadConfig(fileName)
               } else {
-                this._logger.debug(`clearConfig ${fileName}`)
                 this._clearConfig(fileName)
               }
               break
             case "change":
               if (fileExists(fileName)) {
-                this._logger.debug(`loadConfig ${fileName}`)
                 this._loadConfig(fileName)
               } else {
-                this._logger.debug(`clearConfig ${fileName}`)
                 this._clearConfig(fileName)
               }
               break
@@ -247,7 +243,6 @@ export class FileSystemConfigurationManager
   private _clearConfig(fileName: string): void {
     this._logger.debug(`Clearing: ${fileName}`)
     const keys = this._configLocations.get(fileName) ?? []
-    this._logger.debug(`Affected keys: ${getDebugInfo(keys)}`)
     if (this._configLocations.delete(fileName)) {
       for (const key of keys) {
         if (this._configMap.delete(key)) {
@@ -274,10 +269,6 @@ export class FileSystemConfigurationManager
               // Parse the contents
               const contents = this.contentsAsItemArray(data)
 
-              this._logger.info(
-                `${fileName} contents: ${getDebugInfo(contents)}`,
-              )
-
               // Update the mapping for the objects in this file
               this._configLocations.set(
                 fileName,
@@ -297,10 +288,8 @@ export class FileSystemConfigurationManager
                   this._lazyLoading ? fileName : item.item,
                 )
 
-                this._logger.info(`configmap: ${getDebugInfo(this._configMap)}`)
-
                 // Emit the update
-                this._logger.info(`emitting ${item.key}`)
+                this._logger.debug(`emitting ${item.key}`)
                 this.emit(event, item.key)
               }
             } catch (parseErr) {
@@ -327,7 +316,7 @@ export class FileSystemConfigurationManager
     defaultValue?: T,
   ): MaybeAwaitable<Optional<T>> {
     if (this._lazyLoading) {
-      this._logger.info("lazy loading...")
+      this._logger.debug(`lazy loading ${configKey}...`)
       const fileName = this._configMap.get(configKey) as string
       if (fileName && fs.existsSync(fileName)) {
         const promise = new DeferredPromise<Optional<T>>()
@@ -353,9 +342,8 @@ export class FileSystemConfigurationManager
       return defaultValue
     }
 
-    this._logger.info(`Getting ${configKey}...`)
+    this._logger.debug(`Getting ${configKey}...`)
     const value = this._configMap.get(configKey)
-    this._logger.info(`Value: ${value ? getDebugInfo(value) : "undefined"}`)
 
     return (value as T) ?? defaultValue
   }
