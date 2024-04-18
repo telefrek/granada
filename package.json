@@ -10,7 +10,8 @@
     "ci": "npm install --legacy-peer-deps && turbo lint && turbo build && npm run test:unit",
     "upgrade-all": "npx npm-check-updates -u && npm install --legacy-peer-deps && npm run upgrade --workspaces --if-present",
     "build": "turbo build",
-    "lint": "npm run lint --workspaces --if-present"
+    "lint": "npm run lint --workspaces --if-present",
+    "publish:alpha": "turbo compile && lerna publish --preid alpha --force-publish"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.0.2",
