@@ -1,6 +1,6 @@
 {
   "name": "@telefrek/query",
-  "version": "1.0.0-alpha.29",
+  "version": "1.0.0-alpha.30",
   "description": "This package contains the data abstractions that are referenced throughout the Granada framework",
   "author": "nathan@telefrek.com",
   "license": "MIT",
@@ -30,7 +30,7 @@
     "lint": "npx eslint . --fix"
   },
   "dependencies": {
-    "@telefrek/core": "^1.0.0-alpha.29"
+    "@telefrek/core": "^1.0.0-alpha.30"
   },
   "gitHead": "1be6bb3a61aab8ae5361827b54f8428682b9d536"
 }
