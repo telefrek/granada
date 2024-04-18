@@ -590,24 +590,18 @@ export class RoutingTransform extends BaseHttpPipelineTransform {
   protected override async processRequest(
     request: PipelineRequest,
   ): Promise<void> {
-    this._logger.debug(`Routing transform checking ${request.path.original}`)
-
+    // Try to route it
     const info = this._router.lookup({
       path: request.path.original,
       method: request.method,
     })
 
     if (info) {
-      this._logger.debug(`Identified route for ${request.path.original}`)
-
       // Add the parameter mapping...
       request.path.parameters = info.parameters
 
       await info.handler(request)
-    } else {
-      this._logger.debug(`No route identified for ${request.path.original}`)
     }
-
     return
   }
 }

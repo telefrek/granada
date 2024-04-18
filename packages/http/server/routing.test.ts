@@ -1,3 +1,9 @@
+import {
+  ConsoleLogWriter,
+  DefaultLogger,
+  LogLevel,
+  setGlobalLogger,
+} from "@telefrek/core/logging.js"
 import { HttpHandler, HttpMethod } from "../index.js"
 import { LookupRequest, createRouter } from "./routing.js"
 
@@ -11,12 +17,15 @@ function request(
   }
 }
 
+setGlobalLogger(
+  new DefaultLogger({ writer: new ConsoleLogWriter(), level: LogLevel.INFO }),
+)
+
 describe("verify router", () => {
   test("A router should not accept invalid templates", () => {
     const router = createRouter()
     const handler: HttpHandler = (_request) => Promise.reject("invalid")
 
-    expect(() => router.addHandler("/", handler)).toThrow()
     expect(() => router.addHandler("/...", handler)).toThrow()
     expect(() => router.addHandler("/para:meter", handler)).toThrow()
     expect(() => router.addHandler("/parameter:", handler)).toThrow()
@@ -24,6 +33,7 @@ describe("verify router", () => {
     expect(() => router.addHandler("/cannot/**/terminate", handler)).toThrow()
     expect(() => router.addHandler("/*t", handler)).toThrow()
     expect(() => router.addHandler("/t*", handler)).toThrow()
+    expect(() => router.addHandler("/***", handler)).toThrow()
 
     router.addHandler("/one/:two/three", handler)
     expect(() => router.addHandler("/one/*/three", handler)).toThrow()
@@ -33,6 +43,7 @@ describe("verify router", () => {
     const router = createRouter()
     const handler: HttpHandler = (_request) => Promise.reject("invalid")
 
+    router.addHandler("/", handler)
     router.addHandler("/valid", handler)
     router.addHandler("/this/is/a/valid/handler/", handler)
     router.addHandler("/:parameter/should/work", handler)
@@ -40,6 +51,7 @@ describe("verify router", () => {
     router.addHandler("/wildcards/*/should/be/:accepted/**", handler)
 
     expect(router.lookup(request("/valid"))).not.toBeUndefined()
+    expect(router.lookup(request("/"))).not.toBeUndefined()
   })
 
   test("A router should accept a top level terminal", () => {

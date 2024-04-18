@@ -2,8 +2,6 @@
  * Logging interfaces
  */
 
-import { EventEmitter } from "events"
-import type { Emitter } from "./events.js"
 import { HiResClock, type Timestamp } from "./time.js"
 
 /**
@@ -161,9 +159,6 @@ export class DefaultLogger implements Logger {
     this._writer = options?.writer ?? NoopLogWriter
     this._injectTimestamp = options?.includeTimestamps ?? true
     this.source = options?.name
-
-    // Bind to the global log changes
-    GLOBAL_LOG_EVENTS.on("levelChanged", this.setLevel.bind(this))
   }
 
   get level(): LogLevel {
@@ -247,41 +242,21 @@ const ReadableLogLevels = {
 } as const
 
 /**
- * Interface to define global log events
- */
-interface GlobalLogLevelEvents {
-  /**
-   * Signals a change to global logging levels
-   *
-   * @param level The new {@link LogLevel} to use globally
-   */
-  levelChanged(level: LogLevel): void
-}
-
-/**
- * Implementation of the {@link EventEmitter} for the {@link GlobalLogLevelEvents}
- */
-class GlobalLogEvents
-  extends EventEmitter
-  implements Emitter<GlobalLogLevelEvents>
-{
-  constructor() {
-    super()
-  }
-}
-
-/**
- * Simple class to allow hooking for global logger events
- */
-export const GLOBAL_LOG_EVENTS: GlobalLogEvents = new GlobalLogEvents()
-
-/**
  * Attempts to update the global logging levels
  *
  * @param level The new {@link LogLevel} to set globally
  */
-export function updateGlobalLevel(level: LogLevel): void {
-  GLOBAL_LOG_EVENTS.emit("levelChanged", level)
+export function setGlobalLogLevel(level: LogLevel): void {
+  GLOBAL_LOGGER.setLevel(level)
+}
+
+export function setGlobalWriter(writer: LogWriter): void {
+  GLOBAL_LOGGER = new DefaultLogger({
+    name: "global",
+    level: GLOBAL_LOGGER.level,
+    writer,
+    includeTimestamps: true,
+  })
 }
 
 /**

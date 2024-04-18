@@ -2,7 +2,7 @@
  * Package containing all of the routing information for associating a given path/method combination with a handler
  */
 
-import type { Optional } from "@telefrek/core/type/utils"
+import type { Optional } from "@telefrek/core/type/utils.js"
 import {
   HTTP_METHODS,
   HttpHandler,
@@ -131,12 +131,12 @@ const parseParameter = (s: string): SegmentValue => {
  * Default {@link Router} implementation that uses a tree structure to hold the mapping information
  */
 class RouterImpl implements Router {
-  readonly _root: RouteTrieNode = {
+  readonly _root: RootNode = {
     info: RouteSegmentInfo.None,
   }
 
   lookup(request: LookupRequest): Optional<RouteInfo> {
-    let current = this._root
+    let current: RouteTrieNode = this._root
     let remainder = request.path
 
     let parameters: Optional<Map<string, SegmentValue>>
@@ -145,7 +145,7 @@ class RouterImpl implements Router {
     let info = this._root.info
 
     // Still more to search
-    while (remainder.length > 0) {
+    while (remainder.length > 0 && remainder !== "/") {
       switch (true) {
         case info === RouteSegmentInfo.Wildcard:
           // Advance to the next slash
@@ -197,19 +197,21 @@ class RouterImpl implements Router {
               })
 
               // If we found info
-              if (routeInfo && parameters) {
-                // Check for existing in case we have to merge the set
-                if (routeInfo.parameters) {
-                  for (const key of parameters.keys()) {
-                    routeInfo.parameters.set(key, parameters.get(key)!)
+              if (routeInfo) {
+                if (parameters) {
+                  // Check for existing in case we have to merge the set
+                  if (routeInfo.parameters) {
+                    for (const key of parameters.keys()) {
+                      routeInfo.parameters.set(key, parameters.get(key)!)
+                    }
+                  } else {
+                    routeInfo.parameters = parameters
                   }
-                } else {
-                  routeInfo.parameters = parameters
                 }
-              }
 
-              // Either we found it or it doesn't exist
-              return routeInfo
+                // We found it
+                return routeInfo
+              }
             }
           } else {
             // Check for terminal, wildcard or parameter
@@ -249,6 +251,8 @@ class RouterImpl implements Router {
           parameters,
         }
       }
+    } else if (isRouterNode(current)) {
+      return current.router.lookup({ method: request.method, path: remainder })
     }
 
     return
@@ -262,73 +266,89 @@ class RouterImpl implements Router {
     // Verify the template and get the set of segments
     const segments = this._verifyRoute(template)
 
-    // Get the last segment off the list
-    const final = segments.pop()!
-
-    // No children so far, just embed this entire stack
-    if (this._root.children === undefined) {
-      const handlerNode: HandlerNode = {
-        segment: final.segment,
-        parameter: final.parameter,
-        info: final.info,
-        handlers: {},
+    if (segments.length === 0) {
+      if (this._root.handlers === undefined) {
+        this._root.handlers = {}
       }
 
       if (method !== undefined) {
-        handlerNode.handlers[method] = handler
+        this._root.handlers![method] = handler
       } else {
         for (const value of HTTP_METHODS) {
-          handlerNode.handlers[value] = handler
+          this._root.handlers![value] = handler
         }
       }
 
-      // Add the first node
-      this._addFast(this._root, segments, handlerNode)
+      return
     } else {
-      let current = this._root
+      // Get the last segment off the list
+      const final = segments.pop()!
 
-      // Merge all the segments
-      for (const segment of segments) {
-        current = this._mergeSegment(current, segment)
-      }
+      // No children so far, just embed this entire stack
+      if (this._root.children === undefined) {
+        const handlerNode: HandlerNode = {
+          segment: final.segment,
+          parameter: final.parameter,
+          info: final.info,
+          handlers: {},
+        }
 
-      // Get the location for our handler from the final merge
-      current = this._mergeSegment(current, final)
+        if (method !== undefined) {
+          handlerNode.handlers[method] = handler
+        } else {
+          for (const value of HTTP_METHODS) {
+            handlerNode.handlers[value] = handler
+          }
+        }
 
-      if (isHandlerNode(current)) {
-        if (method) {
-          if (current.handlers[method]) {
+        // Add the first node
+        this._addFast(this._root, segments, handlerNode)
+      } else {
+        let current = this._root
+
+        // Merge all the segments
+        for (const segment of segments) {
+          current = this._mergeSegment(current, segment)
+        }
+
+        // Get the location for our handler from the final merge
+        current = this._mergeSegment(current, final)
+
+        if (isHandlerNode(current)) {
+          if (method) {
+            if (current.handlers[method]) {
+              throw new RoutingError(
+                `There is already a handler at ${method}: ${template}`,
+              )
+            }
+
+            // Add the handler
+            current.handlers[method] = handler
+          } else {
             throw new RoutingError(
-              `There is already a handler at ${method}: ${template}`,
+              `Found partial handler at ${template} and unsure how to merge since no method defined`,
             )
           }
-
-          // Add the handler
-          current.handlers[method] = handler
-        } else {
+        } else if (isRouterNode(current)) {
           throw new RoutingError(
-            `Found partial handler at ${template} and unsure how to merge since no method defined`,
+            `Found routing node at ${template} in conflict with handler`,
           )
-        }
-      } else if (isRouterNode(current)) {
-        throw new RoutingError(
-          `Found routing node at ${template} in conflict with handler`,
-        )
-      } else {
-        // Add the handler for all methods
-        const handlers: RouteHandler = {}
-
-        if (method) {
-          handlers[method] = handler
         } else {
-          for (const method of HTTP_METHODS) {
-            handlers[method] = handler
-          }
-        }
+          // Add the handler for all methods
+          const handlers: RouteHandler = {}
 
-        // Inject this in
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(current as any).handlers = handlers
+          if (method) {
+            handlers[method] = handler
+          } else {
+            for (const method of HTTP_METHODS) {
+              handlers[method] = handler
+            }
+          }
+
+          // Inject this in
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ;(current as any).handlers = handlers
+        }
       }
     }
   }
@@ -337,44 +357,53 @@ class RouterImpl implements Router {
     // Verify the template and get the set of segments
     const segments = this._verifyRoute(template)
 
-    // Get the last segment off the list
-    const final = segments.pop()!
-
-    // No children so far, just embed this entire stack
-    if (this._root.children === undefined) {
-      // Build the node
-      const routerNode: RouterNode = {
-        segment: final.segment,
-        parameter: final.parameter,
-        info: final.info,
-        router,
+    // Adding to the root
+    if (segments.length === 0) {
+      if (this._root.router) {
+        throw new RoutingError(`Duplicate router definition at root node`)
       }
 
-      // Add this to the root, no need for collision checks
-      this._addFast(this._root, segments, routerNode)
+      this._root.router = router
     } else {
-      let current = this._root
+      // Get the last segment off the list
+      const final = segments.pop()!
 
-      // Merge all the segments
-      for (const segment of segments) {
-        current = this._mergeSegment(current, segment)
-      }
+      // No children so far, just embed this entire stack
+      if (this._root.children === undefined) {
+        // Build the node
+        const routerNode: RouterNode = {
+          segment: final.segment,
+          parameter: final.parameter,
+          info: final.info,
+          router,
+        }
 
-      // Get the location for our handler from the final merge
-      current = this._mergeSegment(current, final)
-
-      if (isHandlerNode(current)) {
-        throw new RoutingError(
-          `Conflicting handler node already registerred at ${template}`,
-        )
-      } else if (isRouterNode(current)) {
-        throw new RoutingError(
-          `Conflicting router node already registerred at ${template}`,
-        )
+        // Add this to the root, no need for collision checks
+        this._addFast(this._root, segments, routerNode)
       } else {
-        // Inject the router
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(current as any).router = router
+        let current = this._root
+
+        // Merge all the segments
+        for (const segment of segments) {
+          current = this._mergeSegment(current, segment)
+        }
+
+        // Get the location for our handler from the final merge
+        current = this._mergeSegment(current, final)
+
+        if (isHandlerNode(current)) {
+          throw new RoutingError(
+            `Conflicting handler node already registerred at ${template}`,
+          )
+        } else if (isRouterNode(current)) {
+          throw new RoutingError(
+            `Conflicting router node already registerred at ${template}`,
+          )
+        } else {
+          // Inject the router
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ;(current as any).router = router
+        }
       }
     }
   }
@@ -608,7 +637,11 @@ class RouterImpl implements Router {
   _verifyRoute(template: string): RouteSegment[] {
     // verify the template matches
     if (!TEMPLATE_REGEX.test(template)) {
-      throw new RoutingError("Template is not valid")
+      throw new RoutingError(`Template is not valid: ${template}`)
+    }
+
+    if (template === "/") {
+      return []
     }
 
     // verify all of the segments are valid
@@ -678,7 +711,7 @@ class RouterImpl implements Router {
           break
         default:
           // This should never happen iwth valid routes
-          throw new RoutingError(`Invalid segment: ${segment}`)
+          throw new RoutingError(`Invalid segment: '${segment}' in ${template}`)
       }
     }
 
@@ -697,8 +730,8 @@ class RouterImpl implements Router {
 const WILDCARD = "*"
 const TERMINATOR = "**"
 const URI_SEGMENT_REGEX = /^[a-zA-Z0-9-]+$/
-const PARAMETER_REGEX = /^:[a-zA-Z_$][0-9a-zA-Z_$]*$/
-const TEMPLATE_REGEX = /(?:\/(?:[a-zA-Z0-9-]+|:[a-zA-Z_$][0-9a-zA-Z_$]*|\*+)+)+/
+const PARAMETER_REGEX = /^:[a-zA-Z][0-9a-zA-Z_]*$/
+const TEMPLATE_REGEX = /^\/(([a-zA-Z0-9_]+|:[a-zA-Z][0-9a-zA-Z_]*|\*{1,2})?\/)*/
 
 /**
  * Internal enum to track {@link RouteTrieNode} state information
@@ -742,6 +775,11 @@ interface RouterNode extends RouteTrieNode {
  */
 interface HandlerNode extends RouteTrieNode {
   handlers: RouteHandler
+}
+
+interface RootNode extends RouteTrieNode {
+  handlers?: RouteHandler
+  router?: Router
 }
 
 /**

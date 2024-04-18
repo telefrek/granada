@@ -10,13 +10,14 @@ import {
   HttpMethod,
   HttpResponse,
   HttpStatus,
-  emptyHeaders,
-  type HttpHandler,
-  type HttpRequest,
 } from "../index.js"
 import { fileToMediaType } from "../media.js"
-import { HttpPipelineTransform, RoutingTransform } from "./pipeline.js"
-import { createRouter } from "./routing.js"
+import {
+  BaseHttpPipelineTransform,
+  HttpPipelineStage,
+  HttpPipelineTransform,
+  type PipelineRequest,
+} from "./pipeline.js"
 
 /**
  * Options for configuring hosting
@@ -38,49 +39,72 @@ export interface HostingOptions extends LoggerOptions {
  * @returns A new {@link HttpPipelineTransform}
  */
 export function hostFolder(options: HostingOptions): HttpPipelineTransform {
+  // Verify the flie exists
   if (!existsSync(options.baseDir)) {
     throw new Error(`${options.baseDir} does not exist`)
   }
 
-  // Sanitize our base directory
-  const sanitizedBaseDir = resolve(options.baseDir)
+  return new HostingTransform(options)
+}
 
-  // Set the default file
-  const defaultFile = options.defaultFile ?? "index.html"
+/**
+ * Handles hosting files
+ */
+class HostingTransform extends BaseHttpPipelineTransform {
+  protected override async processRequest(
+    request: PipelineRequest,
+  ): Promise<void> {
+    if (
+      request.method === HttpMethod.GET ||
+      request.method === HttpMethod.HEAD
+    ) {
+      const target =
+        request.path.original === "/" || request.path.original === ""
+          ? this._defaultFile
+          : request.path.original
 
-  // Create a router for handling requests
-  const router = createRouter()
+      const check = join(this._sanitizedBaseDir, target)
 
-  //
-  const handler: HttpHandler = async (request: HttpRequest) => {
-    const target =
-      request.path.original === "/" || request.path.original === ""
-        ? defaultFile
-        : request.path.original
+      // See if we can find the file
+      const filePath = resolve(check)
 
-    // See if we can find the file
-    const filePath = resolve(join(sanitizedBaseDir, target))
+      if (filePath.startsWith(this._sanitizedBaseDir)) {
+        if (existsSync(filePath)) {
+          request.respond(
+            request.method === HttpMethod.HEAD
+              ? { status: HttpStatus.NO_CONTENT }
+              : await createFileContentResponse(filePath),
+          )
+        } else {
+          request.respond({
+            status: HttpStatus.NOT_FOUND,
+          })
+        }
+      } else if (filePath !== check) {
+        this._logger.error(
+          `Attempt to traverse file system detected: ${request.path.original}`,
+        )
 
-    // Ensure we didn't try to traverse out...
-    if (filePath.startsWith(sanitizedBaseDir) && existsSync(filePath)) {
-      if (request.method === HttpMethod.GET) {
-        request.respond(await createFileContentResponse(filePath))
-      } else {
-        // TODO: Probably should add some headers with useful contents
-        request.respond({ status: HttpStatus.OK })
+        // Someone is doing something shady, stop it here
+        request.respond({
+          status: HttpStatus.NOT_FOUND,
+        })
       }
-    } else {
-      request.respond({
-        status: HttpStatus.NOT_FOUND,
-        headers: emptyHeaders(),
-      })
     }
   }
 
-  router.addHandler(options.urlPath ?? "/", handler, HttpMethod.GET)
-  router.addHandler(options.urlPath ?? "/", handler, HttpMethod.HEAD)
+  private _sanitizedBaseDir: string
+  private _defaultFile: string
 
-  return new RoutingTransform(router)
+  constructor(options: HostingOptions) {
+    super(HttpPipelineStage.ROUTING)
+
+    // Sanitize our base directory
+    this._sanitizedBaseDir = resolve(options.baseDir)
+
+    // Set the default file
+    this._defaultFile = options.defaultFile ?? "index.html"
+  }
 }
 
 async function createFileContentResponse(

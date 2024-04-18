@@ -4,6 +4,8 @@ import {
   DefaultLogger,
   LogLevel,
   error,
+  setGlobalLogLevel,
+  setGlobalWriter,
 } from "@telefrek/core/logging.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
 import { HttpMethod, HttpStatus } from "@telefrek/http/index.js"
@@ -23,7 +25,9 @@ const dir = __dirname
 
 // Enable console logging for the pipeline
 setPipelineWriter(new ConsoleLogWriter())
-setPipelineLogLevel(LogLevel.INFO)
+setPipelineLogLevel(LogLevel.DEBUG)
+setGlobalLogLevel(LogLevel.DEBUG)
+setGlobalWriter(new ConsoleLogWriter())
 
 const logger = new DefaultLogger({
   name: "testLog",
