@@ -1,6 +1,6 @@
 {
   "name": "@telefrek/service",
-  "version": "1.0.0-alpha.36",
+  "version": "1.0.0-alpha.37",
   "description": "This package makes creating new services easier than working with the raw HTTP stack",
   "author": "nathan@telefrek.com",
   "license": "MIT",
@@ -31,7 +31,7 @@
     "lint": "npx eslint . --fix"
   },
   "dependencies": {
-    "@telefrek/http": "^1.0.0-alpha.36"
+    "@telefrek/http": "^1.0.0-alpha.37"
   },
   "gitHead": "1be6bb3a61aab8ae5361827b54f8428682b9d536"
 }
