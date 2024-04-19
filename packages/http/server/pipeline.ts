@@ -17,6 +17,7 @@ import {
   type Logger,
 } from "@telefrek/core/logging.js"
 import { combineTransforms, createTransform } from "@telefrek/core/streams.js"
+import { Timer } from "@telefrek/core/time.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
 import EventEmitter from "events"
 import { Readable, Writable, type Transform } from "stream"
@@ -26,6 +27,7 @@ import {
   type HttpRequest,
   type HttpTransform,
 } from "../index.js"
+import { HttpRequestPipelineMetrics } from "../metrics.js"
 import { CONTENT_PARSERS, getContentType } from "../parsers.js"
 import { createRouter, isRoutableApi, type Router } from "./routing.js"
 
@@ -537,6 +539,7 @@ export abstract class BaseHttpPipelineTransform
         })
       }
 
+      const timer = Timer.startNew()
       try {
         // Pass along logic
         await this.processRequest(request as PipelineRequest)
@@ -548,6 +551,16 @@ export abstract class BaseHttpPipelineTransform
         request.respond({
           status: HttpStatus.INTERNAL_SERVER_ERROR,
         })
+      } finally {
+        HttpRequestPipelineMetrics.PipelineStageDuration.record(
+          timer.elapsed().seconds(),
+          {
+            stage: this.stage,
+          },
+        )
+        HttpRequestPipelineMetrics.PipelineExecutions.add(1, {
+          stage: this.stage,
+        })
       }
 
       // Don't pass this along if something happened (timeout, failure in
@@ -556,7 +569,9 @@ export abstract class BaseHttpPipelineTransform
         return request
       }
     } else {
-      this._logger.debug(`Received completed request: ${request.state}`)
+      this._logger.info(
+        `Received completed request at stage ${this.stage}: ${request.path.original} (${request.state})`,
+      )
     }
 
     return
@@ -584,6 +599,9 @@ export class ContentParsingTransform extends BaseHttpPipelineTransform {
 
         // If found, let it do it's thing
         if (parser) {
+          this._logger.info(
+            `Parsing contents for ${request.body.mediaType.toString()}`,
+          )
           await parser(request.body)
         }
       }
@@ -611,10 +629,18 @@ export class RoutingTransform extends BaseHttpPipelineTransform {
     })
 
     if (info) {
+      this._logger.info(
+        `Mapped route to handler => ${request.method} ${request.path.original}`,
+      )
+
       // Add the parameter mapping...
       request.path.parameters = info.parameters
 
       await info.handler(request)
+    } else {
+      this._logger.info(
+        `No Route found for ${request.method} ${request.path.original}`,
+      )
     }
     return
   }
