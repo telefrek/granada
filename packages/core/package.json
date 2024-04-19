@@ -1,6 +1,6 @@
 {
   "name": "@telefrek/core",
-  "version": "1.0.0-alpha.33",
+  "version": "1.0.0-alpha.34",
   "description": "This package contains the core utilities that are referenced throughout the Granada framework",
   "author": "nathan@telefrek.com",
   "license": "MIT",
