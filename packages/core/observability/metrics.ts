@@ -19,6 +19,8 @@ let _metricsEnabled = false
  */
 
 export function getGranadaMeter(): Meter {
+  // eslint-disable-next-line no-console
+  console.log(`getting meter: ${_metricsEnabled}`)
   return _metricsEnabled
     ? opentelemetry.metrics
         .getMeterProvider()
