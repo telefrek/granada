@@ -30,7 +30,14 @@
     "lint": "npx eslint . --fix"
   },
   "dependencies": {
-    "@telefrek/core": "^1.0.0-alpha.31"
+    "@telefrek/core": "^1.0.0-alpha.31",
+    "@opentelemetry/api": "^1.8.0",
+    "@opentelemetry/semantic-conventions": "^1.23.0"
+  },
+  "peerDependencies": {
+    "@telefrek/core": "^1.0.0-alpha.31",
+    "@opentelemetry/api": "^1.8.0",
+    "@opentelemetry/semantic-conventions": "^1.23.0"
   },
   "gitHead": "1be6bb3a61aab8ae5361827b54f8428682b9d536"
 }

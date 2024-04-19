@@ -78,10 +78,18 @@ export class Timer {
  * Simple timestamp class to track timings at sub millisecond precision
  */
 export class Timestamp {
-  private static OFFSET: bigint = process.hrtime.bigint()
+  private static OFFSET: Timestamp = new Timestamp(process.hrtime.bigint())
   private static START_UTC: number = Date.now()
 
-  private _nano: bigint
+  private _hiRes: boolean
+  private _value: bigint | number
+
+  /**
+   * Check to see if the timestamp is higher resolution (microsecond/nanosecond available)
+   */
+  get isHighResolution(): boolean {
+    return this._hiRes
+  }
 
   /**
    * Calculate the difference between the start and end
@@ -92,16 +100,33 @@ export class Timestamp {
    * if negative
    */
   static duration(begin: Timestamp, end: Timestamp): Duration {
-    const elapsed = end._nano - begin._nano
-    if (elapsed < 0n) {
+    return begin.difference(end)
+  }
+
+  constructor(timestamp: bigint | number = Date.now()) {
+    this._hiRes = typeof timestamp === "bigint"
+    this._value = timestamp
+  }
+
+  /**
+   * Calculate the difference between these two timestamps
+   *
+   * @param other The other {@link Timestamp} to calculate the difference between
+   * @returns The {@link Duration} between the two timestamps
+   */
+  difference(other: Timestamp): Duration {
+    const currentNano = this._hiRes
+      ? (this._value as bigint)
+      : BigInt(this._value) * 1_000_000n
+    const otherNano = other._hiRes
+      ? (other._value as bigint)
+      : BigInt(other._value) * 1_000_000n
+
+    if (otherNano <= currentNano) {
       return Duration.ZERO
     }
 
-    return Duration.fromNano(elapsed)
-  }
-
-  constructor(timestamp?: bigint) {
-    this._nano = timestamp ?? process.hrtime.bigint()
+    return Duration.fromNano(otherNano - currentNano)
   }
 
   /**
@@ -109,9 +134,8 @@ export class Timestamp {
    * @returns The {@link Timestamp} in ISO format
    */
   toISOString() {
-    const elapsed = this._nano - Timestamp.OFFSET
     return new Date(
-      Timestamp.START_UTC + Number((elapsed * 1_000n) / NANO_PER_SECOND),
+      Timestamp.START_UTC + ~~Timestamp.OFFSET.difference(this).milliseconds(),
     ).toISOString()
   }
 }

@@ -21,13 +21,46 @@ import type { Optional } from "@telefrek/core/type/utils.js"
 import EventEmitter from "events"
 import { Readable, Writable, type Transform } from "stream"
 import {
-  HttpRequestState,
   HttpStatus,
+  isTerminal,
   type HttpRequest,
   type HttpTransform,
 } from "../index.js"
 import { CONTENT_PARSERS, getContentType } from "../parsers.js"
 import { createRouter, isRoutableApi, type Router } from "./routing.js"
+
+/**
+ * The default {@link Logger} for {@link HttpPipeline} operations
+ */
+let PIPELINE_LOGGER: Logger = new DefaultLogger({
+  name: "HttpPipeline",
+  level: LogLevel.WARN,
+  includeTimestamps: true,
+})
+
+/**
+ * Update the pipeline log levels
+ *
+ * @param level The {@link LogLevel} for the {@link HttpPipeline} {@link Logger}
+ */
+export function setPipelineLogLevel(level: LogLevel): void {
+  PIPELINE_LOGGER.setLevel(level)
+}
+
+/**
+ * Update the pipeline log writer
+ *
+ * @param writer the {@link LogWriter} to use for {@link HttpPipeline}
+ * {@link Logger} objects
+ */
+export function setPipelineWriter(writer: LogWriter): void {
+  PIPELINE_LOGGER = new DefaultLogger({
+    name: "HttpPipeline",
+    level: PIPELINE_LOGGER.level,
+    writer: writer,
+    includeTimestamps: true,
+  })
+}
 
 /**
  * Set of supported events on an {@link HttpPipeline}
@@ -467,25 +500,6 @@ export interface HttpPipelineTransform {
   stage: HttpPipelineStage
 }
 
-let PIPELINE_LOGGER: Logger = new DefaultLogger({
-  name: "HttpPipeline",
-  level: LogLevel.WARN,
-  includeTimestamps: true,
-})
-
-export function setPipelineLogLevel(level: LogLevel): void {
-  PIPELINE_LOGGER.setLevel(level)
-}
-
-export function setPipelineWriter(writer: LogWriter): void {
-  PIPELINE_LOGGER = new DefaultLogger({
-    name: "HttpPipeline",
-    level: PIPELINE_LOGGER.level,
-    writer: writer,
-    includeTimestamps: true,
-  })
-}
-
 /**
  * Helper class for building {@link HttpPipelineTransform} with correct request
  * state handling and error tracking
@@ -631,25 +645,5 @@ export type UnhandledRequestConsumer = (
 export const NOT_FOUND_CONSUMER: UnhandledRequestConsumer = (request) => {
   if (~isTerminal(request)) {
     request.respond({ status: HttpStatus.NOT_FOUND })
-  }
-}
-
-/**
- * Check to see if the request is in a terminal state (should not require
- * further processing))
- *
- * @param request The {@link HttpRequest} to check
- *
- * @returns True if the request is in a state indicating no further processing
- * is allowed
- */
-export function isTerminal(request: HttpRequest): boolean {
-  switch (request.state) {
-    case HttpRequestState.COMPLETED:
-    case HttpRequestState.TIMEOUT:
-    case HttpRequestState.ERROR:
-      return true
-    default:
-      return false
   }
 }

@@ -105,12 +105,21 @@ export enum HttpRequestState {
   TIMEOUT = "timeout",
   /** The request encountered some error */
   ERROR = "error",
+  /** The request was dropped (shed) for some reason */
+  DROPPED = "dropped",
+}
+
+/**
+ * Specific extra
+ */
+export interface HttpRequestEvents extends LifecycleEvents {
+  stateChanged: (from: HttpRequestState, to: HttpRequestState) => void
 }
 
 /**
  * An interface defining the behavior of an HTTP Request
  */
-export interface HttpRequest extends Emitter<LifecycleEvents> {
+export interface HttpRequest extends Emitter<HttpRequestEvents> {
   path: HttpPath
   method: HttpMethod
   headers: HttpHeaders
@@ -119,7 +128,7 @@ export interface HttpRequest extends Emitter<LifecycleEvents> {
   query?: HttpQuery
   body?: HttpBody
 
-  respond(response: HttpResponse): void
+  respond(response: HttpResponse, state?: HttpRequestState): void
 }
 
 /**
@@ -286,5 +295,26 @@ export function parsePath(path: string): { path: HttpPath; query?: HttpQuery } {
             }, new Map<string, StringOrArray>()),
           }
         : undefined,
+  }
+}
+
+/**
+ * Check to see if the request is in a terminal state (should not require
+ * further processing))
+ *
+ * @param request The {@link HttpRequest} to check
+ *
+ * @returns True if the request is in a state indicating no further processing
+ * is allowed
+ */
+export function isTerminal(request: HttpRequest): boolean {
+  switch (request.state) {
+    case HttpRequestState.COMPLETED:
+    case HttpRequestState.TIMEOUT:
+    case HttpRequestState.ERROR:
+    case HttpRequestState.DROPPED:
+      return true
+    default:
+      return false
   }
 }

@@ -49,9 +49,14 @@ describe("verify router", () => {
     router.addHandler("/:parameter/should/work", handler)
     router.addHandler("/terminal/**", handler)
     router.addHandler("/wildcards/*/should/be/:accepted/**", handler)
+    router.addHandler("/path/ends/with/:variable", handler)
 
     expect(router.lookup(request("/valid"))).not.toBeUndefined()
     expect(router.lookup(request("/"))).not.toBeUndefined()
+    const info = router.lookup(request("/path/ends/with/v123"))
+    expect(info).not.toBeUndefined()
+    expect(info?.parameters?.size).toBe(1)
+    expect(info?.parameters?.get("variable")).toBe("v123")
   })
 
   test("A router should accept a top level terminal", () => {

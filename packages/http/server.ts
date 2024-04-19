@@ -8,16 +8,17 @@ import { DeferredPromise, type MaybeAwaitable } from "@telefrek/core/index.js"
 import { LifecycleEvents, registerShutdown } from "@telefrek/core/lifecycle.js"
 import {
   DefaultLogger,
+  LogLevel,
   Logger,
-  NoopLogWriter,
   error,
+  type LogWriter,
 } from "@telefrek/core/logging.js"
 import {
   CircularArrayBuffer,
   createIterator,
 } from "@telefrek/core/structures/circularBuffer.js"
+import { Timer, type Duration } from "@telefrek/core/time.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
-import assert from "assert"
 import EventEmitter from "events"
 import * as http2 from "http2"
 import { Readable, Stream, finished, pipeline } from "stream"
@@ -34,8 +35,43 @@ import {
   HttpStatus,
   HttpVersion,
   emptyHeaders,
+  isTerminal,
   parsePath,
 } from "./index.js"
+import { HttpRequestMetrics, HttpServerMetrics } from "./metrics.js"
+
+/**
+ * The default {@link Logger} for {@link HttpPipeline} operations
+ */
+let HTTP_SERVER_LOGGER: Logger = new DefaultLogger({
+  name: "HttpServer",
+  level: LogLevel.INFO,
+  includeTimestamps: true,
+})
+
+/**
+ * Update the pipeline log levels
+ *
+ * @param level The {@link LogLevel} for the {@link HttpPipeline} {@link Logger}
+ */
+export function setHttpServerLogLevel(level: LogLevel): void {
+  HTTP_SERVER_LOGGER.setLevel(level)
+}
+
+/**
+ * Update the pipeline log writer
+ *
+ * @param writer the {@link LogWriter} to use for {@link HttpPipeline}
+ * {@link Logger} objects
+ */
+export function setHttpServerLogWriter(writer: LogWriter): void {
+  HTTP_SERVER_LOGGER = new DefaultLogger({
+    name: "HttpServer",
+    level: HTTP_SERVER_LOGGER.level,
+    writer: writer,
+    includeTimestamps: true,
+  })
+}
 
 /**
  * Set of supported events on an {@link HttpServer}
@@ -77,6 +113,13 @@ export interface HttpServer extends Emitter<HttpServerEvents> {
   listen(port: number): Promise<void>
 
   /**
+   * Enable/Disable queries for the /ready endpoint
+   *
+   * @param enable The enable flag
+   */
+  enableReady(enable: boolean): void
+
+  /**
    * Closes the server, rejecting any further calls
    */
   close(): MaybeAwaitable<void>
@@ -88,67 +131,37 @@ export interface HttpServer extends Emitter<HttpServerEvents> {
 }
 
 /**
- * Builder style creation for a {@link HttpServer}
+ * The options used to configure the {@link HttpServer}
  */
-export interface HttpServerBuilder {
-  /**
-   * Add TLS to the server
-   *
-   * @param details The details for the certificate locations and allowed usage
-   *
-   * @returns An updated builder
-   */
-  withTls(details: {
-    /** The certificate path */
-    cert: string | Buffer
-    /** The key path */
-    key: string | Buffer
-    /** The key password */
-    passphrase?: string
-    /** The optional CA Chain file */
-    caFile?: string
-    /** Flag to indicate if mutual authentication should be used to validate client certificates */
-    mutualAuth?: boolean
-  }): HttpServerBuilder
-
-  /**
-   * Allow HTTP1
-   */
-  allowHttp1(): HttpServerBuilder
-
-  /**
-   * Specify the logger to use (default is {@link DefaultLogger} with {@link NoopLogWriter})
-   * @param logger The {@link Logger} to use for the server
-   */
-  withLogger(logger: Logger): HttpServerBuilder
-
-  /**
-   * Builds a {@link HttpServer} from the parameters given
-   *
-   * @returns A fully initialized {@link HttpServer}
-   */
-  build(): HttpServer
+interface HttpServerOptions extends http2.SecureServerOptions {
+  maxBufferedRequests?: number
+  maxDuplexListeners?: number
+  loadShedRetryAfter?: number
+  disableReady?: boolean
 }
 
 /**
  * Default {@link HttpServerBuilder} that utilizes the underlying node `http2` package
  * @returns The default {@link HttpServerBuilder} in the framework
  */
-export function getDefaultBuilder(): HttpServerBuilder {
-  return new HttpServerBuilderImpl()
+export function httpServerBuilder(): HttpServerBuilder {
+  return new HttpServerBuilder()
 }
 
 /**
  * Default implementation of a {@link HttpServerBuilder}
  */
-class HttpServerBuilderImpl implements HttpServerBuilder {
+class HttpServerBuilder {
   options: HttpServerOptions = {
     allowHTTP1: true,
-    logger: new DefaultLogger({
-      writer: NoopLogWriter,
-    }),
   }
 
+  /**
+   * Add the required TLS details
+   *
+   * @param details The TLS details
+   * @returns An updated {@link HttpServerBuilder}
+   */
   withTls(details: {
     cert: string | Buffer
     key: string | Buffer
@@ -164,43 +177,47 @@ class HttpServerBuilderImpl implements HttpServerBuilder {
     return this
   }
 
-  allowHttp1(): HttpServerBuilder {
-    this.options.allowHTTP1 = true
+  /**
+   * Enable/disable HTTP1.1
+   *
+   * @param enable Flag to ocntrol if HTTP1.1 is enabled
+   * @returns An updated {@link HttpServerBuilder}
+   */
+  enableHttp1(enable: boolean): HttpServerBuilder {
+    this.options.allowHTTP1 = enable
 
     return this
   }
 
-  withLogger(logger: Logger): HttpServerBuilder {
-    this.options.logger = logger
-
-    return this
-  }
-
+  /**
+   * Builds a new {@link HttpServer} based on the information provided
+   *
+   * @returns A new {@link HttpServer}
+   */
   build(): HttpServer {
     return new HttpServerImpl(this.options)
   }
-}
-
-interface HttpServerOptions extends http2.SecureServerOptions {
-  logger: Logger
 }
 
 /**
  * Default implementation of the {@link HttpServer} using the node `http2` package
  */
 class HttpServerImpl extends EventEmitter implements HttpServer {
-  _server: http2.Http2Server
-  _tracer = trace.getTracer("Granada.HttpServer")
-  _sessions: http2.ServerHttp2Session[] = []
-  _logger: Logger
+  private _server: http2.Http2Server
+  private _tracer = trace.getTracer("Granada.HttpServer")
+  private _sessions: http2.ServerHttp2Session[] = []
+  private _logger: Logger
+  private _options: HttpServerOptions
+  private _ready: boolean
 
   constructor(options: HttpServerOptions) {
     super()
 
-    Stream.Duplex.setMaxListeners(200)
+    this._options = options
+    this._ready = !(options.disableReady ?? false)
+    Stream.Duplex.setMaxListeners(options.maxDuplexListeners ?? 128)
 
-    this._logger = options.logger
-
+    this._logger = HTTP_SERVER_LOGGER
     this._server = http2.createSecureServer(options)
 
     this._server.on("session", (session) => {
@@ -220,24 +237,32 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
     this._setupRequestMapping()
   }
 
+  enableReady(enable: boolean): void {
+    this._ready = enable
+  }
+
   [Symbol.asyncIterator](): AsyncIterator<HttpRequest, void, never> {
-    // TODO: Make this configurable
-    const buffer = new CircularArrayBuffer<HttpRequest>({ highWaterMark: 256 })
+    const buffer = new CircularArrayBuffer<HttpRequest>({
+      highWaterMark: this._options.maxBufferedRequests ?? 32,
+    })
 
     this.on("request", (request: HttpRequest) => {
-      this._logger.debug(`New request received: ${request.path.original}`)
-
       // If we can't add to the buffer, need to reject
       if (!buffer.tryAdd(request)) {
         this._logger.warn("Failed to enqueue request, shedding load")
         const headers = emptyHeaders()
 
-        // TODO: Make this configurable...
-        headers.set("Retry-After", "60")
-        request.respond({
-          status: HttpStatus.SERVICE_UNAVAILABLE,
-          headers,
-        })
+        headers.set(
+          "Retry-After",
+          (~~(this._options.loadShedRetryAfter ?? 60)).toString(),
+        )
+        request.respond(
+          {
+            status: HttpStatus.SERVICE_UNAVAILABLE,
+            headers,
+          },
+          HttpRequestState.DROPPED,
+        )
       }
     })
 
@@ -301,6 +326,21 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
       this.emit("error", err)
     })
     this._server.on("request", (req, resp) => {
+      // Handle health
+      if (req.url === "/health") {
+        resp.writeHead(HttpStatus.NO_CONTENT).end()
+        return
+      }
+
+      // Handle ready
+      if (req.url === "/ready") {
+        resp
+          .writeHead(this._ready ? HttpStatus.NO_CONTENT : HttpStatus.NOT_FOUND)
+          .end()
+        return
+      }
+
+      // Emit the request and let it process downstream
       this.emit(
         "request",
         new Http2Request(req, resp).on("finished", () => {
@@ -339,31 +379,65 @@ function parseHttp2Headers(
   return headers
 }
 
-let counter = 0
-
 class Http2Request extends EventEmitter implements HttpRequest {
-  path: HttpPath
-  method: HttpMethod
-  headers: HttpHeaders
-  version: HttpVersion
-  state: HttpRequestState
+  readonly path: HttpPath
+  readonly method: HttpMethod
+  readonly headers: HttpHeaders
+  readonly version: HttpVersion
+  readonly query: Optional<HttpQuery>
+  readonly body: Optional<HttpBody>
 
-  query: Optional<HttpQuery>
-  body: Optional<HttpBody>
-  _status: Optional<number>
+  private _timer: Timer
+  private _state: HttpRequestState
+  private _response: http2.Http2ServerResponse
+  private _delay: Optional<Duration>
 
-  _response: http2.Http2ServerResponse
-  _id: Optional<number>
+  get state(): HttpRequestState {
+    return this._state
+  }
+
+  set state(state: HttpRequestState) {
+    // Check for duration lag
+    if (this._state === HttpRequestState.PENDING) {
+      this._delay = this._timer.elapsed()
+    }
+
+    // Verify state changes
+    switch (state) {
+      case HttpRequestState.DROPPED:
+        // Increment the request shed counter
+        HttpServerMetrics.RequestsShedCounter.add(1)
+      case HttpRequestState.COMPLETED:
+      case HttpRequestState.ERROR:
+      case HttpRequestState.TIMEOUT:
+        break
+      case HttpRequestState.PENDING:
+        break
+      case HttpRequestState.PROCESSING:
+        break
+      case HttpRequestState.READING:
+        break
+      case HttpRequestState.WRITING:
+        break
+    }
+
+    this._state = state
+  }
 
   constructor(
     request: http2.Http2ServerRequest,
     response: http2.Http2ServerResponse,
   ) {
     super()
+    this._timer = Timer.startNew()
+
+    // Log the incoming request
+    HTTP_SERVER_LOGGER.info(`${request.method} ${request.url}`)
+
     const { path, query } = parsePath(request.url)
     this.path = path
     this.query = query
-    this.state = HttpRequestState.PENDING
+    this._state = HttpRequestState.PENDING
     this.headers = parseHttp2Headers(request.headers)
     this.version = HttpVersion.HTTP_2
     this.method = request.method.toUpperCase() as HttpMethod
@@ -380,23 +454,31 @@ class Http2Request extends EventEmitter implements HttpRequest {
     })
 
     request.setTimeout(5000, () => {
-      this.state = HttpRequestState.TIMEOUT
-      this._response.writeHead(503)
-      this._response.end()
+      // Respond...
+      this.respond(
+        {
+          status: HttpStatus.SERVICE_UNAVAILABLE,
+        },
+        HttpRequestState.TIMEOUT,
+      )
     })
   }
 
-  respond(response: HttpResponse): void {
-    try {
-      this._id = counter++
-      assert(
-        this.state !== HttpRequestState.COMPLETED,
-        "request has already seen a response",
+  respond(
+    response: HttpResponse,
+    state: HttpRequestState = HttpRequestState.COMPLETED,
+  ): void {
+    // Verify we aren't already done
+    if (isTerminal(this)) {
+      HTTP_SERVER_LOGGER.error(
+        `Request attempted to finish twice: ${this._state}, ${state}`,
       )
+      return
+    }
 
+    try {
       // We're now writing
       this.state = HttpRequestState.WRITING
-      this._status = response.status
 
       // Verify headers weren't sent
       if (!this._response.headersSent) {
@@ -423,11 +505,11 @@ class Http2Request extends EventEmitter implements HttpRequest {
               )
             }
             this._response.end()
-            this.state = HttpRequestState.COMPLETED
+            this.state = state
           })
         } else {
           this._response.end()
-          this.state = HttpRequestState.COMPLETED
+          this.state = state
         }
       }
     } catch (err) {
@@ -436,6 +518,27 @@ class Http2Request extends EventEmitter implements HttpRequest {
         this._response.end()
       }
       this.state = HttpRequestState.ERROR
+    } finally {
+      if (this._delay) {
+        HttpRequestMetrics.RequestDelayDuration.record(this._delay.seconds(), {
+          wasDropped: this._state === HttpRequestState.DROPPED,
+        })
+      }
+
+      if (this._state === HttpRequestState.TIMEOUT) {
+        HttpRequestMetrics.RequestTimeout.add(1)
+      } else {
+        HttpRequestMetrics.RequestCompleted.add(1)
+      }
+
+      this._response.on("finish", () => {
+        HttpServerMetrics.IncomingRequestDuration.record(
+          this._timer.stop().seconds(),
+        )
+        HttpServerMetrics.ResponseStatus.add(1, {
+          status: this._response.statusCode.toString(),
+        })
+      })
     }
   }
 }

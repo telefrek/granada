@@ -9,7 +9,11 @@ import {
 } from "@telefrek/core/logging.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
 import { HttpMethod, HttpStatus } from "@telefrek/http/index.js"
-import { getDefaultBuilder, type HttpServer } from "@telefrek/http/server.js"
+import {
+  httpServerBuilder,
+  setHttpServerLogWriter,
+  type HttpServer,
+} from "@telefrek/http/server.js"
 import {
   httpPipelineBuilder,
   setPipelineLogLevel,
@@ -18,16 +22,19 @@ import {
 } from "@telefrek/http/server/pipeline.js"
 import * as fs from "fs"
 import { connect, type OutgoingHttpHeaders } from "http2"
-import { join } from "path"
+import { dirname, join } from "path"
+import { fileURLToPath } from "url"
 import { TestService, type TestItem } from "./testUtils.js"
 
-const dir = __dirname
+const dir = dirname(fileURLToPath(import.meta.url))
 
 // Enable console logging for the pipeline
-setPipelineWriter(new ConsoleLogWriter())
-setPipelineLogLevel(LogLevel.DEBUG)
-setGlobalLogLevel(LogLevel.DEBUG)
-setGlobalWriter(new ConsoleLogWriter())
+const writer = new ConsoleLogWriter()
+setPipelineLogLevel(LogLevel.INFO)
+setGlobalLogLevel(LogLevel.INFO)
+setPipelineWriter(writer)
+setGlobalWriter(writer)
+setHttpServerLogWriter(writer)
 
 const logger = new DefaultLogger({
   name: "testLog",
@@ -53,19 +60,11 @@ describe("Basic HTTP server functionality should work", () => {
   })
 
   it("Should be able to create a new server and respond to basic health checks", async () => {
-    server = getDefaultBuilder()
+    server = httpServerBuilder()
       .withTls({
         cert: fs.readFileSync(join(dir, "./test/cert.pem")),
         key: fs.readFileSync(join(dir, "./test/key.pem")),
       })
-      .withLogger(
-        new DefaultLogger({
-          level: LogLevel.INFO,
-          writer: new ConsoleLogWriter(),
-          name: "http",
-          includeTimestamps: true,
-        }),
-      )
       .build()
 
     logger.info("Building pipeline")

@@ -3,9 +3,9 @@
     "./packages/*"
   ],
   "scripts": {
-    "test": "jest --coverage --coverageProvider=v8 -c jest.config.js",
-    "test:unit": "jest --coverage --coverageProvider=v8 -c jest.unit.config.js",
-    "test:integration": "jest --coverage --coverageProvider=v8 --detectOpenHandles -c jest.integration.config.js",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --coverageProvider=v8 --detectOpenHandles -c jest.config.js",
+    "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --coverageProvider=v8 --detectOpenHandles -c jest.unit.config.js",
+    "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --coverageProvider=v8 --detectOpenHandles -c jest.integration.config.js",
     "format": "npx prettier --write .",
     "ci": "npm install --legacy-peer-deps && turbo lint && turbo build && npm run test:unit",
     "upgrade-all": "npx npm-check-updates -u && npm install --legacy-peer-deps && npm run upgrade --workspaces --if-present",

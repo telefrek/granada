@@ -1,5 +1,5 @@
 module.exports = {
-  preset: "ts-jest",
+  preset: "ts-jest/presets/default-esm",
   testEnvironment: "node",
   coverageDirectory: "coverage",
   testMatch: ["<rootDir>/**/*.test.ts"],
