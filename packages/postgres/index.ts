@@ -4,14 +4,15 @@
 
 import { vegasBuilder } from "@telefrek/core/backpressure/algorithms.js"
 import {
-    createSimpleLimiter,
-    type Limiter,
+  createSimpleLimiter,
+  type Limiter,
 } from "@telefrek/core/backpressure/limits.js"
 import type { FrameworkPriority } from "@telefrek/core/index.js"
+import { getGranadaMeter } from "@telefrek/core/observability/metrics.js"
 import {
-    DefaultMultiLevelPriorityQueue,
-    asTaskPriority,
-    type MultiLevelPriorityQueue,
+  DefaultMultiLevelPriorityQueue,
+  asTaskPriority,
+  type MultiLevelPriorityQueue,
 } from "@telefrek/core/structures/multiLevelQueue.js"
 import type { Pool } from "@telefrek/core/structures/pool.js"
 import { Duration, Timer } from "@telefrek/core/time.js"
@@ -19,17 +20,15 @@ import { makeCaseInsensitive } from "@telefrek/core/type/proxies.js"
 import type { Optional } from "@telefrek/core/type/utils"
 import { QueryError } from "@telefrek/query/error.js"
 import {
-    ExecutionMode,
-    QueryParameters,
-    type BoundQuery,
-    type QueryExecutor,
-    type QueryResult,
-    type RowType,
-    type SimpleQuery,
+  ExecutionMode,
+  QueryParameters,
+  type BoundQuery,
+  type QueryExecutor,
+  type QueryResult,
+  type RowType,
+  type SimpleQuery,
 } from "@telefrek/query/index.js"
 import { Client, type QueryConfig } from "pg"
-import { getGranadaMeter } from ()
-} from "@telefrek/core/observability/metrics.js"
 
 /**
  * Options provided when building a {@link PostgresDatabase}
