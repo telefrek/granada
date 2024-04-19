@@ -1,6 +1,6 @@
 {
   "name": "@telefrek/postgres",
-  "version": "1.0.0-alpha.31",
+  "version": "1.0.0-alpha.32",
   "description": "This package handles abstractions around postgres and interactions with a database",
   "author": "nathan@telefrek.com",
   "license": "MIT",
@@ -30,11 +30,11 @@
     "lint": "npx eslint . --fix"
   },
   "dependencies": {
-    "@telefrek/core": "^1.0.0-alpha.31",
-    "@telefrek/query": "^1.0.0-alpha.31",
-    "pg": "^8.11.5",
     "@opentelemetry/api": "^1.8.0",
-    "@opentelemetry/semantic-conventions": "^1.23.0"
+    "@opentelemetry/semantic-conventions": "^1.23.0",
+    "@telefrek/core": "^1.0.0-alpha.32",
+    "@telefrek/query": "^1.0.0-alpha.32",
+    "pg": "^8.11.5"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^10.8.2",

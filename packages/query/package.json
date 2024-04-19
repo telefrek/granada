@@ -1,6 +1,6 @@
 {
   "name": "@telefrek/query",
-  "version": "1.0.0-alpha.31",
+  "version": "1.0.0-alpha.32",
   "description": "This package contains the data abstractions that are referenced throughout the Granada framework",
   "author": "nathan@telefrek.com",
   "license": "MIT",
@@ -30,14 +30,14 @@
     "lint": "npx eslint . --fix"
   },
   "dependencies": {
-    "@telefrek/core": "^1.0.0-alpha.31",
     "@opentelemetry/api": "^1.8.0",
-    "@opentelemetry/semantic-conventions": "^1.23.0"
+    "@opentelemetry/semantic-conventions": "^1.23.0",
+    "@telefrek/core": "^1.0.0-alpha.32"
   },
   "peerDependencies": {
-    "@telefrek/core": "^1.0.0-alpha.31",
     "@opentelemetry/api": "^1.8.0",
-    "@opentelemetry/semantic-conventions": "^1.23.0"
+    "@opentelemetry/semantic-conventions": "^1.23.0",
+    "@telefrek/core": "^1.0.0-alpha.31"
   },
   "gitHead": "1be6bb3a61aab8ae5361827b54f8428682b9d536"
 }
