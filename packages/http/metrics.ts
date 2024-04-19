@@ -3,11 +3,7 @@
  */
 
 import { ValueType } from "@opentelemetry/api"
-import { info } from "@telefrek/core/logging.js"
 import { GRANADA_METRICS_METER } from "@telefrek/core/observability/metrics.js"
-
-// Not sure why they aren't showing...
-info("Initializing HTTP Metrics")
 
 /**
  * Metrics related to http request handling (server)

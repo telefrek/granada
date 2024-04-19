@@ -6,10 +6,12 @@ import opentelemetry, { ValueType, type Meter } from "@opentelemetry/api"
 import type { EventLoopUtilization } from "perf_hooks"
 import type { HeapInfo, HeapSpaceInfo } from "v8"
 import type { Optional } from "../type/utils.js"
+
 /**
- * Setup our framework metrics
+ * Create scaffolding that will be a NO_OP unless {@link enableGranadaMetrics}
+ * is invoked
  */
-export const GRANADA_METRICS_METER = opentelemetry.metrics
+export let GRANADA_METRICS_METER = opentelemetry.metrics
   .getMeterProvider()
   .getMeter("granada-framework-metrics", "1.0.0")
 
@@ -29,6 +31,15 @@ export const ALL_NODE_METRICS: NodeMetricEnabledOptions = {
   heap: true,
   gc: true,
   eventLoop: true,
+}
+
+/**
+ * Enable the core Granada framework metrics
+ */
+export function enableGranadaMetrics(): void {
+  GRANADA_METRICS_METER = opentelemetry.metrics
+    .getMeterProvider()
+    .getMeter("granada-framework-metrics", "1.0.0")
 }
 
 /**
