@@ -17,7 +17,7 @@ import {
   CircularArrayBuffer,
   createIterator,
 } from "@telefrek/core/structures/circularBuffer.js"
-import { Timer, type Duration } from "@telefrek/core/time.js"
+import { Timer, delay, type Duration } from "@telefrek/core/time.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
 import EventEmitter from "events"
 import * as http2 from "http2"
@@ -121,8 +121,10 @@ export interface HttpServer extends Emitter<HttpServerEvents> {
 
   /**
    * Closes the server, rejecting any further calls
+   *
+   * @param graceful Flag to indicate if we want a graceful shutdown
    */
-  close(): MaybeAwaitable<void>
+  close(graceful: boolean): MaybeAwaitable<void>
 
   /**
    * Allow iterating over the {@link HttpRequest} that are received
@@ -281,7 +283,7 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
       this.emit("listening", port)
 
       // Register the shutdown hook
-      registerShutdown(this.close.bind(this))
+      registerShutdown(() => this.close(false))
     } else {
       throw new Error("Server is already listening on another port")
     }
@@ -293,8 +295,19 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
     })
   }
 
-  close(): MaybeAwaitable<void> {
-    this._logger.info("close invoked")
+  async close(graceful: boolean = true): Promise<void> {
+    this._logger.info(`close invoked (graceful=${graceful})`)
+
+    // We want to indicate we aren't ready and wait for existing requests to
+    // close out
+    if (graceful && this._ready) {
+      // Mark this is not ready for more traffic
+      this.enableReady(false)
+
+      // Wait 15 seconds
+      // TODO: Make this driven by a signal on outstanding requests...
+      await delay(15_000)
+    }
 
     if (this._server.listening) {
       this.emit("stopping")
@@ -316,7 +329,7 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
       this._sessions.map((s) => s.close())
 
       // Return the promise
-      return deferred
+      await deferred
     }
   }
 
@@ -325,6 +338,7 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
       this._logger.error(`Error: ${err}`, err)
       this.emit("error", err)
     })
+
     this._server.on("request", (req, resp) => {
       // Handle health
       if (req.url === "/health") {
@@ -531,13 +545,18 @@ class Http2Request extends EventEmitter implements HttpRequest {
         HttpRequestMetrics.RequestCompleted.add(1)
       }
 
-      this._response.on("finish", () => {
+      HttpServerMetrics.ResponseStatus.add(1, {
+        status: this._response.statusCode.toString(),
+      })
+
+      finished(this._response, {}, (_) => {
+        HTTP_SERVER_LOGGER.info(
+          `\t${this.method} ${this.path.original} => ${this._response.statusCode}`,
+        )
+
         HttpServerMetrics.IncomingRequestDuration.record(
           this._timer.stop().seconds(),
         )
-        HttpServerMetrics.ResponseStatus.add(1, {
-          status: this._response.statusCode.toString(),
-        })
       })
     }
   }

@@ -3,7 +3,7 @@
  */
 
 import { MaybeAwaitable } from "./index.js"
-import { error, info } from "./logging.js"
+import { error, fatal } from "./logging.js"
 
 /**
  * Set of supported events on an object with a defined lifecycle
@@ -65,18 +65,25 @@ const shutdownHooks: (() => MaybeAwaitable<unknown>)[] = []
 
 /** Simple method to invoke shutdowns */
 const shutdown = async () => {
-  info("Global shutdown started")
+  fatal("Global shutdown started")
+
   // Fire all the hooks and hope for the best...
   await Promise.allSettled(shutdownHooks.map(async (s) => await s())).then(
-    (_) => info("shutdown finished"),
+    (_) => fatal("shutdown finished"),
     (err) => {
-      error(`error: ${err}`)
+      error(`error during shutdown: ${err}`)
     },
   )
 }
 
 // Local process kill (ctrl+c)
-process.on("SIGINT", shutdown)
+process.on("SIGINT", async () => {
+  fatal("Received SIGINT, shutting down system...")
+  await shutdown()
+})
 
 // Container process kill (docker, etc.)
-process.on("SIGTERM", shutdown)
+process.on("SIGTERM", async () => {
+  fatal("Received SIGTERM, shutting down system...")
+  await shutdown()
+})
