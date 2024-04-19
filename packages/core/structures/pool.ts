@@ -13,7 +13,7 @@ import {
 } from "../backpressure/circuits/breaker.js"
 import { Signal } from "../concurrency.js"
 import { type MaybeAwaitable } from "../index.js"
-import { GRANADA_METRICS_METER } from "../observability/metrics.js"
+import { getGranadaMeter } from "../observability/metrics.js"
 import { Duration, Timer } from "../time.js"
 import type { Optional } from "../type/utils.js"
 
@@ -95,7 +95,7 @@ export interface PoolOptions extends CircuitBreakerOptions {
 }
 
 const PoolMetrics = {
-  PoolWaitTime: GRANADA_METRICS_METER.createHistogram("pool_wait_time", {
+  PoolWaitTime: getGranadaMeter().createHistogram("pool_wait_time", {
     description:
       "Measures long a consumer waits for a pool item to be available",
     valueType: ValueType.DOUBLE,
@@ -106,11 +106,11 @@ const PoolMetrics = {
       ],
     },
   }),
-  PoolSize: GRANADA_METRICS_METER.createObservableGauge("pool_size", {
+  PoolSize: getGranadaMeter().createObservableGauge("pool_size", {
     description: "The current size of the pool",
     valueType: ValueType.INT,
   }),
-  PoolRetrievalFailure: GRANADA_METRICS_METER.createCounter(
+  PoolRetrievalFailure: getGranadaMeter().createCounter(
     "pool_retrieval_failure",
     {
       description:

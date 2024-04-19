@@ -3,21 +3,18 @@
  */
 
 import { ValueType } from "@opentelemetry/api"
-import { GRANADA_METRICS_METER } from "@telefrek/core/observability/metrics.js"
+import { getGranadaMeter } from "@telefrek/core/observability/metrics.js"
 
 /**
  * Metrics related to http request handling (server)
  */
 export const HttpServerMetrics = {
-  IncomingRequests: GRANADA_METRICS_METER.createCounter(
-    "http_incoming_requests",
-    {
-      description:
-        "The total number of incoming requests that a server has received",
-      valueType: ValueType.INT,
-    },
-  ),
-  IncomingRequestDuration: GRANADA_METRICS_METER.createHistogram(
+  IncomingRequests: getGranadaMeter().createCounter("http_incoming_requests", {
+    description:
+      "The total number of incoming requests that a server has received",
+    valueType: ValueType.INT,
+  }),
+  IncomingRequestDuration: getGranadaMeter().createHistogram(
     "http_incoming_request_duration",
     {
       description: "The amount of time the incoming request took to complete",
@@ -30,7 +27,7 @@ export const HttpServerMetrics = {
       },
     },
   ),
-  RequestsShedCounter: GRANADA_METRICS_METER.createCounter(
+  RequestsShedCounter: getGranadaMeter().createCounter(
     "http_incoming_request_shed_counter",
     {
       description:
@@ -38,7 +35,7 @@ export const HttpServerMetrics = {
       valueType: ValueType.INT,
     },
   ),
-  ResponseStatus: GRANADA_METRICS_METER.createCounter("http_response_status", {
+  ResponseStatus: getGranadaMeter().createCounter("http_response_status", {
     description:
       "The total number responses by status type the server has returned",
     valueType: ValueType.INT,
@@ -49,14 +46,11 @@ export const HttpServerMetrics = {
  * Metrics related to routing statistics
  */
 export const ApiRouteMetrics = {
-  RouteRequests: GRANADA_METRICS_METER.createCounter(
-    "incoming_route_requests",
-    {
-      description: "The total number of incoming requests to a specific route",
-      valueType: ValueType.INT,
-    },
-  ),
-  RouteRequestDuration: GRANADA_METRICS_METER.createHistogram(
+  RouteRequests: getGranadaMeter().createCounter("incoming_route_requests", {
+    description: "The total number of incoming requests to a specific route",
+    valueType: ValueType.INT,
+  }),
+  RouteRequestDuration: getGranadaMeter().createHistogram(
     "incoming_route_duration",
     {
       description: "The amount of time the route request took to complete",
@@ -69,7 +63,7 @@ export const ApiRouteMetrics = {
       },
     },
   ),
-  RouteResponseStatus: GRANADA_METRICS_METER.createCounter(
+  RouteResponseStatus: getGranadaMeter().createCounter(
     "route_response_status",
     {
       description:
@@ -83,14 +77,14 @@ export const ApiRouteMetrics = {
  * Metrics related to pipeline processing
  */
 export const HttpRequestPipelineMetrics = {
-  PipelineExecutions: GRANADA_METRICS_METER.createCounter(
+  PipelineExecutions: getGranadaMeter().createCounter(
     "pipeline_stage_counter",
     {
       description: "The number of times a given pipeline stage has executed",
       valueType: ValueType.INT,
     },
   ),
-  PipelineStageDuration: GRANADA_METRICS_METER.createHistogram(
+  PipelineStageDuration: getGranadaMeter().createHistogram(
     "pipeline_stage_duration",
     {
       description: "The amount of time spent in each stage",
@@ -109,21 +103,18 @@ export const HttpRequestPipelineMetrics = {
  * Metrics related to request handling
  */
 export const HttpRequestMetrics = {
-  RequestCompleted: GRANADA_METRICS_METER.createCounter(
+  RequestCompleted: getGranadaMeter().createCounter(
     "request_completed_counter",
     {
       description: "The number of requests that were completed",
       valueType: ValueType.INT,
     },
   ),
-  RequestTimeout: GRANADA_METRICS_METER.createCounter(
-    "request_timeout_counter",
-    {
-      description: "The number of requests that were cancelled due to timeout",
-      valueType: ValueType.INT,
-    },
-  ),
-  RequestDelayDuration: GRANADA_METRICS_METER.createHistogram(
+  RequestTimeout: getGranadaMeter().createCounter("request_timeout_counter", {
+    description: "The number of requests that were cancelled due to timeout",
+    valueType: ValueType.INT,
+  }),
+  RequestDelayDuration: getGranadaMeter().createHistogram(
     "request_delay_duration",
     {
       description:
