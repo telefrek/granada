@@ -75,10 +75,6 @@ class HostingTransform extends BaseHttpPipelineTransform {
               ? { status: HttpStatus.NO_CONTENT }
               : await createFileContentResponse(filePath),
           )
-        } else {
-          request.respond({
-            status: HttpStatus.NOT_FOUND,
-          })
         }
       } else if (filePath !== check) {
         this._logger.error(
