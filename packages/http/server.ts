@@ -491,6 +491,24 @@ class Http2Request extends EventEmitter implements HttpRequest {
 
     this._response = response
 
+    request.stream
+      .once("aborted", () => {
+        HTTP_SERVER_LOGGER.error(
+          `Request aborted: ${this.path.original} (${this._state})`,
+        )
+        this.state = HttpRequestState.ERROR
+      })
+      .once("close", () => {
+        HTTP_SERVER_LOGGER.info(
+          `Request stream.close: ${this.path.original} (${this._state})`,
+        )
+      })
+      .once("streamClosed", () => {
+        HTTP_SERVER_LOGGER.info(
+          `Request.stream.streamClosed ${this.path.original} (${this._state})`,
+        )
+      })
+
     // Ensure we track the response completion event
     finished(response, (_err) => {
       ;(this as HttpRequest).emit("finished")

@@ -7,7 +7,6 @@ import {
 } from "./configuration.js"
 import { DeferredPromise } from "./index.js"
 import { ConsoleLogWriter, DefaultLogger, LogLevel } from "./logging.js"
-import { delay } from "./time.js"
 import type { Optional } from "./type/utils.js"
 
 const logger = new DefaultLogger({
@@ -30,15 +29,13 @@ describe("configuration should work for basic file system integrations", () => {
     }
   })
 
-  afterAll(async () => {
+  afterAll(() => {
     if (existsSync(directory)) {
       rmSync(directory, {
         recursive: true,
         force: true,
       })
     }
-
-    await delay(50)
   })
 
   async function verifyEmpty(): Promise<void> {
