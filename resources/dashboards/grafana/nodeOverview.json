@@ -7,10 +7,22 @@
       "type": "datasource",
       "pluginId": "prometheus",
       "pluginName": "Prometheus"
+    },
+    {
+      "name": "DS_EXPRESSION",
+      "label": "Expression",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "__expr__"
     }
   ],
   "__elements": {},
   "__requires": [
+    {
+      "type": "datasource",
+      "id": "__expr__",
+      "version": "1.0.0"
+    },
     {
       "type": "panel",
       "id": "barchart",
@@ -201,7 +213,20 @@
           "mappings": [],
           "unit": "decbytes"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "C"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "${__field.labels.space}"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 6,
@@ -216,7 +241,7 @@
           "displayMode": "list",
           "placement": "right",
           "showLegend": true,
-          "values": ["percent"]
+          "values": ["value"]
         },
         "pieType": "pie",
         "reduceOptions": {
@@ -239,12 +264,40 @@
           "editorMode": "builder",
           "expr": "sum by(space) (heap_space_used_size{namespace=\"$namespace\", service=\"$service\", pod=~\"$pod\"})",
           "fullMetaSearch": false,
+          "hide": true,
           "includeNullMetadata": true,
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
           "refId": "A",
           "useBackend": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "expr": "sum by(space) (heap_space_available_size{namespace=\"$namespace\", service=\"$service\", pod=~\"$pod\"})",
+          "fullMetaSearch": false,
+          "hide": true,
+          "includeNullMetadata": true,
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "B",
+          "useBackend": false
+        },
+        {
+          "datasource": {
+            "type": "__expr__",
+            "uid": "${DS_EXPRESSION}"
+          },
+          "expression": "$A + $B",
+          "hide": false,
+          "refId": "C",
+          "type": "math"
         }
       ],
       "title": "Heap By Space",
@@ -900,6 +953,6 @@
   "timezone": "browser",
   "title": "Granada NodeJS Overview",
   "uid": "ddj3absz1z1mob",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
