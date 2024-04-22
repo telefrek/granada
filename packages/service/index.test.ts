@@ -50,7 +50,7 @@ describe("Basic HTTP server functionality should work", () => {
   afterEach(async () => {
     // Stop the server
     if (server) {
-      await server.close()
+      await server.close(false)
     }
 
     // Stop the pipeline

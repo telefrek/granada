@@ -2,6 +2,7 @@
  * The goal of this package is to provide the scaffolding for creating an HTTP pipeline
  */
 
+import { context } from "@opentelemetry/api"
 import { isAbortError } from "@telefrek/core/errors.js"
 import { Emitter } from "@telefrek/core/events.js"
 import { DeferredPromise, MaybeAwaitable } from "@telefrek/core/index.js"
@@ -16,6 +17,7 @@ import {
   type LogWriter,
   type Logger,
 } from "@telefrek/core/logging.js"
+import { extractTraceContext } from "@telefrek/core/observability/tracing.js"
 import { combineTransforms, createTransform } from "@telefrek/core/streams.js"
 import { Timer } from "@telefrek/core/time.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
@@ -540,9 +542,19 @@ export abstract class BaseHttpPipelineTransform
       }
 
       const timer = Timer.startNew()
+      const ctx = extractTraceContext(request)
+
       try {
-        // Pass along logic
-        await this.processRequest(request as PipelineRequest)
+        if (ctx) {
+          await context.with(
+            ctx,
+            this.processRequest,
+            this,
+            request as PipelineRequest,
+          )
+        } else {
+          await this.processRequest(request as PipelineRequest)
+        }
       } catch (err) {
         // Log the failure
         this._logger.error(`Error during ${this.stage} - ${err}`, err)

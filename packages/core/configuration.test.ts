@@ -24,12 +24,13 @@ describe("configuration should work for basic file system integrations", () => {
     directory = mkdtempSync("granada-test", "utf8")
   })
 
-  afterAll(async () => {
-    // Release the resources
+  afterEach(() => {
     if (manager) {
       manager.close()
     }
+  })
 
+  afterAll(async () => {
     if (existsSync(directory)) {
       rmSync(directory, {
         recursive: true,

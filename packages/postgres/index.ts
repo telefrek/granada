@@ -7,7 +7,7 @@ import {
   createSimpleLimiter,
   type Limiter,
 } from "@telefrek/core/backpressure/limits.js"
-import type { FrameworkPriority } from "@telefrek/core/index.js"
+import type { FrameworkPriority, MaybeAwaitable } from "@telefrek/core/index.js"
 import { getGranadaMeter } from "@telefrek/core/observability/metrics.js"
 import {
   DefaultMultiLevelPriorityQueue,
@@ -58,6 +58,11 @@ const PostgresQueryMetrics = {
  */
 export interface PostgresDatabase extends QueryExecutor {
   /**
+   * Close the database and release connections
+   */
+  close(): MaybeAwaitable<void>
+
+  /**
    * Submits a query for execution
    *
    * @param query The {@link PostgresQuery} to submit
@@ -94,6 +99,14 @@ export class DefaultPostgresDatabase implements PostgresDatabase {
 
     // TODO: Change queue working size based on rate limiting
     this._queue = new DefaultMultiLevelPriorityQueue(4)
+  }
+
+  async close(): Promise<void> {
+    // Stop the queue
+    await this._queue.shutdown()
+
+    // Stop the pool
+    await this._pool.shutdown()
   }
 
   run<T extends RowType, P extends QueryParameters>(

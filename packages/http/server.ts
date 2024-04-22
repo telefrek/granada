@@ -2,7 +2,13 @@
  * HTTP Server implementation
  */
 
-import { trace } from "@opentelemetry/api"
+import {
+  ROOT_CONTEXT,
+  createContextKey,
+  trace,
+  type Context,
+  type Span,
+} from "@opentelemetry/api"
 import { Emitter } from "@telefrek/core/events.js"
 import { DeferredPromise, type MaybeAwaitable } from "@telefrek/core/index.js"
 import { LifecycleEvents, registerShutdown } from "@telefrek/core/lifecycle.js"
@@ -13,6 +19,7 @@ import {
   error,
   type LogWriter,
 } from "@telefrek/core/logging.js"
+import { getTracer } from "@telefrek/core/observability/tracing.js"
 import {
   CircularArrayBuffer,
   createIterator,
@@ -124,7 +131,7 @@ export interface HttpServer extends Emitter<HttpServerEvents> {
    *
    * @param graceful Flag to indicate if we want a graceful shutdown
    */
-  close(graceful: boolean): MaybeAwaitable<void>
+  close(graceful?: boolean): MaybeAwaitable<void>
 
   /**
    * Allow iterating over the {@link HttpRequest} that are received
@@ -393,6 +400,8 @@ function parseHttp2Headers(
   return headers
 }
 
+const HTTP_REQUEST_KEY = createContextKey("HTTP_REQUEST_KEY")
+
 class Http2Request extends EventEmitter implements HttpRequest {
   readonly path: HttpPath
   readonly method: HttpMethod
@@ -400,11 +409,13 @@ class Http2Request extends EventEmitter implements HttpRequest {
   readonly version: HttpVersion
   readonly query: Optional<HttpQuery>
   readonly body: Optional<HttpBody>
+  readonly context: Optional<Context>
 
   private _timer: Timer
   private _state: HttpRequestState
   private _response: http2.Http2ServerResponse
   private _delay: Optional<Duration>
+  private readonly _span: Span
 
   get state(): HttpRequestState {
     return this._state
@@ -444,6 +455,27 @@ class Http2Request extends EventEmitter implements HttpRequest {
   ) {
     super()
     this._timer = Timer.startNew()
+
+    this.context = ROOT_CONTEXT.setValue(HTTP_REQUEST_KEY, this)
+
+    this._span = getTracer().startSpan(
+      "HttpRequest",
+      {
+        attributes: {
+          "http.request.url": request.url,
+          "http.request.method": request.method,
+          "http.request.version": HttpVersion.HTTP_2,
+        },
+      },
+      this.context,
+    )
+
+    this.on("finished", () => {
+      this._span.setAttributes({
+        "http.response.status": this._response.statusCode,
+      })
+      this._span.end()
+    })
 
     // Log the incoming request
     HTTP_SERVER_LOGGER.info(`${request.method} ${request.url}`)
@@ -557,6 +589,8 @@ class Http2Request extends EventEmitter implements HttpRequest {
         HttpServerMetrics.IncomingRequestDuration.record(
           this._timer.stop().seconds(),
         )
+
+        this.emit("finished")
       })
     }
   }

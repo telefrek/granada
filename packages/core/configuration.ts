@@ -199,6 +199,8 @@ export class FileSystemConfigurationManager
     if (!this._abortController.signal.aborted) {
       this._abortController.abort("closing the manager")
     }
+
+    this._watcher.close()
   }
 
   /**

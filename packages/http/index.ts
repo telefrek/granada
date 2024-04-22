@@ -4,6 +4,7 @@
 
 import { Emitter } from "@telefrek/core/events.js"
 import { LifecycleEvents } from "@telefrek/core/lifecycle.js"
+import type { TraceableContext } from "@telefrek/core/observability/tracing"
 import type { TransformFunc } from "@telefrek/core/streams.js"
 import type { Readable } from "stream"
 import type { MediaType } from "./content.js"
@@ -119,7 +120,9 @@ export interface HttpRequestEvents extends LifecycleEvents {
 /**
  * An interface defining the behavior of an HTTP Request
  */
-export interface HttpRequest extends Emitter<HttpRequestEvents> {
+export interface HttpRequest
+  extends Emitter<HttpRequestEvents>,
+    TraceableContext {
   path: HttpPath
   method: HttpMethod
   headers: HttpHeaders

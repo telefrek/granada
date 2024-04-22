@@ -2,6 +2,7 @@
  * Set of classes that are used for testing only
  */
 
+import type { Context } from "@opentelemetry/api"
 import type { Optional } from "@telefrek/core/type/utils"
 import EventEmitter from "events"
 import {
@@ -25,6 +26,8 @@ export class TestRequest extends EventEmitter implements HttpRequest {
   version: HttpVersion
   query?: Optional<HttpQuery>
   body?: Optional<HttpBody>
+  context: Optional<Context>
+
   respond(response: HttpResponse): void {
     this.emit("response", response)
   }
@@ -38,5 +41,6 @@ export class TestRequest extends EventEmitter implements HttpRequest {
     this.version = args.version ?? HttpVersion.HTTP1_1
     this.headers = args.headers ?? emptyHeaders()
     this.body = args.body
+    this.context = undefined
   }
 }

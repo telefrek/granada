@@ -10,8 +10,10 @@ import opentelemetry, {
 import type { EventLoopUtilization } from "perf_hooks"
 import type { HeapInfo, HeapSpaceInfo } from "v8"
 import type { Optional } from "../type/utils.js"
+import { GRANADA_VERSION } from "../version.js"
 
 let _metricsEnabled = false
+let _meter = createNoopMeter()
 
 /**
  * Create scaffolding that will be a NO_OP unless {@link enableGranadaMetrics}
@@ -19,13 +21,7 @@ let _metricsEnabled = false
  */
 
 export function getGranadaMeter(): Meter {
-  // eslint-disable-next-line no-console
-  console.log(`getting meter: ${_metricsEnabled}`)
-  return _metricsEnabled
-    ? opentelemetry.metrics
-        .getMeterProvider()
-        .getMeter("granada-framework-metrics", "1.0.0")
-    : createNoopMeter()
+  return _meter
 }
 
 /**
@@ -50,6 +46,11 @@ export const ALL_NODE_METRICS: NodeMetricEnabledOptions = {
  * Enable the core Granada framework metrics
  */
 export function enableGranadaMetrics(): void {
+  if (!_metricsEnabled) {
+    _meter = opentelemetry.metrics
+      .getMeterProvider()
+      .getMeter("granada-framework-metrics", GRANADA_VERSION)
+  }
   _metricsEnabled = true
 }
 
