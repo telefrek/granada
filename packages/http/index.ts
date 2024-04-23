@@ -9,12 +9,9 @@ import type { TransformFunc } from "@telefrek/core/streams.js"
 import type { Readable } from "stream"
 import type { MediaType } from "./content.js"
 
-export type StringOrArray = string | string[]
-
 export type SegmentValue = string | number | boolean
 
-// TODO: Replace references with this for parameters...
-export type ParameterMap = Map<string, SegmentValue>
+export type QueryParameters = Map<string, string | string[]>
 
 /**
  * Supported methods for HTTP operations
@@ -48,90 +45,6 @@ export const HTTP_METHODS = [
 export enum HttpVersion {
   HTTP1_1 = "HTTP1.1",
   HTTP_2 = "HTTP2",
-}
-
-/**
- * HttpHeaders are collections of key, value pairs where the value can be singular or an array
- */
-export type HttpHeaders = Map<string, StringOrArray>
-
-/**
- * Create an empty set of {@link HttpHeaders}
- * @returns An empty set of {@link HttpHeaders}
- */
-export function emptyHeaders(): HttpHeaders {
-  return new Map()
-}
-
-/**
- * An interface defining the query portion of a request
- */
-export interface HttpQuery {
-  readonly original: string
-  parameters: Map<string, StringOrArray>
-}
-
-/**
- * An interface defining the path portion of a request
- */
-export interface HttpPath {
-  readonly original: string
-  segments: string[]
-  parameters?: Map<string, SegmentValue>
-}
-
-/**
- * An interface defining the body that is transmitted as part of the request/response cycle
- */
-export interface HttpBody {
-  mediaType?: MediaType
-  contents?: Readable
-}
-
-/**
- * Set of states that a {@link HttpRequest} can be in
- */
-export enum HttpRequestState {
-  /** The request is waiting to be processed */
-  PENDING = "pending",
-  /** The request is being read but not processed via handler */
-  READING = "reading",
-  /** The request is being processed via a handler */
-  PROCESSING = "processing",
-  /** The request has response data being written to it */
-  WRITING = "writing",
-  /**  The request was fully written and completed */
-  COMPLETED = "completed",
-  /** The request timed out before being handled */
-  TIMEOUT = "timeout",
-  /** The request encountered some error */
-  ERROR = "error",
-  /** The request was dropped (shed) for some reason */
-  DROPPED = "dropped",
-}
-
-/**
- * Specific extra
- */
-export interface HttpRequestEvents extends LifecycleEvents {
-  stateChanged: (from: HttpRequestState, to: HttpRequestState) => void
-}
-
-/**
- * An interface defining the behavior of an HTTP Request
- */
-export interface HttpRequest
-  extends Emitter<HttpRequestEvents>,
-    TraceableContext {
-  path: HttpPath
-  method: HttpMethod
-  headers: HttpHeaders
-  version: HttpVersion
-  state: HttpRequestState
-  query?: HttpQuery
-  body?: HttpBody
-
-  respond(response: HttpResponse, state?: HttpRequestState): void
 }
 
 /**
@@ -201,6 +114,102 @@ export enum HttpStatus {
   LOOP_DETECTED = 508,
   NOT_EXTENDED = 510,
   NETWORK_AUTHENTICATION_REQUIRED = 511,
+}
+
+/**
+ * HttpHeaders are collections of key, value pairs where the value can be singular or an array
+ */
+export type HttpHeaders = Map<string, string | string[]>
+
+/**
+ * Create an empty set of {@link HttpHeaders}
+ * @returns An empty set of {@link HttpHeaders}
+ */
+export function emptyHeaders(): HttpHeaders {
+  return new Map()
+}
+
+/**
+ * An interface defining the query portion of a request
+ */
+export interface HttpQuery {
+  readonly original: string
+  parameters: QueryParameters
+}
+
+/**
+ * An interface defining the path portion of a request
+ */
+export interface HttpPath {
+  readonly original: string
+  segments: string[]
+}
+
+/**
+ * An interface defining the body that is transmitted as part of the request/response cycle
+ */
+export interface HttpBody {
+  mediaType?: MediaType
+  contents?: Readable
+}
+
+/**
+ * Set of states that a {@link HttpRequest} can be in
+ */
+export enum HttpRequestState {
+  /** The request is waiting to be processed */
+  PENDING = "pending",
+  /** The request is being read but not processed via handler */
+  READING = "reading",
+  /** The request is being processed via a handler */
+  PROCESSING = "processing",
+  /** The request has response data being written to it */
+  WRITING = "writing",
+  /**  The request was fully written and completed */
+  COMPLETED = "completed",
+  /** The request timed out before being handled */
+  TIMEOUT = "timeout",
+  /** The request encountered some error */
+  ERROR = "error",
+  /** The request was dropped (shed) for some reason */
+  DROPPED = "dropped",
+}
+
+/**
+ * Specific extra
+ */
+export interface HttpRequestEvents extends LifecycleEvents {
+  /**
+   * Event raised when there is a state change
+   *
+   * @param previousState The previous {@link HttpRequestState}
+   */
+  changed: (previousState: HttpRequestState) => void
+
+  /**
+   * Event raised when a request receives a {@link HttpResponse}
+   *
+   * @param response The {@link HttpResponse}
+   */
+  response: (response: HttpResponse) => void
+}
+
+/**
+ * An interface defining the behavior of an HTTP Request
+ */
+export interface HttpRequest
+  extends Emitter<HttpRequestEvents>,
+    TraceableContext {
+  path: HttpPath
+  method: HttpMethod
+  headers: HttpHeaders
+  version: HttpVersion
+  state: HttpRequestState
+  query?: HttpQuery
+  body?: HttpBody
+
+  respond(response: HttpResponse): void
+  drop(headers?: HttpHeaders): void
 }
 
 /**
@@ -275,7 +284,6 @@ export function parsePath(path: string): { path: HttpPath; query?: HttpQuery } {
     path: {
       original: uri[0],
       segments: uri[0].replace(/^\//, "").replace(/\/$/, "").split("/"),
-      parameters: new Map(),
     },
     query:
       uri.length > 1
@@ -295,7 +303,7 @@ export function parsePath(path: string): { path: HttpPath; query?: HttpQuery } {
                 }
               }
               return map
-            }, new Map<string, StringOrArray>()),
+            }, new Map<string, string | string[]>()),
           }
         : undefined,
   }

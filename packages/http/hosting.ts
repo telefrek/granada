@@ -10,8 +10,8 @@ import {
   HttpMethod,
   HttpResponse,
   HttpStatus,
-} from "../index.js"
-import { fileToMediaType } from "../media.js"
+} from "./index.js"
+import { fileToMediaType } from "./media.js"
 import {
   BaseHttpPipelineTransform,
   HttpPipelineStage,

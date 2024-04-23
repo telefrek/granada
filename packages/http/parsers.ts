@@ -6,7 +6,7 @@ import { MaybeAwaitable } from "@telefrek/core/index.js"
 import type { Optional } from "@telefrek/core/type/utils"
 import { Readable } from "stream"
 import { MediaType, TopLevelMediaTypes, parseMediaType } from "./content.js"
-import { HttpBody, HttpHeaders, StringOrArray } from "./index.js"
+import { HttpBody, HttpHeaders } from "./index.js"
 
 /**
  * The content type header
@@ -19,7 +19,7 @@ export const CONTENT_TYPE_HEADER = "content-type"
  * @returns The content type header or undefined
  */
 export function getContentType(headers: HttpHeaders): Optional<MediaType> {
-  let value: Optional<StringOrArray>
+  let value: Optional<string | string[]>
 
   // Fast path is that we have it already lowercase
   if (headers.has(CONTENT_TYPE_HEADER)) {

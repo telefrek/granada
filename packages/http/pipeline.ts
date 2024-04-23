@@ -28,10 +28,15 @@ import {
   isTerminal,
   type HttpRequest,
   type HttpTransform,
-} from "../index.js"
-import { HttpRequestPipelineMetrics } from "../metrics.js"
-import { CONTENT_PARSERS, getContentType } from "../parsers.js"
-import { createRouter, isRoutableApi, type Router } from "./routing.js"
+} from "./index.js"
+import { HttpRequestPipelineMetrics } from "./metrics.js"
+import { CONTENT_PARSERS, getContentType } from "./parsers.js"
+import {
+  createRouter,
+  isRoutableApi,
+  setRoutingParameters,
+  type Router,
+} from "./routing.js"
 
 /**
  * The default {@link Logger} for {@link HttpPipeline} operations
@@ -646,7 +651,9 @@ export class RoutingTransform extends BaseHttpPipelineTransform {
       )
 
       // Add the parameter mapping...
-      request.path.parameters = info.parameters
+      if (info.parameters) {
+        setRoutingParameters(info.parameters)
+      }
 
       await info.handler(request)
     } else {

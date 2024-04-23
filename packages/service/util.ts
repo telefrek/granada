@@ -6,7 +6,11 @@ import {
   type HttpHandler,
   type HttpRequest,
 } from "@telefrek/http/index.js"
-import { createRouter, type Router } from "@telefrek/http/server/routing.js"
+import {
+  createRouter,
+  getRoutingParameters,
+  type Router,
+} from "@telefrek/http/routing.js"
 import type { Readable } from "stream"
 import {
   SerializationFormat,
@@ -71,10 +75,7 @@ export function buildHandler<T>(
       : undefined
 
     if (serviceRoute.options.mapping) {
-      args = serviceRoute.options.mapping(
-        request.path.parameters ?? new Map(),
-        body,
-      )
+      args = serviceRoute.options.mapping(getRoutingParameters(), body)
     } else if (body) {
       args = [body]
     }

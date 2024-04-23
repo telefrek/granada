@@ -10,16 +10,16 @@ import {
 import type { Optional } from "@telefrek/core/type/utils.js"
 import { HttpMethod, HttpStatus } from "@telefrek/http/index.js"
 import {
-  httpServerBuilder,
-  setHttpServerLogWriter,
-  type HttpServer,
-} from "@telefrek/http/server.js"
-import {
   httpPipelineBuilder,
   setPipelineLogLevel,
   setPipelineWriter,
   type HttpPipeline,
-} from "@telefrek/http/server/pipeline.js"
+} from "@telefrek/http/pipeline.js"
+import {
+  httpServerBuilder,
+  setHttpServerLogWriter,
+  type HttpServer,
+} from "@telefrek/http/server.js"
 import * as fs from "fs"
 import { connect, type OutgoingHttpHeaders } from "http2"
 import { dirname, join } from "path"

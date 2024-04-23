@@ -2,7 +2,7 @@ import { delay } from "@telefrek/core/time.js"
 import { Readable } from "stream"
 import { parseMediaType } from "./content.js"
 import { HttpMethod, parsePath } from "./index.js"
-import { ContentParsingTransform } from "./server/pipeline.js"
+import { ContentParsingTransform } from "./pipeline.js"
 import { TestRequest } from "./testUtils.js"
 
 describe("Verify parsing is appropriately delayed", () => {

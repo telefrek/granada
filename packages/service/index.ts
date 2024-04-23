@@ -2,16 +2,17 @@
  * Common components used by this package
  */
 
+import type { Optional } from "@telefrek/core/type/utils.js"
 import { CommonMediaTypes } from "@telefrek/http/content.js"
 import {
   HttpHandler,
   HttpMethod,
   type HttpBody,
   type HttpStatus,
-  type SegmentValue,
 } from "@telefrek/http/index.js"
 import { Readable } from "stream"
 import type { MaybeAwaitable } from "../core/index.js"
+import type { RoutingParameters } from "../http/routing.js"
 
 /**
  * The target platform the service will be running on for optimizing some operations
@@ -141,7 +142,7 @@ export interface RoutableApiOptions {
  * Allows for mapping of parameters
  */
 export type ParameterMapping = <T = unknown>(
-  parameters: Map<string, SegmentValue>,
+  parameters: Optional<RoutingParameters>,
   body?: T,
 ) => unknown[]
 

@@ -3,7 +3,7 @@
  */
 
 import type { Context } from "@opentelemetry/api"
-import type { Optional } from "@telefrek/core/type/utils"
+import type { Optional } from "@telefrek/core/type/utils.js"
 import EventEmitter from "events"
 import {
   HttpBody,
@@ -27,6 +27,8 @@ export class TestRequest extends EventEmitter implements HttpRequest {
   query?: Optional<HttpQuery>
   body?: Optional<HttpBody>
   context: Optional<Context>
+
+  drop(): void {}
 
   respond(response: HttpResponse): void {
     this.emit("response", response)

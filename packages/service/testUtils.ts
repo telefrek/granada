@@ -3,7 +3,8 @@
  */
 
 import type { Optional } from "@telefrek/core/type/utils"
-import { HttpMethod, type SegmentValue } from "@telefrek/http/index.js"
+import { HttpMethod } from "@telefrek/http/index.js"
+import type { RoutingParameters } from "../http/routing.js"
 import { routableApi, route } from "./decorators.js"
 import { SerializationFormat, type ServiceResponse } from "./index.js"
 
@@ -29,7 +30,7 @@ export class TestService {
     template: "/items",
     method: HttpMethod.POST,
     mapping: <ItemData>(
-      parameters: Map<string, SegmentValue>,
+      _parameters: Optional<RoutingParameters>,
       body?: ItemData,
     ) => {
       return [body]
@@ -54,8 +55,8 @@ export class TestService {
   @route({
     template: "/items/:itemId",
     method: HttpMethod.GET,
-    mapping: (parameters: Map<string, SegmentValue>, _?: unknown) => {
-      return [parameters.get("itemId")]
+    mapping: (parameters: Optional<RoutingParameters>, _?: unknown) => {
+      return [parameters?.get("itemId")]
     },
   })
   getItem(itemId: number): Optional<TestItem> {
@@ -66,10 +67,10 @@ export class TestService {
     template: "/items/:itemId",
     method: HttpMethod.PATCH,
     mapping: <ItemData>(
-      parameters: Map<string, SegmentValue>,
+      parameters: Optional<RoutingParameters>,
       body?: ItemData,
     ) => {
-      return [parameters.get("itemId"), body]
+      return [parameters?.get("itemId"), body]
     },
   })
   updateItem(itemId: number, update: ItemData): ServiceResponse<TestItem> {

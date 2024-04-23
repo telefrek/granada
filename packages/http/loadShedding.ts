@@ -10,7 +10,7 @@ import {
 import { info } from "@telefrek/core/logging.js"
 import { Timer } from "@telefrek/core/time.js"
 import type { Optional } from "@telefrek/core/type/utils"
-import { HttpStatus, emptyHeaders, type HttpRequest } from "../index.js"
+import { HttpStatus, emptyHeaders, type HttpRequest } from "./index.js"
 import { HttpPipelineStage, HttpPipelineTransform } from "./pipeline.js"
 
 export function enableLoadShedding(

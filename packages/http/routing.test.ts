@@ -4,7 +4,7 @@ import {
   LogLevel,
   setGlobalLogger,
 } from "@telefrek/core/logging.js"
-import { HttpHandler, HttpMethod } from "../index.js"
+import { HttpHandler, HttpMethod } from "./index.js"
 import { LookupRequest, createRouter } from "./routing.js"
 
 function request(

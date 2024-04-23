@@ -3,12 +3,38 @@
  */
 
 import type { Optional } from "@telefrek/core/type/utils.js"
-import {
-  HTTP_METHODS,
-  HttpHandler,
-  HttpMethod,
-  SegmentValue,
-} from "../index.js"
+import { AsyncLocalStorage } from "async_hooks"
+import { HTTP_METHODS, HttpHandler, HttpMethod, SegmentValue } from "./index.js"
+
+export type RoutingParameters = Map<string, SegmentValue>
+
+const HTTP_ROUTING_STORE: AsyncLocalStorage<RoutingParameters> =
+  new AsyncLocalStorage()
+
+/**
+ * Get the current routing parameters for this operation
+ *
+ * @returns The current {@link RoutingParameters}
+ */
+export function getRoutingParameters(): Optional<RoutingParameters> {
+  return HTTP_ROUTING_STORE.getStore()
+}
+
+/**
+ * Set the current routing parameters for this operation
+ *
+ * @param parameters The {@link RoutingParameters} to set
+ */
+export function setRoutingParameters(parameters: RoutingParameters): void {
+  HTTP_ROUTING_STORE.enterWith(parameters)
+}
+
+/**
+ * Clear the routing parameters for this operation
+ */
+export function clearRoutingParameters(): void {
+  HTTP_ROUTING_STORE.disable()
+}
 
 /**
  * Custom {@link Error} raised for routing issues
@@ -47,7 +73,7 @@ export function isRoutableApi(routable: unknown): routable is RoutableApi {
  */
 export interface RouteInfo {
   /** Any parameters that were retrieved */
-  parameters?: Map<string, SegmentValue>
+  parameters?: RoutingParameters
 
   /** The handler to invoke */
   handler: HttpHandler
@@ -139,7 +165,7 @@ class RouterImpl implements Router {
     let current: RouteTrieNode = this._root
     let remainder = request.path
 
-    let parameters: Optional<Map<string, SegmentValue>>
+    let parameters: Optional<RoutingParameters>
     let nextSlash = -1
     let children = this._root.children
     let info = this._root.info

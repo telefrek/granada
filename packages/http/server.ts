@@ -265,13 +265,7 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
           "Retry-After",
           (~~(this._options.loadShedRetryAfter ?? 60)).toString(),
         )
-        request.respond(
-          {
-            status: HttpStatus.SERVICE_UNAVAILABLE,
-            headers,
-          },
-          HttpRequestState.DROPPED,
-        )
+        request.drop(headers)
       }
     })
 
@@ -526,6 +520,16 @@ class Http2Request extends EventEmitter implements HttpRequest {
         HttpRequestState.TIMEOUT,
       )
     })
+  }
+
+  drop(headers?: HttpHeaders): void {
+    this.respond(
+      {
+        status: HttpStatus.SERVICE_UNAVAILABLE,
+        headers,
+      },
+      HttpRequestState.DROPPED,
+    )
   }
 
   respond(
