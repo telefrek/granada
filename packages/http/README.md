@@ -18,7 +18,63 @@ This package provides common patterns for working with the HTTP stack including:
 - Content Parsing
 - Load Shedding
 
+## Patterns and Philosophy
+
+This library is split into two main components:
+
+1. The low level protocol aspects for HTTP (both client and server) represented
+   as a series of interfaces, types and enumerations that are required to use
+   this library.
+
+2. A reference implementation of the protocol that is entirely based on
+   available NodeJS tooling with no additional resources required.
+
+The goal of this library is to expose a large number of concepts for underlying
+HTTP scenarios through a series of layers that build on top of one another with
+hook points for extensions but allowing users to find their level of
+comfortability with the system and work there without having to understand the
+internals beyond that. The lower bound on this library does not seek to
+re-implement the HTTP transport at a raw socket level but attempts to leave that
+open to potential extension by another consumer of the library if so chosen.
+
+Another aspect of this library is the intent to model many of the operations
+that can be done as a state machine to help prevent invalid transitions
+regardless of the implemntation chosen with respect to the operation of a given
+client/server. This is deemed to fit nicely with the way that the event loop
+operates instead of long, unbounded processing stages that would be difficult to
+still allow for some of the advanced concepts like: load shedding,
+prioritization or request aborting.
+
+Given the choice of a state machine, many of the operations are driven by events
+at the lowest level while promises are preferred at later stages to make coding
+easier for consumers at varying levels of the stack. It is also assumed that
+operations can be cancelled at any time for a variety of reasons and state
+checks on the objects makes this easier for consumers to abandon or not start
+work that would not be useful.
+
+## Common
+
+There are several aspects of the HTTP transport protocol that are agnostic to
+client and server paradigms including things like: headers, methods, content
+types etc. These are intended to be as simple as possible to allow others to
+extend and build upon them while respecting the underlying semantics of the
+transport.
+
+## Client
+
+This is the main entrypoint for any HTTP Client impementations and includes the
+underlying state machine for requests moving through this flow as well as
+customizations to the common objects that are specific to client needs.
+
 ## Server
+
+This is the main entrypoint for any HTTP Server implementation and includes the
+underlying state machine for requests moving through this flow as well as
+customizations to the common objects that are specific to server needs.
+
+---
+
+Needs re-work
 
 ### Http Request Processing Flow
 

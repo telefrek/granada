@@ -26,6 +26,7 @@ import {
 } from "@telefrek/core/structures/circularBuffer.js"
 import { Timer, delay, type Duration } from "@telefrek/core/time.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
+import { randomUUID as v4 } from "crypto"
 import EventEmitter from "events"
 import * as http2 from "http2"
 import { Readable, Stream, finished, pipeline } from "stream"
@@ -34,18 +35,16 @@ import {
   HttpBody,
   HttpHeaders,
   HttpMethod,
+  HttpOperationState,
   HttpPath,
   HttpQuery,
   HttpRequest,
-  HttpRequestState,
   HttpResponse,
-  HttpStatus,
+  HttpStatusCode,
   HttpVersion,
-  emptyHeaders,
-  isTerminal,
-  parsePath,
 } from "./index.js"
 import { HttpRequestMetrics, HttpServerMetrics } from "./metrics.js"
+import { emptyHeaders, parsePath } from "./utils.js"
 
 /**
  * The default {@link Logger} for {@link HttpPipeline} operations
@@ -265,7 +264,6 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
           "Retry-After",
           (~~(this._options.loadShedRetryAfter ?? 60)).toString(),
         )
-        request.drop(headers)
       }
     })
 
@@ -343,14 +341,16 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
     this._server.on("request", (req, resp) => {
       // Handle health
       if (req.url === "/health") {
-        resp.writeHead(HttpStatus.NO_CONTENT).end()
+        resp.writeHead(HttpStatusCode.NO_CONTENT).end()
         return
       }
 
       // Handle ready
       if (req.url === "/ready") {
         resp
-          .writeHead(this._ready ? HttpStatus.NO_CONTENT : HttpStatus.NOT_FOUND)
+          .writeHead(
+            this._ready ? HttpStatusCode.NO_CONTENT : HttpStatusCode.NOT_FOUND,
+          )
           .end()
         return
       }
@@ -397,6 +397,7 @@ function parseHttp2Headers(
 const HTTP_REQUEST_KEY = createContextKey("HTTP_REQUEST_KEY")
 
 class Http2Request extends EventEmitter implements HttpRequest {
+  readonly id: string = v4()
   readonly path: HttpPath
   readonly method: HttpMethod
   readonly headers: HttpHeaders
@@ -406,37 +407,32 @@ class Http2Request extends EventEmitter implements HttpRequest {
   readonly context: Optional<Context>
 
   private _timer: Timer
-  private _state: HttpRequestState
+  private _state: HttpOperationState
   private _response: http2.Http2ServerResponse
   private _delay: Optional<Duration>
   private readonly _span: Span
 
-  get state(): HttpRequestState {
+  get state(): HttpOperationState {
     return this._state
   }
 
-  set state(state: HttpRequestState) {
+  set state(state: HttpOperationState) {
     // Check for duration lag
-    if (this._state === HttpRequestState.PENDING) {
+    if (this._state === HttpOperationState.QUEUED) {
       this._delay = this._timer.elapsed()
     }
 
     // Verify state changes
     switch (state) {
-      case HttpRequestState.DROPPED:
-        // Increment the request shed counter
-        HttpServerMetrics.RequestsShedCounter.add(1)
-      case HttpRequestState.COMPLETED:
-      case HttpRequestState.ERROR:
-      case HttpRequestState.TIMEOUT:
+      case HttpOperationState.ABORTED:
+      case HttpOperationState.COMPLETED:
+      case HttpOperationState.TIMEOUT:
         break
-      case HttpRequestState.PENDING:
+      case HttpOperationState.PROCESSING:
         break
-      case HttpRequestState.PROCESSING:
+      case HttpOperationState.READING:
         break
-      case HttpRequestState.READING:
-        break
-      case HttpRequestState.WRITING:
+      case HttpOperationState.WRITING:
         break
     }
 
@@ -477,7 +473,7 @@ class Http2Request extends EventEmitter implements HttpRequest {
     const { path, query } = parsePath(request.url)
     this.path = path
     this.query = query
-    this._state = HttpRequestState.PENDING
+    this._state = HttpOperationState.QUEUED
     this.headers = parseHttp2Headers(request.headers)
     this.version = HttpVersion.HTTP_2
     this.method = request.method.toUpperCase() as HttpMethod
@@ -490,7 +486,7 @@ class Http2Request extends EventEmitter implements HttpRequest {
         HTTP_SERVER_LOGGER.error(
           `Request aborted: ${this.path.original} (${this._state})`,
         )
-        this.state = HttpRequestState.ERROR
+        this.state = HttpOperationState.ABORTED
       })
       .once("close", () => {
         HTTP_SERVER_LOGGER.info(
@@ -505,7 +501,7 @@ class Http2Request extends EventEmitter implements HttpRequest {
 
     // Ensure we track the response completion event
     finished(response, (_err) => {
-      ;(this as HttpRequest).emit("finished")
+      this.emit("finished")
       if (_err) {
         error(`error on finish ${JSON.stringify(_err)}`)
       }
@@ -515,9 +511,11 @@ class Http2Request extends EventEmitter implements HttpRequest {
       // Respond...
       this.respond(
         {
-          status: HttpStatus.SERVICE_UNAVAILABLE,
+          status: {
+            code: HttpStatusCode.SERVICE_UNAVAILABLE,
+          },
         },
-        HttpRequestState.TIMEOUT,
+        HttpOperationState.TIMEOUT,
       )
     })
   }
@@ -525,28 +523,20 @@ class Http2Request extends EventEmitter implements HttpRequest {
   drop(headers?: HttpHeaders): void {
     this.respond(
       {
-        status: HttpStatus.SERVICE_UNAVAILABLE,
+        status: { code: HttpStatusCode.SERVICE_UNAVAILABLE },
         headers,
       },
-      HttpRequestState.DROPPED,
+      HttpOperationState.COMPLETED,
     )
   }
 
   respond(
     response: HttpResponse,
-    state: HttpRequestState = HttpRequestState.COMPLETED,
+    state: HttpOperationState = HttpOperationState.COMPLETED,
   ): void {
-    // Verify we aren't already done
-    if (isTerminal(this)) {
-      HTTP_SERVER_LOGGER.error(
-        `Request attempted to finish twice: ${this._state}, ${state}`,
-      )
-      return
-    }
-
     try {
       // We're now writing
-      this.state = HttpRequestState.WRITING
+      this.state = HttpOperationState.WRITING
 
       // Verify headers weren't sent
       if (!this._response.headersSent) {
@@ -554,11 +544,11 @@ class Http2Request extends EventEmitter implements HttpRequest {
 
         // Write the head section
         if (response.body?.mediaType) {
-          this._response.writeHead(response.status, {
+          this._response.writeHead(response.status.code, {
             "Content-Type": mediaTypeToString(response.body.mediaType),
           })
         } else {
-          this._response.writeHead(response.status)
+          this._response.writeHead(response.status.code)
         }
 
         // Write the body
@@ -585,15 +575,15 @@ class Http2Request extends EventEmitter implements HttpRequest {
       if (!this._response.writableEnded) {
         this._response.end()
       }
-      this.state = HttpRequestState.ERROR
+      this.state = HttpOperationState.COMPLETED
     } finally {
       if (this._delay) {
         HttpRequestMetrics.RequestDelayDuration.record(this._delay.seconds(), {
-          wasDropped: this._state === HttpRequestState.DROPPED,
+          wasDropped: this._state === HttpOperationState.COMPLETED,
         })
       }
 
-      if (this._state === HttpRequestState.TIMEOUT) {
+      if (this._state === HttpOperationState.TIMEOUT) {
         HttpRequestMetrics.RequestTimeout.add(1)
       } else {
         HttpRequestMetrics.RequestCompleted.add(1)

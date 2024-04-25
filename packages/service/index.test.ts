@@ -8,7 +8,7 @@ import {
   setGlobalWriter,
 } from "@telefrek/core/logging.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
-import { HttpMethod, HttpStatus } from "@telefrek/http/index.js"
+import { HttpMethod, HttpStatusCode } from "@telefrek/http/index.js"
 import {
   httpPipelineBuilder,
   setPipelineLogLevel,
@@ -90,7 +90,7 @@ describe("Basic HTTP server functionality should work", () => {
     )
 
     logger.info("checking response")
-    expect(response.status).toBe(HttpStatus.CREATED)
+    expect(response.status).toBe(HttpStatusCode.CREATED)
     expect(response.contents).not.toBeUndefined()
     expect(response.contents?.name).toEqual("foo")
 
@@ -112,7 +112,7 @@ describe("Basic HTTP server functionality should work", () => {
     method: HttpMethod,
     body?: string,
   ): Promise<{
-    status: HttpStatus
+    status: HttpStatusCode
     contents?: T
   }> {
     const deferred = new DeferredPromise()
@@ -136,10 +136,10 @@ describe("Basic HTTP server functionality should work", () => {
     try {
       const req = client.request(headers)
       let data = ""
-      let status = HttpStatus.BAD_GATEWAY
+      let status = HttpStatusCode.BAD_GATEWAY
 
       req.on("response", (headers, _) => {
-        status = (headers[":status"] as HttpStatus) ?? status
+        status = (headers[":status"] as HttpStatusCode) ?? status
       })
 
       req.setEncoding("utf8")

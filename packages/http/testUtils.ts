@@ -4,6 +4,7 @@
 
 import type { Context } from "@opentelemetry/api"
 import type { Optional } from "@telefrek/core/type/utils.js"
+import { randomUUID as v4 } from "crypto"
 import EventEmitter from "events"
 import {
   HttpBody,
@@ -12,16 +13,15 @@ import {
   HttpPath,
   HttpQuery,
   HttpRequest,
-  HttpRequestState,
   HttpResponse,
   HttpVersion,
-  emptyHeaders,
 } from "./index.js"
+import { emptyHeaders } from "./utils.js"
 
 export class TestRequest extends EventEmitter implements HttpRequest {
+  id: string = v4()
   path: HttpPath
   method: HttpMethod
-  state: HttpRequestState
   headers: HttpHeaders = emptyHeaders()
   version: HttpVersion
   query?: Optional<HttpQuery>
@@ -38,7 +38,6 @@ export class TestRequest extends EventEmitter implements HttpRequest {
     super()
     this.path = args.path ?? { original: "/", segments: [] }
     this.query = args.query
-    this.state = args.state ?? HttpRequestState.PENDING
     this.method = args.method ?? HttpMethod.GET
     this.version = args.version ?? HttpVersion.HTTP1_1
     this.headers = args.headers ?? emptyHeaders()

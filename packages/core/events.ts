@@ -8,7 +8,7 @@ export interface Emitter<E> {
    * @param event The event that was raised
    * @param listener The listener to add
    */
-  on<T extends keyof E>(event: T, listener: E[T]): this
+  on<T extends EventKeys<E>>(event: T, listener: E[T]): this
 
   /**
    * Match all EventEmitter.on functionality
@@ -16,7 +16,7 @@ export interface Emitter<E> {
    * @param event The event that was raised
    * @param listener The listener to add to the next invocation only
    */
-  once<T extends keyof E>(event: T, listener: E[T]): this
+  once<T extends EventKeys<E>>(event: T, listener: E[T]): this
 
   /**
    * Match all EventEmitter.off functionality
@@ -24,7 +24,7 @@ export interface Emitter<E> {
    * @param event The event that was raised
    * @param listener The listener to remove
    */
-  off<T extends keyof E>(event: T, listener: E[T]): this
+  off<T extends EventKeys<E>>(event: T, listener: E[T]): this
 
   /**
    * Match all EventEmitter.emit functionality
@@ -32,9 +32,13 @@ export interface Emitter<E> {
    * @param event The event that was raised
    * @param args  The parameters for the function to invoke
    */
-  emit<T extends keyof E>(
-    event: T,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ...args: Parameters<any>
-  ): boolean
+  emit<T extends EventKeys<E>>(event: T, ...args: EventFunc<E[T]>): boolean
 }
+
+type EventKeys<T> = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [Key in keyof T]: T[Key] extends (...args: any[]) => any ? Key : never
+}[keyof T]
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type EventFunc<T> = T extends (...args: any[]) => any ? Parameters<T> : never

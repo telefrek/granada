@@ -2,7 +2,7 @@ import { DeferredPromise } from "@telefrek/core/index.js"
 import type { Optional } from "@telefrek/core/type/utils"
 import {
   DefaultHttpMethodStatus,
-  HttpStatus,
+  HttpStatusCode,
   type HttpHandler,
   type HttpRequest,
 } from "@telefrek/http/index.js"
@@ -90,7 +90,7 @@ export function buildHandler<T>(
       response = serviceRoute.options.errorHandler
         ? serviceRoute.options.errorHandler(err)
         : {
-            status: HttpStatus.INTERNAL_SERVER_ERROR,
+            status: HttpStatusCode.INTERNAL_SERVER_ERROR,
           }
     }
 
@@ -109,7 +109,7 @@ export function buildHandler<T>(
       // If no contents, return NO_CONTENT
       if (response === undefined || response === null) {
         request.respond({
-          status: HttpStatus.NO_CONTENT,
+          status: HttpStatusCode.NO_CONTENT,
         })
       } else {
         request.respond({

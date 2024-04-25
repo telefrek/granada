@@ -2,7 +2,6 @@
  * The goal of this package is to provide the scaffolding for creating an HTTP pipeline
  */
 
-import { context } from "@opentelemetry/api"
 import { isAbortError } from "@telefrek/core/errors.js"
 import { Emitter } from "@telefrek/core/events.js"
 import { DeferredPromise, MaybeAwaitable } from "@telefrek/core/index.js"
@@ -17,17 +16,20 @@ import {
   type LogWriter,
   type Logger,
 } from "@telefrek/core/logging.js"
-import { extractTraceContext } from "@telefrek/core/observability/tracing.js"
-import { combineTransforms, createTransform } from "@telefrek/core/streams.js"
+import {
+  combineTransforms,
+  createTransform,
+  type TransformFunc,
+} from "@telefrek/core/streams.js"
 import { Timer } from "@telefrek/core/time.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
 import EventEmitter from "events"
 import { Readable, Writable, type Transform } from "stream"
 import {
-  HttpStatus,
-  isTerminal,
+  HttpStatusCode,
+  type HttpOperation,
   type HttpRequest,
-  type HttpTransform,
+  type HttpResponse,
 } from "./index.js"
 import { HttpRequestPipelineMetrics } from "./metrics.js"
 import { CONTENT_PARSERS, getContentType } from "./parsers.js"
@@ -37,6 +39,11 @@ import {
   setRoutingParameters,
   type Router,
 } from "./routing.js"
+
+/**
+ * A simple type representing a stream transform on a {@link HttpOperation}
+ */
+export type HttpTransform = TransformFunc<HttpOperation, HttpOperation>
 
 /**
  * The default {@link Logger} for {@link HttpPipeline} operations
@@ -324,12 +331,12 @@ export class DefaultHttpPipeline extends EventEmitter implements HttpPipeline {
     if (this._shedOnPause) {
       this._shedding = new Writable({
         objectMode: true,
-        async write(chunk: HttpRequest, _encoding, callback) {
+        async write(chunk: HttpOperation, _encoding, callback) {
           try {
-            if (!isTerminal(chunk)) {
-              chunk.respond({
-                status: HttpStatus.SERVICE_UNAVAILABLE,
-              })
+            if (!chunk.response) {
+              chunk.response = {
+                status: { code: HttpStatusCode.SERVICE_UNAVAILABLE },
+              }
             }
             callback()
           } catch (err) {
@@ -376,7 +383,7 @@ export class DefaultHttpPipeline extends EventEmitter implements HttpPipeline {
     // The consumer needs to handle all requests that make it this far
     this._consumer = new Writable({
       objectMode: true,
-      async write(chunk: HttpRequest, _encoding, callback) {
+      async write(chunk: HttpOperation, _encoding, callback) {
         try {
           await unhandledRequest(chunk)
           callback()
@@ -529,45 +536,44 @@ export abstract class BaseHttpPipelineTransform
    *
    * @param request The {@link PipelineRequest} to process
    */
-  protected abstract processRequest(request: PipelineRequest): MaybeAwaitable
+  protected abstract processRequest(
+    request: PipelineRequest,
+  ): MaybeAwaitable<Optional<HttpResponse>>
 
   transform: HttpTransform = async (
-    request: HttpRequest,
-  ): Promise<Optional<HttpRequest>> => {
-    // We can't process a request in these states...they are completed
-    if (!isTerminal(request)) {
+    operation: HttpOperation,
+  ): Promise<Optional<HttpOperation>> => {
+    // We can't process a request that is already completed
+    if (!operation.response) {
       // Either inject or apply the current stage
-      if (isPipelineRequest(request)) {
-        request.pipelineStage = this.stage
+      if (isPipelineRequest(operation.request)) {
+        operation.request.pipelineStage = this.stage
       } else {
-        Object.defineProperty(request, "pipelineStage", {
+        Object.defineProperty(operation.request, "pipelineStage", {
           value: this.stage,
           writable: true,
         })
       }
 
       const timer = Timer.startNew()
-      const ctx = extractTraceContext(request)
 
       try {
-        if (ctx) {
-          await context.with(
-            ctx,
-            this.processRequest,
-            this,
-            request as PipelineRequest,
-          )
-        } else {
-          await this.processRequest(request as PipelineRequest)
+        const response = await this.processRequest(
+          operation.request as PipelineRequest,
+        )
+        if (response) {
+          operation.response = response
         }
       } catch (err) {
         // Log the failure
         this._logger.error(`Error during ${this.stage} - ${err}`, err)
 
         // We should complete the request as an error
-        request.respond({
-          status: HttpStatus.INTERNAL_SERVER_ERROR,
-        })
+        operation.response = {
+          status: {
+            code: HttpStatusCode.INTERNAL_SERVER_ERROR,
+          },
+        }
       } finally {
         HttpRequestPipelineMetrics.PipelineStageDuration.record(
           timer.elapsed().seconds(),
@@ -582,12 +588,12 @@ export abstract class BaseHttpPipelineTransform
 
       // Don't pass this along if something happened (timeout, failure in
       // handler, etc.)
-      if (!isTerminal(request)) {
-        return request
+      if (!operation.response) {
+        return operation
       }
     } else {
       this._logger.info(
-        `Received completed request at stage ${this.stage}: ${request.path.original} (${request.state})`,
+        `Received completed request at stage ${this.stage}: ${operation.request.path.original} (${operation.state})`,
       )
     }
 
@@ -602,7 +608,7 @@ export class ContentParsingTransform extends BaseHttpPipelineTransform {
 
   protected override async processRequest(
     request: PipelineRequest,
-  ): Promise<void> {
+  ): Promise<Optional<HttpResponse>> {
     // Process the body if there is an unknown mediaType (i.e. no one beat us to
     // this)
     if (request.body && request.body.mediaType === undefined) {
@@ -638,7 +644,7 @@ export class RoutingTransform extends BaseHttpPipelineTransform {
 
   protected override async processRequest(
     request: PipelineRequest,
-  ): Promise<void> {
+  ): Promise<Optional<HttpResponse>> {
     // Try to route it
     const info = this._router.lookup({
       path: request.path.original,
@@ -675,10 +681,10 @@ export type HttpRequestSource =
 /**
  * Simple method that consumes a {@link HttpRequest} and ensures a response is provided
  *
- * @param request The {@link HttpRequest} to finish
+ * @param operation The {@link HttpOperation} to finish
  */
 export type UnhandledRequestConsumer = (
-  request: HttpRequest,
+  operation: HttpOperation,
 ) => MaybeAwaitable<void>
 
 /**
@@ -687,8 +693,8 @@ export type UnhandledRequestConsumer = (
  * @param request The unhandled {@link HttpRequest}
  * @returns A {@link UnhandledRequestConsumer} that responds as 404
  */
-export const NOT_FOUND_CONSUMER: UnhandledRequestConsumer = (request) => {
-  if (~isTerminal(request)) {
-    request.respond({ status: HttpStatus.NOT_FOUND })
+export const NOT_FOUND_CONSUMER: UnhandledRequestConsumer = (operation) => {
+  if (!operation.response) {
+    operation.response = { status: { code: HttpStatusCode.NOT_FOUND } }
   }
 }

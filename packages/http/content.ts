@@ -33,8 +33,8 @@ export type MediaTreeTypes = "vnd" | "prs" | "x"
  * Common media types for fast access
  */
 export const CommonMediaTypes = {
-  HTML: parseMediaType("text/html"),
-  JSON: parseMediaType("application/json"),
+  HTML: parseMediaType("text/html")!,
+  JSON: parseMediaType("application/json")!,
 } as const
 
 /**

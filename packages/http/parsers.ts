@@ -4,7 +4,7 @@
 
 import { MaybeAwaitable } from "@telefrek/core/index.js"
 import type { Optional } from "@telefrek/core/type/utils"
-import { Readable } from "stream"
+import { Readable, Transform } from "stream"
 import { MediaType, TopLevelMediaTypes, parseMediaType } from "./content.js"
 import { HttpBody, HttpHeaders } from "./index.js"
 
@@ -12,6 +12,7 @@ import { HttpBody, HttpHeaders } from "./index.js"
  * The content type header
  */
 export const CONTENT_TYPE_HEADER = "content-type"
+export const CONTENT_TYPE_HEADER_2 = "Content-Type"
 
 /**
  * Try to extract the content type from the given headers
@@ -24,6 +25,8 @@ export function getContentType(headers: HttpHeaders): Optional<MediaType> {
   // Fast path is that we have it already lowercase
   if (headers.has(CONTENT_TYPE_HEADER)) {
     value = headers.get(CONTENT_TYPE_HEADER)
+  } else if (headers.has(CONTENT_TYPE_HEADER_2)) {
+    value = headers.get(CONTENT_TYPE_HEADER_2)
   }
 
   // If undefined, may be that we got a headers collection without lowercase somehow
@@ -53,51 +56,41 @@ export type ContentTypeParser = (body: HttpBody) => MaybeAwaitable<void>
 export const CONTENT_PARSERS: Partial<
   Record<TopLevelMediaTypes, ContentTypeParser>
 > = {
-  application: async (body: HttpBody) => {
-    switch (body.mediaType?.subType ?? "") {
-      case "json":
-        await JSON_CONTENT_PARSER(body)
-        break
-      default: // Do nothing
-        break
-    }
+  application: (_body: HttpBody): MaybeAwaitable<void> => {
+    return
   },
 }
 
-/**
- *
- * @param body The {@link HttpBody} to parse
- */
-export const JSON_CONTENT_PARSER: ContentTypeParser = (
-  body: HttpBody,
-): MaybeAwaitable<void> => {
-  // Verify we have a body
-  if (body.contents) {
-    const readableStream = body.contents
-    const encoding =
-      (body.mediaType?.parameters.get("charset") as BufferEncoding) ?? "utf-8"
-
-    // Setup the reader
-    const bodyReader = async function* () {
-      yield await new Promise((resolve, reject) => {
-        let bodyStr = ""
-        const readBody = (chunk: string | Buffer) => {
-          bodyStr +=
-            typeof chunk === "string" ? chunk : chunk.toString(encoding)
+export function parseBody(mediaType: MediaType, body: Readable): Readable {
+  if (mediaType) {
+    switch (mediaType.type) {
+      case "application":
+        switch (true) {
+          case "json" === mediaType.subType:
+            return readBodyAsJson(body)
         }
-        readableStream
-          .on("data", readBody)
-          .once("end", () => {
-            readableStream.off("data", readBody)
-            resolve(JSON.parse(bodyStr))
-          })
-          .once("error", (err) => {
-            readableStream.off("data", readBody)
-            reject(err)
-          })
-      })
+        break
     }
-
-    body.contents = Readable.from(bodyReader())
   }
+
+  return body
+}
+
+export function readBodyAsJson(readable: Readable): Readable {
+  let data = ""
+  const transform = new Transform({
+    writableObjectMode: true,
+    readableObjectMode: true,
+    objectMode: true,
+    transform(chunk, encoding, callback) {
+      data += Buffer.isBuffer(chunk) ? chunk.toString(encoding) : chunk
+      callback()
+    },
+    final(callback) {
+      this.push(JSON.parse(data))
+      callback()
+    },
+  })
+
+  return readable.pipe(transform, { end: true })
 }

@@ -2,16 +2,30 @@
  * Core package definitions and interfaces
  */
 
-import { Emitter } from "@telefrek/core/events.js"
+import type { MaybeAwaitable } from "@telefrek/core"
+import type { Emitter } from "@telefrek/core/events.js"
 import { LifecycleEvents } from "@telefrek/core/lifecycle.js"
-import type { TraceableContext } from "@telefrek/core/observability/tracing"
 import type { TransformFunc } from "@telefrek/core/streams.js"
 import type { Readable } from "stream"
 import type { MediaType } from "./content.js"
 
+// TODO: Should also consider validation of strings...
+
+/**
+ * A segment value must be a string, number or boolean
+ *
+ */
 export type SegmentValue = string | number | boolean
 
+/**
+ * Query parameters are named parameters that can be singular or an array
+ */
 export type QueryParameters = Map<string, string | string[]>
+
+/**
+ * HttpHeaders are collections of key, value pairs where the value can be singular or an array
+ */
+export type HttpHeaders = Map<string, string | string[]>
 
 /**
  * Supported methods for HTTP operations
@@ -50,7 +64,7 @@ export enum HttpVersion {
 /**
  * Set of status codes with names
  */
-export enum HttpStatus {
+export enum HttpStatusCode {
   CONTINUE = 100,
   SWITCH_PROTOCOLS = 101,
   PROCESSING = 102,
@@ -117,16 +131,11 @@ export enum HttpStatus {
 }
 
 /**
- * HttpHeaders are collections of key, value pairs where the value can be singular or an array
+ * Represents the HTTP Status object
  */
-export type HttpHeaders = Map<string, string | string[]>
-
-/**
- * Create an empty set of {@link HttpHeaders}
- * @returns An empty set of {@link HttpHeaders}
- */
-export function emptyHeaders(): HttpHeaders {
-  return new Map()
+export interface HttpStatus {
+  code: HttpStatusCode
+  message?: string
 }
 
 /**
@@ -142,7 +151,8 @@ export interface HttpQuery {
  */
 export interface HttpPath {
   readonly original: string
-  segments: string[]
+  readonly segments: string[]
+  template?: string
 }
 
 /**
@@ -150,66 +160,78 @@ export interface HttpPath {
  */
 export interface HttpBody {
   mediaType?: MediaType
-  contents?: Readable
+  contents: Readable
 }
 
 /**
- * Set of states that a {@link HttpRequest} can be in
+ * Set of states that a {@link HttpOperation} can be in
  */
-export enum HttpRequestState {
-  /** The request is waiting to be processed */
-  PENDING = "pending",
-  /** The request is being read but not processed via handler */
-  READING = "reading",
-  /** The request is being processed via a handler */
-  PROCESSING = "processing",
-  /** The request has response data being written to it */
-  WRITING = "writing",
-  /**  The request was fully written and completed */
+export enum HttpOperationState {
+  /** The operation was aborted by either side */
+  ABORTED = "aborted",
+  /**  The operation has been fully completed */
   COMPLETED = "completed",
-  /** The request timed out before being handled */
+  /** The operation is being processed via a handler */
+  PROCESSING = "processing",
+  /** The operation is waiting to be processed */
+  QUEUED = "queued",
+  /** The operation contents are being read */
+  READING = "reading",
+  /** The operation timed out before being handled */
   TIMEOUT = "timeout",
-  /** The request encountered some error */
-  ERROR = "error",
-  /** The request was dropped (shed) for some reason */
-  DROPPED = "dropped",
+  /** The operation contents are being written */
+  WRITING = "writing",
 }
 
 /**
- * Specific extra
+ * Specific operations that occur during {@link HttpOperation} processing
  */
-export interface HttpRequestEvents extends LifecycleEvents {
+export interface HttpOperationEvents extends LifecycleEvents {
   /**
    * Event raised when there is a state change
    *
-   * @param previousState The previous {@link HttpRequestState}
+   * @param previousState The previous {@link HttpOperationState}
    */
-  changed: (previousState: HttpRequestState) => void
+  changed: (previousState: HttpOperationState) => void
 
   /**
-   * Event raised when a request receives a {@link HttpResponse}
+   * Event raised when the operation receives a {@link HttpResponse}
    *
    * @param response The {@link HttpResponse}
    */
   response: (response: HttpResponse) => void
+
+  /**
+   * Event fired on an error during the processing of the operation
+   *
+   * @param error The error that was encountered
+   */
+  error: (error: unknown) => void
+}
+
+/**
+ * An operation that has a request and response pair
+ */
+export interface HttpOperation extends Emitter<HttpOperationEvents> {
+  /** The current {@link HttpOperationState} */
+  readonly state: HttpOperationState
+  /** The {@link HttpRequest} that initiated the operation */
+  readonly request: Readonly<HttpRequest>
+  /** The {@link HttpResponse} that was paired with the operation */
+  response?: Readonly<HttpResponse>
 }
 
 /**
  * An interface defining the behavior of an HTTP Request
  */
-export interface HttpRequest
-  extends Emitter<HttpRequestEvents>,
-    TraceableContext {
-  path: HttpPath
-  method: HttpMethod
-  headers: HttpHeaders
-  version: HttpVersion
-  state: HttpRequestState
-  query?: HttpQuery
-  body?: HttpBody
-
-  respond(response: HttpResponse): void
-  drop(headers?: HttpHeaders): void
+export interface HttpRequest {
+  readonly id: string
+  readonly path: HttpPath
+  readonly method: HttpMethod
+  readonly headers: HttpHeaders
+  readonly version: HttpVersion
+  readonly query?: HttpQuery
+  readonly body?: HttpBody
 }
 
 /**
@@ -217,115 +239,47 @@ export interface HttpRequest
  */
 export interface HttpResponse {
   /** The {@link HttpStatus} to return */
-  status: HttpStatus
+  readonly status: HttpStatus
   /** The {@link HttpHeaders} to include in the response */
-  headers?: HttpHeaders
-  /** The optional status message to return */
-  statusMessage?: string
+  readonly headers?: HttpHeaders
   /** The {@link HttpBody} to return */
-  body?: HttpBody
+  readonly body?: HttpBody
 }
 
 /**
- * Default {@link HttpStatus} for each {@link HttpMethod}
+ * Simple type for handling a {@link HttpRequest}
  */
-export const DefaultHttpMethodStatus = {
-  [HttpMethod.DELETE]: HttpStatus.NO_CONTENT,
-  [HttpMethod.GET]: HttpStatus.OK,
-  [HttpMethod.HEAD]: HttpStatus.NO_CONTENT,
-  [HttpMethod.OPTIONS]: HttpStatus.OK,
-  [HttpMethod.PATCH]: HttpStatus.ACCEPTED,
-  [HttpMethod.POST]: HttpStatus.CREATED,
-  [HttpMethod.PUT]: HttpStatus.ACCEPTED,
-} as const
+export type HttpHandler = (
+  operation: HttpRequest,
+) => MaybeAwaitable<HttpResponse>
 
 /**
- * Utility method to check for {@link FileContentResponse} objects
- *
- * @param response A {@link HttpResponse} to inspect
- * @returns True if the response is a {@link FileContentResponse}
+ * A simple type representing a stream transform on a {@link HttpOperation}
  */
-export function isFileContent(
-  response: HttpResponse,
-): response is FileContentResponse {
-  return (
-    response !== undefined &&
-    "filePath" in response &&
-    typeof response.filePath === "string"
-  )
+export type HttpTransform = TransformFunc<HttpOperation, HttpOperation>
+
+/**
+ * Definition of events for {@link HttpOperation} providers
+ */
+export interface HttpOperationSourceEvents extends LifecycleEvents {
+  /**
+   * Fired when a new {@link HttpOperation} is available
+   *
+   * @param operation The {@link HttpOperation} that was received
+   */
+  received: (operation: HttpOperation) => void
 }
 
 /**
- * An interface for defining the shape of a file HTTP Response
+ * Custom type for objects that create {@link HttpOperation} via events
  */
-export interface FileContentResponse extends HttpResponse {
-  filePath: string
-}
+export type HttpOperationSource = Emitter<HttpOperationSourceEvents>
 
 /**
- * Simple type for contracting the async model for an HTTP request/response operation
+ * Common TLS Options
  */
-export type HttpHandler = (request: HttpRequest) => Promise<void>
-
-export type HttpTransform = TransformFunc<HttpRequest, HttpRequest>
-
-/**
- * Parse the path string into it's corresponding {@link HttpPath} and {@link HttpQuery}
- *
- * @param path The path to parse
- * @returns A {@link HttpPath} and {@link HttpQuery} representing the path
- */
-export function parsePath(path: string): { path: HttpPath; query?: HttpQuery } {
-  // Remove any URI encoding
-  const uri = decodeURI(path).split("?")
-
-  // Parse out the path and the query, removing leading and trailing '/' characters
-  return {
-    path: {
-      original: uri[0],
-      segments: uri[0].replace(/^\//, "").replace(/\/$/, "").split("/"),
-    },
-    query:
-      uri.length > 1
-        ? {
-            original: uri[1],
-            parameters: uri[1].split("&").reduce((map, segment) => {
-              const kv = segment.split("=")
-              if (kv.length === 2) {
-                if (map.has(kv[0])) {
-                  if (Array.isArray(map.get(kv[0]))) {
-                    ;(map.get(kv[0])! as string[]).push(kv[1])
-                  } else {
-                    map.set(kv[0], [map.get(kv[0])! as string, kv[1]])
-                  }
-                } else {
-                  map.set(kv[0], kv[1])
-                }
-              }
-              return map
-            }, new Map<string, string | string[]>()),
-          }
-        : undefined,
-  }
-}
-
-/**
- * Check to see if the request is in a terminal state (should not require
- * further processing))
- *
- * @param request The {@link HttpRequest} to check
- *
- * @returns True if the request is in a state indicating no further processing
- * is allowed
- */
-export function isTerminal(request: HttpRequest): boolean {
-  switch (request.state) {
-    case HttpRequestState.COMPLETED:
-    case HttpRequestState.TIMEOUT:
-    case HttpRequestState.ERROR:
-    case HttpRequestState.DROPPED:
-      return true
-    default:
-      return false
-  }
+export interface TLSConfig {
+  certificateAuthority?: Buffer | string
+  privateKey: Buffer | string
+  publicCertificate: Buffer | string
 }

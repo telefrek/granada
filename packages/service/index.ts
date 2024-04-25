@@ -8,7 +8,7 @@ import {
   HttpHandler,
   HttpMethod,
   type HttpBody,
-  type HttpStatus,
+  type HttpStatusCode,
 } from "@telefrek/http/index.js"
 import { Readable } from "stream"
 import type { MaybeAwaitable } from "../core/index.js"
@@ -49,7 +49,7 @@ export interface Service {
 
 /** A service error */
 export interface ServiceError {
-  status: HttpStatus
+  status: HttpStatusCode
   statusMessage?: string
   body?: HttpBody
 }
@@ -161,7 +161,7 @@ export interface RouteOptions {
   /** the {@link ParameterMapping} for calling this method */
   mapping?: ParameterMapping
   /** The status code to return on success */
-  statusCode?: HttpStatus
+  statusCode?: HttpStatusCode
   /** Optional error handler */
   errorHandler?: ServiceErrorHandler
 }

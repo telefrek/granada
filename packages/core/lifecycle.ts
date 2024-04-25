@@ -10,23 +10,22 @@ import { error, fatal } from "./logging.js"
  */
 export interface LifecycleEvents {
   /**
-   * Fired when the object is initializing itself
+   * Fired when the lifecycle is initializing
    */
   initializing: () => void
 
   /**
-   * Fired when the object is started
+   * Fired when the lifecycle is started
    */
   started: () => void
 
   /**
-   * Fired when the object is stopping
+   * Fired when the lifecycle is stopping
    */
   stopping: () => void
 
   /**
-   *
-   * @returns Fired when the object has finished
+   * Fired when the lifeycle is finished
    */
   finished: () => void
 }

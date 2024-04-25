@@ -3,14 +3,10 @@
  */
 
 import { type LoggerOptions } from "@telefrek/core/logging"
+import type { Optional } from "@telefrek/core/type/utils"
 import { createReadStream, existsSync } from "fs"
 import { join, resolve } from "path"
-import {
-  FileContentResponse,
-  HttpMethod,
-  HttpResponse,
-  HttpStatus,
-} from "./index.js"
+import { HttpMethod, HttpResponse, HttpStatusCode } from "./index.js"
 import { fileToMediaType } from "./media.js"
 import {
   BaseHttpPipelineTransform,
@@ -53,7 +49,7 @@ export function hostFolder(options: HostingOptions): HttpPipelineTransform {
 class HostingTransform extends BaseHttpPipelineTransform {
   protected override async processRequest(
     request: PipelineRequest,
-  ): Promise<void> {
+  ): Promise<Optional<HttpResponse>> {
     if (
       request.method === HttpMethod.GET ||
       request.method === HttpMethod.HEAD
@@ -70,11 +66,9 @@ class HostingTransform extends BaseHttpPipelineTransform {
 
       if (filePath.startsWith(this._sanitizedBaseDir)) {
         if (existsSync(filePath)) {
-          request.respond(
-            request.method === HttpMethod.HEAD
-              ? { status: HttpStatus.NO_CONTENT }
-              : await createFileContentResponse(filePath),
-          )
+          return request.method === HttpMethod.HEAD
+            ? { status: { code: HttpStatusCode.NO_CONTENT } }
+            : await createFileContentResponse(filePath)
         }
       } else if (filePath !== check) {
         this._logger.error(
@@ -82,11 +76,14 @@ class HostingTransform extends BaseHttpPipelineTransform {
         )
 
         // Someone is doing something shady, stop it here
-        request.respond({
-          status: HttpStatus.NOT_FOUND,
-        })
+        return {
+          status: {
+            code: HttpStatusCode.NOT_FOUND,
+          },
+        }
       }
     }
+    return
   }
 
   private _sanitizedBaseDir: string
@@ -105,7 +102,7 @@ class HostingTransform extends BaseHttpPipelineTransform {
 
 async function createFileContentResponse(
   filePath: string,
-): Promise<FileContentResponse | HttpResponse> {
+): Promise<HttpResponse> {
   // Calculate the media type
   const mediaType = await fileToMediaType(filePath)
 
@@ -116,8 +113,9 @@ async function createFileContentResponse(
 
   // Send back the file content response
   return {
-    status: HttpStatus.OK,
-    filePath,
+    status: {
+      code: HttpStatusCode.OK,
+    },
     body: {
       contents: createReadStream(filePath, "utf-8"),
       mediaType,

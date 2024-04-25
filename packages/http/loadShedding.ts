@@ -10,7 +10,7 @@ import {
 import { info } from "@telefrek/core/logging.js"
 import { Timer } from "@telefrek/core/time.js"
 import type { Optional } from "@telefrek/core/type/utils"
-import { HttpStatus, emptyHeaders, type HttpRequest } from "./index.js"
+import { HttpStatusCode, type HttpOperation } from "./index.js"
 import { HttpPipelineStage, HttpPipelineTransform } from "./pipeline.js"
 
 export function enableLoadShedding(
@@ -31,11 +31,11 @@ export function enableLoadShedding(
 
   return {
     stage: HttpPipelineStage.LOAD_SHEDDING,
-    transform: (request: HttpRequest) => {
+    transform: (operation: HttpOperation) => {
       const l = limit.tryAcquire()
       if (l) {
         const timer = new Timer()
-        request.on("finished", () => {
+        operation.on("finished", () => {
           const end = timer.stop()
           if (end.milliseconds() > thresholdMs) {
             l.dropped()
@@ -44,14 +44,13 @@ export function enableLoadShedding(
             l.success()
           }
         })
-        return request
+        return operation
       } else {
         info(`failed to get... ${limit.limit}`)
         // Load shedding...
-        request.respond({
-          status: HttpStatus.SERVICE_UNAVAILABLE,
-          headers: emptyHeaders(),
-        })
+        operation.response = {
+          status: { code: HttpStatusCode.SERVICE_UNAVAILABLE },
+        }
 
         return
       }
