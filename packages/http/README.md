@@ -26,8 +26,24 @@ This library is split into two main components:
    as a series of interfaces, types and enumerations that are required to use
    this library.
 
-2. A reference implementation of the protocol that is entirely based on
-   available NodeJS tooling with no additional resources required.
+   1. A reference implementation of the protocol that is entirely based on
+      available NodeJS tooling with no additional resources required.
+
+   2. The protocol attempts to remove all influences of NodeJS specific
+      components where possible outside of the reference implementation to
+      allow greater adoption.
+
+   3. Pipelines are supported through events provided by the underlying client
+      and server reference implementations.
+
+2. The concept of "pipelines" which are streams of operations that decorate,
+   manipulate and enforce custom rules around request/response objects that are
+   independent of the low level protocol.
+
+   1. Modelling this as a series of streams takes advantage of the event loop
+      driven architecture with independent stages, backpressuring mechanisms
+      while hiding the underlying complexity from the producer/consumer at
+      either end.
 
 The goal of this library is to expose a large number of concepts for underlying
 HTTP scenarios through a series of layers that build on top of one another with
@@ -71,6 +87,13 @@ customizations to the common objects that are specific to client needs.
 This is the main entrypoint for any HTTP Server implementation and includes the
 underlying state machine for requests moving through this flow as well as
 customizations to the common objects that are specific to server needs.
+
+## Pipeline
+
+Pipelines are a set of business logic that is attached to operations
+(request/response pairs) and has flow control, backpressure and throttling built
+in to make the client/server producers agnostic of the backend complexity while
+allowing them to focus on the protocol specific aspects.
 
 ---
 

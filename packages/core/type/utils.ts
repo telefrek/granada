@@ -88,6 +88,11 @@ export type Func<Args extends unknown[], Result> = (...args: Args) => Result
 export type Callback<Args extends unknown[]> = (...args: Args) => void
 
 /**
+ * A {@link Callback} that takes no arguments
+ */
+export type EmptyCallback = () => void
+
+/**
  * A value of type {@link T} or undefined
  */
 export type Optional<T = unknown> = T | undefined

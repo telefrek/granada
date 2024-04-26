@@ -13,9 +13,10 @@ import {
   type LogWriter,
 } from "@telefrek/core/logging.js"
 import { Duration } from "@telefrek/core/time.js"
-import type { Optional } from "@telefrek/core/type/utils.js"
+import type { EmptyCallback, Optional } from "@telefrek/core/type/utils.js"
 import EventEmitter, { captureRejectionSymbol } from "events"
 import { Stream } from "stream"
+import { Http2ClientTransport } from "./client/http2.js"
 import { HttpErrorCode, type HttpError } from "./errors.js"
 import {
   HttpOperationState,
@@ -26,6 +27,7 @@ import {
   type TLSConfig,
 } from "./index.js"
 import { parseBody } from "./parsers.js"
+import { NOOP_PIPELINE, type HttpPipeline } from "./pipeline.js"
 
 /** The logger used for HTTP Clients */
 let HTTP_CLIENT_LOGGER: Logger = new DefaultLogger({
@@ -68,22 +70,99 @@ export interface HttpClient extends Emitter<HttpClientEvents> {
    * @param timeout The optional {@link Duration} before timing out the request
    */
   submit(request: HttpRequest, timeout?: Duration): Promise<HttpResponse>
+
+  /**
+   * Closes the client and prevents further operations from being submitted
+   */
+  close(): MaybeAwaitable<void>
+}
+
+/**
+ * Represents a layer that knows how to write a {@link HttpRequest} and read the
+ * {@link HttpResponse} from the wire
+ */
+export interface HttpClientTransport {
+  /**
+   *
+   * @param request The {@link HttpRequest} to write
+   * @param onHeaderWrite A callback to fire when the headers are written
+   * @param abortSignal
+   */
+  marshal(
+    request: HttpRequest,
+    onHeaderWrite: EmptyCallback,
+    abortSignal: AbortSignal,
+  ): MaybeAwaitable<HttpResponse>
+}
+
+/**
+ * The configuration options available for {@link HttpClientTransport}
+ */
+export interface HttpTransportOptions {
+  name: string
+  host: string
+  port?: number
+  tls?: TLSConfig
+}
+
+type ClientTransportConstructor<
+  T extends HttpTransportOptions = HttpTransportOptions,
+> = {
+  new (config: T): HttpClientTransport
+}
+
+export class HttpClientBuilder<
+  T extends HttpTransportOptions = HttpTransportOptions,
+> {
+  private _options: T
+  private _transport: ClientTransportConstructor<T> = Http2ClientTransport
+  private _pipeline: HttpPipeline = NOOP_PIPELINE
+
+  constructor(options: T) {
+    this._options = options
+  }
+
+  withTransport(
+    transport: ClientTransportConstructor<T>,
+  ): HttpClientBuilder<T> {
+    this._transport = transport
+    return this
+  }
+
+  withPipeline(pipeline: HttpPipeline): HttpClientBuilder<T> {
+    this._pipeline = pipeline
+    return this
+  }
+
+  build(): HttpClient {
+    const client = new DefaultHttpClient(new this._transport(this._options))
+    if (this._pipeline.add({}, client)) {
+      return client
+    }
+
+    throw new Error("Pipeline is not accepting clients")
+  }
 }
 
 /**
  * Base class for extending Http Client behaviors
  */
-export abstract class HttpClientBase
+class DefaultHttpClient
   extends EventEmitter
   implements HttpClient, HttpOperationSource
 {
-  protected readonly _config: HttpClientConfig
-  protected readonly _logger: Logger
+  private readonly _transport: HttpClientTransport
+  private readonly _logger: Logger
+  private _closed: boolean
 
-  constructor(config: HttpClientConfig, logger: Logger = HTTP_CLIENT_LOGGER) {
+  constructor(
+    transport: HttpClientTransport,
+    logger: Logger = HTTP_CLIENT_LOGGER,
+  ) {
     super({ captureRejections: true })
 
-    this._config = config
+    this._transport = transport
+    this._closed = false
     this._logger = logger
   }
 
@@ -100,12 +179,14 @@ export abstract class HttpClientBase
     this.emit("error", err)
   }
 
+  close(): MaybeAwaitable<void> {}
+
   public submit(
     request: HttpRequest,
     timeout: Duration = Duration.ofSeconds(15),
   ): Promise<HttpResponse> {
     this._logger.debug(
-      `(${request.id}) => Submitting ${this._config.host}${this._config.port ? `:${this._config.port}` : ""}${request.path.original}${request.query ? request.query.original : ""}`,
+      `(${request.id}): Submitting [${request.method}] ${request.path.original}${request.query ? request.query.original : ""}`,
       request,
     )
 
@@ -165,10 +246,10 @@ export abstract class HttpClientBase
     return deferred
   }
 
-  protected async process(operation: ClientHttpOperation): Promise<void> {
+  private async process(operation: ClientHttpOperation): Promise<void> {
     try {
       // Set the response and move to reading
-      operation.response = await this.marshal(
+      operation.response = await this._transport.marshal(
         operation.request,
         () => {
           if (!operation.request.body) {
@@ -193,30 +274,6 @@ export abstract class HttpClientBase
       }
     }
   }
-
-  /**
-   * Implementation specific method to marshal a {@link HttpRequest} and return
-   * a {@link HttpResponse}
-   *
-   * @param request The {@link HttpRequest} to send
-   * @param onHeadersWritten A callback to fire once headers are written
-   * @param abortSignal An abort signal for clients that allow this functionality
-   */
-  protected abstract marshal(
-    request: HttpRequest,
-    onHeadersWritten: () => void,
-    abortSignal?: AbortSignal,
-  ): MaybeAwaitable<HttpResponse>
-}
-
-/**
- * The configuration options available for HTTP Clients
- */
-export interface HttpClientConfig {
-  name: string
-  host: string
-  port?: number
-  tls?: TLSConfig
 }
 
 /**

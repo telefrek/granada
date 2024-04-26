@@ -5,13 +5,15 @@ import type { Optional } from "@telefrek/core/type/utils"
 import { Readable } from "stream"
 import {
   HttpClient,
-  HttpClientBase,
+  HttpClientBuilder,
   setHttpClientLogLevel,
   setHttpClientLogWriter,
+  type HttpClientTransport,
+  type HttpTransportOptions,
 } from "./client.js"
 import { HttpStatusCode, type HttpRequest, type HttpResponse } from "./index.js"
 import { CommonMediaTypes, mediaTypeToString } from "./media.js"
-import { PassthroughPipeline, type HttpPipeline } from "./pipeline.js"
+import { setPipelineLogLevel, setPipelineWriter } from "./pipeline.js"
 import { createHttpRequest, emptyHeaders } from "./utils.js"
 
 const writer = new ConsoleLogWriter()
@@ -19,24 +21,28 @@ const writer = new ConsoleLogWriter()
 setHttpClientLogLevel(LogLevel.INFO)
 setHttpClientLogWriter(writer)
 
-class TestHttpClient extends HttpClientBase {
+setPipelineLogLevel(LogLevel.INFO)
+setPipelineWriter(writer)
+
+interface TestTransportOptions extends HttpTransportOptions {
+  marshal: (
+    request: HttpRequest,
+    onHeadersWritten: () => void,
+    _abortSignal?: AbortSignal | undefined,
+  ) => MaybeAwaitable<HttpResponse>
+}
+
+class TestHttpClient implements HttpClientTransport {
   private _marshal: (
     request: HttpRequest,
     onHeadersWritten: () => void,
     _abortSignal?: AbortSignal | undefined,
   ) => MaybeAwaitable<HttpResponse>
-  constructor(
-    marshal: (
-      request: HttpRequest,
-      onHeadersWritten: () => void,
-      _abortSignal?: AbortSignal | undefined,
-    ) => MaybeAwaitable<HttpResponse>,
-  ) {
-    super({ name: "testClient", host: "localhost" })
-    this._marshal = marshal
+  constructor(options: TestTransportOptions) {
+    this._marshal = options.marshal
   }
 
-  protected override marshal(
+  marshal(
     request: HttpRequest,
     onHeadersWritten: () => void,
     abortSignal?: AbortSignal | undefined,
@@ -48,27 +54,22 @@ class TestHttpClient extends HttpClientBase {
 const REQUEST_TIMEOUT = Duration.ofMilli(100)
 
 describe("The HTTP Client should handle various state changes regardless of underlying provider", () => {
-  let pipeline: Optional<HttpPipeline>
-
-  afterEach(() => {
-    if (pipeline) {
-      pipeline.stop()
-      pipeline = undefined
-    }
-  })
-
   it("Should handle a simple success case", async () => {
-    const client: HttpClient = new TestHttpClient((_req, written, _abort) => {
-      written()
-      return {
-        status: {
-          code: HttpStatusCode.NO_CONTENT,
-        },
-        headers: emptyHeaders(),
-      }
+    const client: HttpClient = new HttpClientBuilder<TestTransportOptions>({
+      name: "test.client",
+      host: "localhost",
+      marshal: (_req, written, _abort) => {
+        written()
+        return {
+          status: {
+            code: HttpStatusCode.NO_CONTENT,
+          },
+          headers: emptyHeaders(),
+        }
+      },
     })
-
-    pipeline = new PassthroughPipeline(client)
+      .withTransport(TestHttpClient)
+      .build()
 
     const response = await client.submit(createHttpRequest(), REQUEST_TIMEOUT)
 
@@ -79,23 +80,28 @@ describe("The HTTP Client should handle various state changes regardless of unde
   })
 
   it("Should handle a simplebody", async () => {
-    const client: HttpClient = new TestHttpClient((_req, written, _abort) => {
-      written()
+    const client: HttpClient = new HttpClientBuilder<TestTransportOptions>({
+      name: "test.client",
+      host: "localhost",
+      marshal: (_req, written, _abort) => {
+        written()
 
-      const headers = emptyHeaders()
-      headers.set("Content-Type", mediaTypeToString(CommonMediaTypes.JSON))
+        const headers = emptyHeaders()
+        headers.set("Content-Type", mediaTypeToString(CommonMediaTypes.JSON))
 
-      return {
-        status: {
-          code: HttpStatusCode.OK,
-        },
-        headers,
-        body: {
-          contents: Readable.from(JSON.stringify({ hello: "world" })),
-        },
-      }
+        return {
+          status: {
+            code: HttpStatusCode.OK,
+          },
+          headers,
+          body: {
+            contents: Readable.from(JSON.stringify({ hello: "world" })),
+          },
+        }
+      },
     })
-    pipeline = new PassthroughPipeline(client)
+      .withTransport(TestHttpClient)
+      .build()
 
     const response = await client.submit(createHttpRequest(), REQUEST_TIMEOUT)
     expect(response).not.toBeUndefined()
