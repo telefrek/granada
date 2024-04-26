@@ -58,6 +58,168 @@ export function setHttpClientLogWriter(writer: LogWriter): void {
 }
 
 /**
+ * The interface that represents an Http Client
+ */
+export interface HttpClient extends Emitter<HttpClientEvents> {
+  /**
+   * Submit the request to the client to be processed
+   *
+   * @param request The {@link HttpRequest} to submit
+   * @param timeout The optional {@link Duration} before timing out the request
+   */
+  submit(request: HttpRequest, timeout?: Duration): Promise<HttpResponse>
+}
+
+/**
+ * Base class for extending Http Client behaviors
+ */
+export abstract class HttpClientBase
+  extends EventEmitter
+  implements HttpClient, HttpOperationSource
+{
+  protected readonly _config: HttpClientConfig
+  protected readonly _logger: Logger
+
+  constructor(config: HttpClientConfig, logger: Logger = HTTP_CLIENT_LOGGER) {
+    super({ captureRejections: true })
+
+    this._config = config
+    this._logger = logger
+  }
+
+  [captureRejectionSymbol](
+    err: unknown,
+    event: string | symbol,
+    ...args: unknown[]
+  ): void {
+    this._logger.fatal(
+      `Unhandled exception error during ${String(event)}: ${err}`,
+      { err, event, args },
+    )
+
+    this.emit("error", err)
+  }
+
+  public submit(
+    request: HttpRequest,
+    timeout: Duration = Duration.ofSeconds(15),
+  ): Promise<HttpResponse> {
+    this._logger.debug(
+      `(${request.id}) => Submitting ${this._config.host}${this._config.port ? `:${this._config.port}` : ""}${request.path.original}${request.query ? request.query.original : ""}`,
+      request,
+    )
+
+    // Create the operation
+    const operation = new ClientHttpOperation(request)
+    let nodeTimeout: Optional<NodeJS.Timeout>
+
+    // Check if there is a timeout on this operation
+    if (timeout) {
+      nodeTimeout = setTimeout(() => {
+        if (operation.state === HttpOperationState.QUEUED) {
+          operation.timeout()
+        } else {
+          operation.abort()
+        }
+      }, ~~timeout.milliseconds())
+    }
+
+    // Create our promise
+    const deferred = new DeferredPromise<HttpResponse>()
+
+    // Hook the change event for the reading state
+    operation.on("changed", (_state: HttpOperationState) => {
+      switch (operation.state) {
+        case HttpOperationState.ABORTED:
+          this._logger.error(`(${request.id}) Aborted`)
+          deferred.reject(<HttpError>{
+            errorCode: HttpErrorCode.ABORTED,
+          })
+          break
+        case HttpOperationState.TIMEOUT:
+          this._logger.error(`(${request.id}) Timeout`)
+          deferred.reject(<HttpError>{
+            errorCode: HttpErrorCode.TIMEOUT,
+          })
+        case HttpOperationState.READING:
+          clearTimeout(nodeTimeout)
+          this._logger.debug(`(${request.id}) Response Available`)
+          if (operation.response) {
+            deferred.resolve(operation.response)
+          } else {
+            deferred.reject(
+              operation.error ?? {
+                errorCode: HttpErrorCode.UNKNOWN,
+              },
+            )
+          }
+          break
+        case HttpOperationState.WRITING:
+          this.process(operation)
+          break
+      }
+    })
+
+    this.emit("received", operation)
+
+    return deferred
+  }
+
+  protected async process(operation: ClientHttpOperation): Promise<void> {
+    try {
+      // Set the response and move to reading
+      operation.response = await this.marshal(
+        operation.request,
+        () => {
+          if (!operation.request.body) {
+            operation.process()
+          }
+        },
+        operation.signal,
+      )
+
+      // Parse the body if present
+      if (operation.response.body) {
+        parseBody(operation.response.headers, operation.response.body)
+      } else {
+        operation.complete()
+      }
+    } catch (err) {
+      if (!isAbortError(err)) {
+        operation.error = {
+          errorCode: HttpErrorCode.UNKNOWN,
+          description: String(err),
+        }
+      }
+    }
+  }
+
+  /**
+   * Implementation specific method to marshal a {@link HttpRequest} and return
+   * a {@link HttpResponse}
+   *
+   * @param request The {@link HttpRequest} to send
+   * @param onHeadersWritten A callback to fire once headers are written
+   * @param abortSignal An abort signal for clients that allow this functionality
+   */
+  protected abstract marshal(
+    request: HttpRequest,
+    onHeadersWritten: () => void,
+    abortSignal?: AbortSignal,
+  ): MaybeAwaitable<HttpResponse>
+}
+
+/**
+ * The configuration options available for HTTP Clients
+ */
+export interface HttpClientConfig {
+  name: string
+  host: string
+  port?: number
+  tls?: TLSConfig
+}
+
+/**
  * Set of supported events on an {@link HttpServer}
  */
 interface HttpClientEvents extends LifecycleEvents {
@@ -297,157 +459,4 @@ class ClientHttpOperation extends EventEmitter implements HttpOperation {
         return false
     }
   }
-}
-
-export interface HttpClient extends Emitter<HttpClientEvents> {
-  submit(request: HttpRequest, timeout?: Duration): Promise<HttpResponse>
-}
-
-/**
- * Base class for extending Http Client behaviors
- */
-export abstract class HttpClientBase
-  extends EventEmitter
-  implements HttpClient, HttpOperationSource
-{
-  protected readonly _config: HttpClientConfig
-  protected readonly _logger: Logger
-
-  constructor(config: HttpClientConfig, logger: Logger = HTTP_CLIENT_LOGGER) {
-    super({ captureRejections: true })
-
-    this._config = config
-    this._logger = logger
-  }
-
-  [captureRejectionSymbol](
-    err: unknown,
-    event: string | symbol,
-    ...args: unknown[]
-  ): void {
-    this._logger.fatal(
-      `Unhandled exception error during ${String(event)}: ${err}`,
-      { err, event, args },
-    )
-
-    this.emit("error", err)
-  }
-
-  public submit(
-    request: HttpRequest,
-    timeout: Duration = Duration.ofSeconds(15),
-  ): Promise<HttpResponse> {
-    this._logger.debug(
-      `(${request.id}) => Submitting ${this._config.host}${this._config.port ? `:${this._config.port}` : ""}${request.path.original}${request.query ? request.query.original : ""}`,
-      request,
-    )
-
-    // Create the operation
-    const operation = new ClientHttpOperation(request)
-    let nodeTimeout: Optional<NodeJS.Timeout>
-
-    // Check if there is a timeout on this operation
-    if (timeout) {
-      nodeTimeout = setTimeout(() => {
-        if (operation.state === HttpOperationState.QUEUED) {
-          operation.timeout()
-        } else {
-          operation.abort()
-        }
-      }, ~~timeout.milliseconds())
-    }
-
-    // Create our promise
-    const deferred = new DeferredPromise<HttpResponse>()
-
-    // Hook the change event for the reading state
-    operation.on("changed", (_state: HttpOperationState) => {
-      switch (operation.state) {
-        case HttpOperationState.ABORTED:
-          this._logger.error(`(${request.id}) Aborted`)
-          deferred.reject(<HttpError>{
-            errorCode: HttpErrorCode.ABORTED,
-          })
-          break
-        case HttpOperationState.TIMEOUT:
-          this._logger.error(`(${request.id}) Timeout`)
-          deferred.reject(<HttpError>{
-            errorCode: HttpErrorCode.TIMEOUT,
-          })
-        case HttpOperationState.READING:
-          clearTimeout(nodeTimeout)
-          this._logger.debug(`(${request.id}) Response Available`)
-          if (operation.response) {
-            deferred.resolve(operation.response)
-          } else {
-            deferred.reject(
-              operation.error ?? {
-                errorCode: HttpErrorCode.UNKNOWN,
-              },
-            )
-          }
-          break
-        case HttpOperationState.WRITING:
-          this.process(operation)
-          break
-      }
-    })
-
-    this.emit("received", operation)
-
-    return deferred
-  }
-
-  protected async process(operation: ClientHttpOperation): Promise<void> {
-    try {
-      // Set the response and move to reading
-      operation.response = await this.marshal(
-        operation.request,
-        () => {
-          if (!operation.request.body) {
-            operation.process()
-          }
-        },
-        operation.signal,
-      )
-
-      // Parse the body if present
-      if (operation.response.body) {
-        parseBody(operation.response.headers, operation.response.body)
-      } else {
-        operation.complete()
-      }
-    } catch (err) {
-      if (!isAbortError(err)) {
-        operation.error = {
-          errorCode: HttpErrorCode.UNKNOWN,
-          description: String(err),
-        }
-      }
-    }
-  }
-
-  /**
-   * Implementation specific method to marshal a {@link HttpRequest} and return
-   * a {@link HttpResponse}
-   *
-   * @param request The {@link HttpRequest} to send
-   * @param onHeadersWritten A callback to fire once headers are written
-   * @param abortSignal An abort signal for clients that allow this functionality
-   */
-  protected abstract marshal(
-    request: HttpRequest,
-    onHeadersWritten: () => void,
-    abortSignal?: AbortSignal,
-  ): MaybeAwaitable<HttpResponse>
-}
-
-/**
- * The configuration options available for HTTP Clients
- */
-export interface HttpClientConfig {
-  name: string
-  host: string
-  port?: number
-  tls?: TLSConfig
 }
