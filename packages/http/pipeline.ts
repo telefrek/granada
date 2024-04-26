@@ -5,11 +5,7 @@
 import { isAbortError } from "@telefrek/core/errors.js"
 import { Emitter } from "@telefrek/core/events.js"
 import { DeferredPromise, MaybeAwaitable } from "@telefrek/core/index.js"
-import {
-  LifecycleEvents,
-  registerShutdown,
-  removeShutdown,
-} from "@telefrek/core/lifecycle.js"
+import { LifecycleEvents, removeShutdown } from "@telefrek/core/lifecycle.js"
 import {
   DefaultLogger,
   LogLevel,
@@ -21,24 +17,31 @@ import {
   createTransform,
   type TransformFunc,
 } from "@telefrek/core/streams.js"
+import {
+  CircularArrayBuffer,
+  type CircularBuffer,
+} from "@telefrek/core/structures/circularBuffer"
 import { Timer } from "@telefrek/core/time.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
 import EventEmitter from "events"
 import { Readable, Writable, type Transform } from "stream"
 import {
+  HttpOperationState,
   HttpStatusCode,
   type HttpOperation,
+  type HttpOperationSource,
   type HttpRequest,
   type HttpResponse,
 } from "./index.js"
 import { HttpRequestPipelineMetrics } from "./metrics.js"
-import { CONTENT_PARSERS, getContentType } from "./parsers.js"
+import { parseBody } from "./parsers.js"
 import {
   createRouter,
   isRoutableApi,
   setRoutingParameters,
   type Router,
 } from "./routing.js"
+import { emptyHeaders } from "./utils.js"
 
 /**
  * A simple type representing a stream transform on a {@link HttpOperation}
@@ -49,7 +52,7 @@ export type HttpTransform = TransformFunc<HttpOperation, HttpOperation>
  * The default {@link Logger} for {@link HttpPipeline} operations
  */
 let PIPELINE_LOGGER: Logger = new DefaultLogger({
-  name: "HttpPipeline",
+  name: "http.pipeline",
   level: LogLevel.WARN,
   includeTimestamps: true,
 })
@@ -71,7 +74,7 @@ export function setPipelineLogLevel(level: LogLevel): void {
  */
 export function setPipelineWriter(writer: LogWriter): void {
   PIPELINE_LOGGER = new DefaultLogger({
-    name: "HttpPipeline",
+    name: PIPELINE_LOGGER.name,
     level: PIPELINE_LOGGER.level,
     writer: writer,
     includeTimestamps: true,
@@ -138,6 +141,36 @@ export interface HttpPipeline extends Emitter<HttpPipelineEvents> {
   resume(): MaybeAwaitable<void>
 }
 
+export class PassthroughPipeline extends EventEmitter implements HttpPipeline {
+  private _state: HttpPipelineState
+  private _source: HttpOperationSource
+
+  get state(): HttpPipelineState {
+    return this._state
+  }
+
+  constructor(source: HttpOperationSource) {
+    super()
+
+    this._state = HttpPipelineState.PROCESSING
+    this._source = source
+
+    source.on("received", PassthroughPipeline.passthrough)
+  }
+
+  private static passthrough(operation: HttpOperation): void {
+    operation.dequeue()
+  }
+
+  stop(): MaybeAwaitable<void> {
+    this._source.off("received", PassthroughPipeline.passthrough)
+  }
+
+  pause(): MaybeAwaitable<void> {}
+
+  resume(): MaybeAwaitable<void> {}
+}
+
 /**
  * Explicitly define the stages of a pipeline
  */
@@ -193,30 +226,19 @@ export function isPipelineRequest(
  * @returns
  */
 export function httpPipelineBuilder(
-  source: HttpRequestSource,
+  source: HttpOperationSource,
 ): HttpPipelineBuilder {
   return new HttpPipelineBuilder(source)
 }
 
 export class HttpPipelineBuilder {
-  private _source: HttpRequestSource
+  private _source: HttpOperationSource
   private _transforms: HttpPipelineTransform[] = []
-  private _unhandled: UnhandledRequestConsumer = NOT_FOUND_CONSUMER
+  private _unhandled: UnhandledOperationConsumer = NOT_FOUND_CONSUMER
   private _shedOnPause: boolean = false
 
-  constructor(source: HttpRequestSource) {
+  constructor(source: HttpOperationSource) {
     this._source = source
-  }
-
-  /**
-   * Add in framework defaults for things like content parsing, authentication, etc.
-   * @returns A modified {@link HttpPipelineBuilder}
-   */
-  withDefaults(): Omit<HttpPipelineBuilder, "withDefaults"> {
-    // TODO: Extend this with others for authorization, etc.
-    this._transforms.push(new ContentParsingTransform())
-
-    return this
   }
 
   /**
@@ -266,7 +288,7 @@ export class HttpPipelineBuilder {
   }
 
   withUnhandledConsumer(
-    unhandled: UnhandledRequestConsumer,
+    unhandled: UnhandledOperationConsumer,
   ): HttpPipelineBuilder {
     this._unhandled = unhandled
     return this
@@ -293,11 +315,11 @@ export class HttpPipelineBuilder {
 
 export interface HttpPipelineOptions {
   /** The {@link HttpRequestSource} to process */
-  source: HttpRequestSource
+  source: HttpOperationSource
   /** The {@link HttpPipelineTransform} set to apply */
   transforms: HttpPipelineTransform[]
-  /** The {@link UnhandledRequestConsumer} that deals with unhandled requests */
-  unhandledRequest?: UnhandledRequestConsumer
+  /** The {@link UnhandledOperationConsumer} that deals with unhandled requests */
+  unhandledRequest?: UnhandledOperationConsumer
   /** Flag to indicate if load should be shed on pause (default is false) */
   shedOnPause?: boolean
 }
@@ -310,23 +332,25 @@ export class DefaultHttpPipeline extends EventEmitter implements HttpPipeline {
   private _shedding: Optional<Writable>
   private _shedOnPause: boolean
   private readonly _closedPromise: DeferredPromise = new DeferredPromise()
+  private readonly _buffer: CircularBuffer<HttpOperation>
 
   state: HttpPipelineState
 
   constructor(options: HttpPipelineOptions) {
     super()
 
+    this._buffer = new CircularArrayBuffer({
+      highWaterMark: 16,
+    })
+
     const { source, transforms } = options
 
-    const unhandledRequest: UnhandledRequestConsumer =
+    const unhandledRequest: UnhandledOperationConsumer =
       options.unhandledRequest ?? NOT_FOUND_CONSUMER
 
     // Setup the abort controller
     this._abortController = new AbortController()
     this._shedOnPause = options.shedOnPause ?? false
-
-    // Register the shutdown
-    registerShutdown(this.stop.bind(this))
 
     if (this._shedOnPause) {
       this._shedding = new Writable({
@@ -336,6 +360,7 @@ export class DefaultHttpPipeline extends EventEmitter implements HttpPipeline {
             if (!chunk.response) {
               chunk.response = {
                 status: { code: HttpStatusCode.SERVICE_UNAVAILABLE },
+                headers: emptyHeaders(),
               }
             }
             callback()
@@ -356,7 +381,7 @@ export class DefaultHttpPipeline extends EventEmitter implements HttpPipeline {
     }
 
     // Create the stream and hook the error handling
-    this._requestStream = Readable.from(source, {
+    this._requestStream = Readable.from(this._buffer, {
       // autoDestroy: true,
       objectMode: true,
       // emitClose: true,
@@ -433,6 +458,16 @@ export class DefaultHttpPipeline extends EventEmitter implements HttpPipeline {
     const target = this._transform ?? this._consumer
     this._requestStream.pipe(target, {
       end: true,
+    })
+
+    source.on("received", async (operation) => {
+      try {
+        if (!(await this._buffer.add(operation))) {
+          operation.fail()
+        }
+      } catch (err) {
+        operation.fail(err)
+      }
     })
 
     this.state = HttpPipelineState.PROCESSING
@@ -540,11 +575,22 @@ export abstract class BaseHttpPipelineTransform
     request: PipelineRequest,
   ): MaybeAwaitable<Optional<HttpResponse>>
 
+  private static isTerminal(operation: HttpOperation): boolean {
+    switch (operation.state) {
+      case HttpOperationState.ABORTED:
+      case HttpOperationState.COMPLETED:
+      case HttpOperationState.TIMEOUT:
+        return true
+    }
+
+    return operation.response !== undefined
+  }
+
   transform: HttpTransform = async (
     operation: HttpOperation,
   ): Promise<Optional<HttpOperation>> => {
     // We can't process a request that is already completed
-    if (!operation.response) {
+    if (!BaseHttpPipelineTransform.isTerminal(operation)) {
       // Either inject or apply the current stage
       if (isPipelineRequest(operation.request)) {
         operation.request.pipelineStage = this.stage
@@ -573,6 +619,7 @@ export abstract class BaseHttpPipelineTransform
           status: {
             code: HttpStatusCode.INTERNAL_SERVER_ERROR,
           },
+          headers: emptyHeaders(),
         }
       } finally {
         HttpRequestPipelineMetrics.PipelineStageDuration.record(
@@ -613,21 +660,7 @@ export class ContentParsingTransform extends BaseHttpPipelineTransform {
     // this)
     if (request.body && request.body.mediaType === undefined) {
       // Parse out the media type
-      request.body.mediaType = getContentType(request.headers)
-
-      // If we know how to decode this, go ahead
-      if (request.body.mediaType) {
-        // Get the parser
-        const parser = CONTENT_PARSERS[request.body.mediaType.type]
-
-        // If found, let it do it's thing
-        if (parser) {
-          this._logger.info(
-            `Parsing contents for ${request.body.mediaType.toString()}`,
-          )
-          await parser(request.body)
-        }
-      }
+      parseBody(request.headers, request.body)
     }
 
     return
@@ -672,29 +705,25 @@ export class RoutingTransform extends BaseHttpPipelineTransform {
 }
 
 /**
- * We only want an iterable source so we can control the flow of consumption
- */
-export type HttpRequestSource =
-  | Iterable<HttpRequest>
-  | AsyncIterable<HttpRequest>
-
-/**
  * Simple method that consumes a {@link HttpRequest} and ensures a response is provided
  *
  * @param operation The {@link HttpOperation} to finish
  */
-export type UnhandledRequestConsumer = (
+export type UnhandledOperationConsumer = (
   operation: HttpOperation,
 ) => MaybeAwaitable<void>
 
 /**
- * The default {@link UnhandledRequestConsumer} that just returns 404
+ * The default {@link UnhandledOperationConsumer} that just returns 404
  *
  * @param request The unhandled {@link HttpRequest}
- * @returns A {@link UnhandledRequestConsumer} that responds as 404
+ * @returns A {@link UnhandledOperationConsumer} that responds as 404
  */
-export const NOT_FOUND_CONSUMER: UnhandledRequestConsumer = (operation) => {
+export const NOT_FOUND_CONSUMER: UnhandledOperationConsumer = (operation) => {
   if (!operation.response) {
-    operation.response = { status: { code: HttpStatusCode.NOT_FOUND } }
+    operation.response = {
+      status: { code: HttpStatusCode.NOT_FOUND },
+      headers: emptyHeaders(),
+    }
   }
 }

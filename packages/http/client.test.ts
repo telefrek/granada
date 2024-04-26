@@ -1,5 +1,6 @@
 import { DeferredPromise, type MaybeAwaitable } from "@telefrek/core"
 import { ConsoleLogWriter, LogLevel } from "@telefrek/core/logging"
+import { Duration } from "@telefrek/core/time"
 import type { Optional } from "@telefrek/core/type/utils"
 import { Readable } from "stream"
 import {
@@ -8,12 +9,15 @@ import {
   setHttpClientLogLevel,
   setHttpClientLogWriter,
 } from "./client.js"
-import { CommonMediaTypes, mediaTypeToString } from "./content.js"
 import { HttpStatusCode, type HttpRequest, type HttpResponse } from "./index.js"
+import { CommonMediaTypes, mediaTypeToString } from "./media.js"
+import { PassthroughPipeline, type HttpPipeline } from "./pipeline.js"
 import { createHttpRequest, emptyHeaders } from "./utils.js"
 
-setHttpClientLogLevel(LogLevel.DEBUG)
-setHttpClientLogWriter(new ConsoleLogWriter())
+const writer = new ConsoleLogWriter()
+
+setHttpClientLogLevel(LogLevel.INFO)
+setHttpClientLogWriter(writer)
 
 class TestHttpClient extends HttpClientBase {
   private _marshal: (
@@ -41,7 +45,18 @@ class TestHttpClient extends HttpClientBase {
   }
 }
 
+const REQUEST_TIMEOUT = Duration.ofMilli(100)
+
 describe("The HTTP Client should handle various state changes regardless of underlying provider", () => {
+  let pipeline: Optional<HttpPipeline>
+
+  afterEach(() => {
+    if (pipeline) {
+      pipeline.stop()
+      pipeline = undefined
+    }
+  })
+
   it("Should handle a simple success case", async () => {
     const client: HttpClient = new TestHttpClient((_req, written, _abort) => {
       written()
@@ -49,10 +64,13 @@ describe("The HTTP Client should handle various state changes regardless of unde
         status: {
           code: HttpStatusCode.NO_CONTENT,
         },
+        headers: emptyHeaders(),
       }
     })
 
-    const response = await client.submit(createHttpRequest())
+    pipeline = new PassthroughPipeline(client)
+
+    const response = await client.submit(createHttpRequest(), REQUEST_TIMEOUT)
 
     expect(response).not.toBeUndefined()
     expect(response.status.code).toBe(HttpStatusCode.NO_CONTENT)
@@ -77,8 +95,9 @@ describe("The HTTP Client should handle various state changes regardless of unde
         },
       }
     })
+    pipeline = new PassthroughPipeline(client)
 
-    const response = await client.submit(createHttpRequest())
+    const response = await client.submit(createHttpRequest(), REQUEST_TIMEOUT)
     expect(response).not.toBeUndefined()
     expect(response.status.code).toBe(HttpStatusCode.OK)
     expect(response.body).not.toBeUndefined()

@@ -27,10 +27,10 @@ import {
 import { Timer, delay, type Duration } from "@telefrek/core/time.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
 import { randomUUID as v4 } from "crypto"
-import EventEmitter from "events"
+import EventEmitter, { captureRejectionSymbol } from "events"
 import * as http2 from "http2"
 import { Readable, Stream, finished, pipeline } from "stream"
-import { mediaTypeToString } from "./content.js"
+import type { HttpError } from "./errors.js"
 import {
   HttpBody,
   HttpHeaders,
@@ -42,9 +42,12 @@ import {
   HttpResponse,
   HttpStatusCode,
   HttpVersion,
+  type HttpOperation,
+  type HttpOperationSource,
+  type TLSConfig,
 } from "./index.js"
 import { HttpRequestMetrics, HttpServerMetrics } from "./metrics.js"
-import { emptyHeaders, parsePath } from "./utils.js"
+import { emptyHeaders, injectHeaders, parsePath } from "./utils.js"
 
 /**
  * The default {@link Logger} for {@link HttpPipeline} operations
@@ -80,6 +83,236 @@ export function setHttpServerLogWriter(writer: LogWriter): void {
 }
 
 /**
+ * Server specific implementation of the {@link HttpOperation} that manipulates
+ * the state machine correctly for this scenario
+ */
+class ServerHttpOperation extends EventEmitter implements HttpOperation {
+  private _state: HttpOperationState
+  private _abortController: AbortController
+  private _error: Optional<HttpError>
+  private _response: Optional<HttpResponse>
+
+  /**
+   * Private setter the changes the state and emits the status change
+   */
+  private set state(newState: HttpOperationState) {
+    const previousState = this._state
+    this._state = newState
+    this.emit("changed", previousState)
+  }
+
+  /** The {@link AbortSignal} for this operation */
+  get signal(): AbortSignal {
+    return this._abortController.signal
+  }
+
+  readonly request: Readonly<HttpRequest>
+
+  get state(): HttpOperationState {
+    return this._state
+  }
+
+  get response(): HttpResponse | undefined {
+    return this._response
+  }
+
+  set error(error: HttpError) {
+    this._error = error
+    this.complete()
+  }
+
+  get error(): Optional<HttpError> {
+    return this._error
+  }
+
+  set response(response: HttpResponse) {
+    if (this._response === undefined) {
+      this._response = response
+
+      // Mark this as in a writing state
+      if (this._check(HttpOperationState.WRITING)) {
+        // Check for a response body to auto-complete on read
+        if (response.body) {
+          const complete = this.complete.bind(this)
+          Stream.finished(
+            response.body.contents,
+            (err: NodeJS.ErrnoException | null | undefined) => {
+              if (!err) {
+                complete()
+              }
+            },
+          )
+        }
+      } else {
+        HTTP_SERVER_LOGGER.info(`Failed to set writing ${this._state}`)
+      }
+    } else {
+      HTTP_SERVER_LOGGER.error(
+        `(${this.request.id}) Attempted to resolve twice!`,
+        { current: this._response, invalid: response },
+      )
+    }
+  }
+
+  [captureRejectionSymbol](
+    err: unknown,
+    event: string | symbol,
+    ...args: unknown[]
+  ): void {
+    HTTP_SERVER_LOGGER.fatal(
+      `Unhandled exception error during ${String(event)}: ${err}`,
+      { err, event, args },
+    )
+
+    this.emit("error", err)
+  }
+
+  constructor(request: HttpRequest) {
+    // Force errors in emitting to go through the 'error' event
+    super({ captureRejections: true })
+
+    this.request = request
+    this._state = HttpOperationState.QUEUED
+    this._abortController = new AbortController()
+  }
+
+  dequeue(): boolean {
+    return this._check(HttpOperationState.READING)
+  }
+
+  fail(cause?: unknown): void {
+    if (cause) {
+      this.emit("error", cause)
+    }
+
+    this.abort()
+  }
+
+  /**
+   * Aborts the request if it is valid to do so
+   *
+   * @returns True if the operation was successful
+   */
+  abort(): boolean {
+    if (this._check(HttpOperationState.ABORTED)) {
+      this._abortController.abort("Operation was aborted")
+      return true
+    }
+
+    return false
+  }
+
+  /**
+   * Times the request out if it is valid to do so
+   *
+   * @returns True if the operation was successful
+   */
+  timeout(): boolean {
+    return this._check(HttpOperationState.TIMEOUT)
+  }
+
+  /**
+   * Completes the request if it is valid to do so
+   *
+   * @returns True if the operation was successful
+   */
+  complete(): boolean {
+    return this._check(HttpOperationState.COMPLETED)
+  }
+
+  /**
+   * Starts the submission of the {@link HttpRequest}
+   *
+   * @returns True if the operation was successful
+   */
+  read(): boolean {
+    try {
+      return this._check(HttpOperationState.READING)
+    } finally {
+      // Hook the body writing
+      if (this._state === HttpOperationState.READING && this.request.body) {
+        const process = this.process.bind(this)
+
+        // When the stream is fully consumed we are waiting for a response, set
+        // it to processing
+        Stream.finished(
+          this.request.body.contents,
+          (err: NodeJS.ErrnoException | null | undefined) => {
+            if (!err) {
+              process()
+            }
+          },
+        )
+      }
+    }
+  }
+
+  /**
+   * Indicates the {@link HttpRequest} has been fully read
+   *
+   * @returns True if the operation was successful
+   */
+  process(): boolean {
+    return this._check(HttpOperationState.PROCESSING)
+  }
+
+  /**
+   * Check if the state transition is valid
+   *
+   * @param state The state to transition to
+   * @returns True if the transition was successful
+   */
+  private _check(state: HttpOperationState): boolean {
+    if (ServerHttpOperation.verifyTransition(this._state, state)) {
+      this.state = state
+      return true
+    } else if (state !== this._state) {
+      HTTP_SERVER_LOGGER.debug(
+        `(${this.request.id}) Invalid state transition: ${this._state} => ${state}`,
+      )
+    }
+
+    return false
+  }
+
+  /**
+   * Verify state transitions
+   *
+   * @param current The current state
+   * @param target The target state
+   * @returns True if the transition is valid
+   */
+  private static verifyTransition(
+    current: HttpOperationState,
+    target: HttpOperationState,
+  ): boolean {
+    switch (target) {
+      case HttpOperationState.QUEUED:
+        return false // You can never move backwards
+      case HttpOperationState.READING:
+        return current === HttpOperationState.QUEUED
+      case HttpOperationState.PROCESSING:
+        return current === HttpOperationState.READING
+      case HttpOperationState.WRITING:
+        return current === HttpOperationState.PROCESSING
+
+      // These are terminal states and should be reachable by any other
+      // non-terminal state
+      case HttpOperationState.ABORTED:
+      case HttpOperationState.TIMEOUT:
+      case HttpOperationState.COMPLETED:
+        return (
+          current !== HttpOperationState.COMPLETED &&
+          current !== HttpOperationState.TIMEOUT &&
+          current !== HttpOperationState.ABORTED
+        )
+      default:
+        return false
+    }
+  }
+}
+
+/**
  * Set of supported events on an {@link HttpServer}
  */
 interface HttpServerEvents extends LifecycleEvents {
@@ -89,13 +322,6 @@ interface HttpServerEvents extends LifecycleEvents {
    * @param port The port that was opened
    */
   listening: (port: number) => void
-
-  /**
-   * Fired when a new {@link HttpRequest} is received
-   *
-   * @param request The {@link HttpRequest} that was received
-   */
-  request: (request: HttpRequest) => void
 
   /**
    * Fired when there is an error with the underlying {@link HttpServer}
@@ -116,14 +342,7 @@ export interface HttpServer extends Emitter<HttpServerEvents> {
    *
    * @returns A promise to optionally use for tracking listening
    */
-  listen(port: number): Promise<void>
-
-  /**
-   * Enable/Disable queries for the /ready endpoint
-   *
-   * @param enable The enable flag
-   */
-  enableReady(enable: boolean): void
+  listen(port: number): MaybeAwaitable<void>
 
   /**
    * Closes the server, rejecting any further calls
@@ -131,11 +350,57 @@ export interface HttpServer extends Emitter<HttpServerEvents> {
    * @param graceful Flag to indicate if we want a graceful shutdown
    */
   close(graceful?: boolean): MaybeAwaitable<void>
+}
 
-  /**
-   * Allow iterating over the {@link HttpRequest} that are received
-   */
-  [Symbol.asyncIterator](): AsyncIterator<HttpRequest>
+export interface HttpServerConfig {
+  tls?: TLSConfig
+  enabledOnStart?: boolean
+  requestTimeout?: Duration
+}
+
+export abstract class HttpServerBase
+  extends EventEmitter
+  implements HttpServer, HttpOperationSource
+{
+  protected readonly _config: HttpServerConfig
+  protected readonly _logger: Logger
+
+  private _ready: boolean
+
+  protected get isReady(): boolean {
+    return this._ready
+  }
+
+  constructor(config: HttpServerConfig, logger: Logger = HTTP_SERVER_LOGGER) {
+    super({ captureRejections: true })
+
+    this._config = config
+    this._logger = logger
+    this._ready = config.enabledOnStart ?? true
+  }
+
+  [captureRejectionSymbol](
+    err: unknown,
+    event: string | symbol,
+    ...args: unknown[]
+  ): void {
+    this._logger.fatal(
+      `Unhandled exception error during ${String(event)}: ${err}`,
+      { err, event, args },
+    )
+
+    this.emit("error", err)
+  }
+
+  abstract listen(port: number): MaybeAwaitable<void>
+  abstract close(graceful?: boolean): MaybeAwaitable<void>
+
+  protected queueRequest(request: HttpRequest): HttpOperation {
+    const operation = new ServerHttpOperation(request)
+    this.emit("received", operation)
+
+    return operation
+  }
 }
 
 /**
@@ -245,7 +510,7 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
     this._setupRequestMapping()
   }
 
-  enableReady(enable: boolean): void {
+  ready(enable: boolean): void {
     this._ready = enable
   }
 
@@ -301,7 +566,7 @@ class HttpServerImpl extends EventEmitter implements HttpServer {
     // close out
     if (graceful && this._ready) {
       // Mark this is not ready for more traffic
-      this.enableReady(false)
+      this.ready(false)
 
       // Wait 15 seconds
       // TODO: Make this driven by a signal on outstanding requests...
@@ -514,6 +779,7 @@ class Http2Request extends EventEmitter implements HttpRequest {
           status: {
             code: HttpStatusCode.SERVICE_UNAVAILABLE,
           },
+          headers: emptyHeaders(),
         },
         HttpOperationState.TIMEOUT,
       )
@@ -524,7 +790,7 @@ class Http2Request extends EventEmitter implements HttpRequest {
     this.respond(
       {
         status: { code: HttpStatusCode.SERVICE_UNAVAILABLE },
-        headers,
+        headers: headers ?? emptyHeaders(),
       },
       HttpOperationState.COMPLETED,
     )
@@ -542,17 +808,11 @@ class Http2Request extends EventEmitter implements HttpRequest {
       if (!this._response.headersSent) {
         // TODO: Need to handle headers...
 
-        // Write the head section
-        if (response.body?.mediaType) {
-          this._response.writeHead(response.status.code, {
-            "Content-Type": mediaTypeToString(response.body.mediaType),
-          })
-        } else {
-          this._response.writeHead(response.status.code)
-        }
+        const headers: http2.OutgoingHttpHeaders = {}
+        injectHeaders(response.headers, headers)
+        this._response.writeHead(response.status.code, headers)
 
         // Write the body
-
         if (response.body?.contents && !this._response.writableEnded) {
           pipeline(response.body.contents, this._response.stream, (err) => {
             if (err) {

@@ -48,13 +48,13 @@ describe("Testing Time Utilities", () => {
     expect(timer.stop()).toBe(Duration.ZERO)
 
     // Verify the durations for nanoseconds
-    const nanoDuration = Duration.fromNano(after - before)
+    const nanoDuration = Duration.ofNano(after - before)
     expect(nanoDuration.seconds()).toBeLessThanOrEqual(expectedSeconds)
     expect(nanoDuration.milliseconds()).toBeLessThanOrEqual(expectedMilli)
     expect(nanoDuration.microseconds()).toBeLessThanOrEqual(expectedMicro)
 
     // Verify the durations for milliseconds
-    const milliDuration = Duration.fromMilli(afterMs - beforeMs)
+    const milliDuration = Duration.ofMilli(afterMs - beforeMs)
     expect(milliDuration.seconds()).toBeLessThanOrEqual(expectedSeconds)
     expect(milliDuration.milliseconds()).toBeLessThanOrEqual(expectedMilli)
     expect(milliDuration.microseconds()).toBeLessThanOrEqual(expectedMicro)

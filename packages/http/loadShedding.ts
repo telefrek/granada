@@ -12,6 +12,7 @@ import { Timer } from "@telefrek/core/time.js"
 import type { Optional } from "@telefrek/core/type/utils"
 import { HttpStatusCode, type HttpOperation } from "./index.js"
 import { HttpPipelineStage, HttpPipelineTransform } from "./pipeline.js"
+import { emptyHeaders } from "./utils.js"
 
 export function enableLoadShedding(
   thresholdMs = 1_000,
@@ -50,6 +51,7 @@ export function enableLoadShedding(
         // Load shedding...
         operation.response = {
           status: { code: HttpStatusCode.SERVICE_UNAVAILABLE },
+          headers: emptyHeaders(),
         }
 
         return

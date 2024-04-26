@@ -12,7 +12,7 @@ import {
   Logger,
   type LogWriter,
 } from "@telefrek/core/logging.js"
-import type { Duration } from "@telefrek/core/time.js"
+import { Duration } from "@telefrek/core/time.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
 import EventEmitter, { captureRejectionSymbol } from "events"
 import { Stream } from "stream"
@@ -25,8 +25,7 @@ import {
   type HttpResponse,
   type TLSConfig,
 } from "./index.js"
-import { getContentType, parseBody } from "./parsers.js"
-import { emptyHeaders } from "./utils.js"
+import { parseBody } from "./parsers.js"
 
 /** The logger used for HTTP Clients */
 let HTTP_CLIENT_LOGGER: Logger = new DefaultLogger({
@@ -71,8 +70,8 @@ interface HttpClientEvents extends LifecycleEvents {
 }
 
 /**
- * This is the client implementation of the {@link HttpOperation} that conforms
- * to the set of state transitions
+ * Client specific implementation of the {@link HttpOperation} that manipulates
+ * the state machine correctly for this scenario
  */
 class ClientHttpOperation extends EventEmitter implements HttpOperation {
   private _state: HttpOperationState
@@ -163,6 +162,19 @@ class ClientHttpOperation extends EventEmitter implements HttpOperation {
     this._state = HttpOperationState.QUEUED
     this._abortController = new AbortController()
   }
+
+  dequeue(): boolean {
+    return this._check(HttpOperationState.WRITING)
+  }
+
+  fail(cause?: unknown): void {
+    if (cause) {
+      this.emit("error", cause)
+    }
+
+    this.abort()
+  }
+
   /**
    * Aborts the request if it is valid to do so
    *
@@ -264,12 +276,12 @@ class ClientHttpOperation extends EventEmitter implements HttpOperation {
     switch (target) {
       case HttpOperationState.QUEUED:
         return false // You can never move backwards
+      case HttpOperationState.WRITING:
+        return current === HttpOperationState.QUEUED
       case HttpOperationState.PROCESSING:
         return current === HttpOperationState.WRITING
       case HttpOperationState.READING:
         return current === HttpOperationState.PROCESSING
-      case HttpOperationState.WRITING:
-        return current === HttpOperationState.QUEUED
 
       // These are terminal states and should be reachable by any other
       // non-terminal state
@@ -301,17 +313,29 @@ export abstract class HttpClientBase
   protected readonly _config: HttpClientConfig
   protected readonly _logger: Logger
 
-  // TODO: Add a pipeline for additional decoration, etc.
   constructor(config: HttpClientConfig, logger: Logger = HTTP_CLIENT_LOGGER) {
-    super()
+    super({ captureRejections: true })
 
     this._config = config
     this._logger = logger
   }
 
+  [captureRejectionSymbol](
+    err: unknown,
+    event: string | symbol,
+    ...args: unknown[]
+  ): void {
+    this._logger.fatal(
+      `Unhandled exception error during ${String(event)}: ${err}`,
+      { err, event, args },
+    )
+
+    this.emit("error", err)
+  }
+
   public submit(
     request: HttpRequest,
-    timeout?: Duration,
+    timeout: Duration = Duration.ofSeconds(15),
   ): Promise<HttpResponse> {
     this._logger.debug(
       `(${request.id}) => Submitting ${this._config.host}${this._config.port ? `:${this._config.port}` : ""}${request.path.original}${request.query ? request.query.original : ""}`,
@@ -363,61 +387,41 @@ export abstract class HttpClientBase
             )
           }
           break
+        case HttpOperationState.WRITING:
+          this.process(operation)
+          break
       }
     })
 
     this.emit("received", operation)
 
-    // Allow subclassing to override this for circuit breakers, authentication, etc.
-    void this.process(operation)
-
     return deferred
   }
 
   protected async process(operation: ClientHttpOperation): Promise<void> {
-    // Mark the operation as in writing state
-    if (operation.write()) {
-      // Track the response
-      try {
-        const response = await this.marshal(
-          operation.request,
-          () => {
-            if (!operation.request.body) {
-              operation.process()
-            }
-          },
-          operation.signal,
-        )
-
-        // Handle additional parsing for content types
-        if (response.body) {
-          // TODO: Compression, etc.
-
-          response.body.mediaType = getContentType(
-            response.headers ?? emptyHeaders(),
-          )
-          if (response.body.mediaType) {
-            response.body.contents = parseBody(
-              response.body.mediaType,
-              response.body.contents,
-            )
+    try {
+      // Set the response and move to reading
+      operation.response = await this.marshal(
+        operation.request,
+        () => {
+          if (!operation.request.body) {
+            operation.process()
           }
-        }
+        },
+        operation.signal,
+      )
 
-        operation.response = {
-          headers: emptyHeaders(),
-          ...response,
-        }
-
-        if (!response.body) {
-          operation.complete()
-        }
-      } catch (err) {
-        if (!isAbortError(err)) {
-          operation.error = {
-            errorCode: HttpErrorCode.UNKNOWN,
-            description: String(err),
-          }
+      // Parse the body if present
+      if (operation.response.body) {
+        parseBody(operation.response.headers, operation.response.body)
+      } else {
+        operation.complete()
+      }
+    } catch (err) {
+      if (!isAbortError(err)) {
+        operation.error = {
+          errorCode: HttpErrorCode.UNKNOWN,
+          description: String(err),
         }
       }
     }

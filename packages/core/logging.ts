@@ -67,7 +67,7 @@ export interface Logger {
   readonly level: LogLevel
 
   /** The source for events logged here */
-  readonly source?: string
+  readonly name?: string
 
   /**
    * Update the {@link LogLevel} minimum to write with
@@ -152,13 +152,13 @@ export class DefaultLogger implements Logger {
   private _level: LogLevel
   private _writer: LogWriter
   private _injectTimestamp: boolean
-  readonly source?: string
+  readonly name?: string
 
   constructor(options?: LoggerOptions) {
     this._level = options?.level ?? LogLevel.ERROR
     this._writer = options?.writer ?? NoopLogWriter
     this._injectTimestamp = options?.includeTimestamps ?? true
-    this.source = options?.name
+    this.name = options?.name
   }
 
   get level(): LogLevel {
@@ -172,7 +172,7 @@ export class DefaultLogger implements Logger {
   debug(message: string, context?: unknown): void {
     if (this._level >= LogLevel.DEBUG) {
       this._writer.log({
-        source: this.source,
+        source: this.name,
         timestamp: this._injectTimestamp ? HiResClock.timestamp() : undefined,
         message,
         level: LogLevel.DEBUG,
@@ -184,7 +184,7 @@ export class DefaultLogger implements Logger {
   info(message: string, context?: unknown): void {
     if (this._level >= LogLevel.INFO) {
       this._writer.log({
-        source: this.source,
+        source: this.name,
         timestamp: this._injectTimestamp ? HiResClock.timestamp() : undefined,
         message,
         level: LogLevel.INFO,
@@ -196,7 +196,7 @@ export class DefaultLogger implements Logger {
   warn(message: string, context?: unknown): void {
     if (this._level >= LogLevel.WARN) {
       this._writer.log({
-        source: this.source,
+        source: this.name,
         timestamp: this._injectTimestamp ? HiResClock.timestamp() : undefined,
         message,
         level: LogLevel.WARN,
@@ -208,7 +208,7 @@ export class DefaultLogger implements Logger {
   error(message: string, context?: unknown): void {
     if (this._level >= LogLevel.ERROR) {
       this._writer.log({
-        source: this.source,
+        source: this.name,
         timestamp: this._injectTimestamp ? HiResClock.timestamp() : undefined,
         message,
         level: LogLevel.ERROR,
@@ -220,7 +220,7 @@ export class DefaultLogger implements Logger {
   fatal(message: string, context?: unknown): void {
     if (this._level >= LogLevel.FATAL) {
       this._writer.log({
-        source: this.source,
+        source: this.name,
         timestamp: this._injectTimestamp ? HiResClock.timestamp() : undefined,
         message,
         level: LogLevel.FATAL,

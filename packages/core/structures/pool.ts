@@ -151,7 +151,7 @@ export abstract class PoolBase<T> implements Pool<T> {
     this._size = 0
 
     // Set the default timeout
-    this._defaultTimeout = Duration.fromMilli(
+    this._defaultTimeout = Duration.ofMilli(
       Math.max(options.defaultTimeoutMs ?? 60_000, 1),
     )
 
@@ -242,7 +242,7 @@ export abstract class PoolBase<T> implements Pool<T> {
     const expires = Date.now() + timeout.milliseconds()
     while (Date.now() < expires) {
       // Wait for the signal to fire before trying again
-      if (await this._signal.wait(Duration.fromMilli(expires - Date.now()))) {
+      if (await this._signal.wait(Duration.ofMilli(expires - Date.now()))) {
         // Try to shift the value off though because we rely on promises (which
         // also use process.nextTick() that our signals do) this might have been
         // stolen in the main get.

@@ -4,16 +4,17 @@
 
 import { type LoggerOptions } from "@telefrek/core/logging"
 import type { Optional } from "@telefrek/core/type/utils"
-import { createReadStream, existsSync } from "fs"
+import { existsSync } from "fs"
 import { join, resolve } from "path"
 import { HttpMethod, HttpResponse, HttpStatusCode } from "./index.js"
-import { fileToMediaType } from "./media.js"
+import { createFileContentResponse } from "./media.js"
 import {
   BaseHttpPipelineTransform,
   HttpPipelineStage,
   HttpPipelineTransform,
   type PipelineRequest,
 } from "./pipeline.js"
+import { emptyHeaders } from "./utils.js"
 
 /**
  * Options for configuring hosting
@@ -67,7 +68,10 @@ class HostingTransform extends BaseHttpPipelineTransform {
       if (filePath.startsWith(this._sanitizedBaseDir)) {
         if (existsSync(filePath)) {
           return request.method === HttpMethod.HEAD
-            ? { status: { code: HttpStatusCode.NO_CONTENT } }
+            ? {
+                status: { code: HttpStatusCode.NO_CONTENT },
+                headers: emptyHeaders(),
+              }
             : await createFileContentResponse(filePath)
         }
       } else if (filePath !== check) {
@@ -80,6 +84,7 @@ class HostingTransform extends BaseHttpPipelineTransform {
           status: {
             code: HttpStatusCode.NOT_FOUND,
           },
+          headers: emptyHeaders(),
         }
       }
     }
@@ -97,28 +102,5 @@ class HostingTransform extends BaseHttpPipelineTransform {
 
     // Set the default file
     this._defaultFile = options.defaultFile ?? "index.html"
-  }
-}
-
-async function createFileContentResponse(
-  filePath: string,
-): Promise<HttpResponse> {
-  // Calculate the media type
-  const mediaType = await fileToMediaType(filePath)
-
-  // Ensure encoding is set
-  if (!mediaType?.parameters.has("charset")) {
-    mediaType?.parameters.set("charset", "utf-8")
-  }
-
-  // Send back the file content response
-  return {
-    status: {
-      code: HttpStatusCode.OK,
-    },
-    body: {
-      contents: createReadStream(filePath, "utf-8"),
-      mediaType,
-    },
   }
 }

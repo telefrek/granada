@@ -90,7 +90,7 @@ export class DefaultPostgresDatabase implements PostgresDatabase {
 
   constructor(options: PostgresDatabaseOptions) {
     this._pool = options.pool
-    this._defaultTimeout = Duration.fromMilli(
+    this._defaultTimeout = Duration.ofMilli(
       options.defaultTimeoutMilliseconds ?? 1_000,
     )
 

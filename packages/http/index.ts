@@ -7,9 +7,6 @@ import type { Emitter } from "@telefrek/core/events.js"
 import { LifecycleEvents } from "@telefrek/core/lifecycle.js"
 import type { TransformFunc } from "@telefrek/core/streams.js"
 import type { Readable } from "stream"
-import type { MediaType } from "./content.js"
-
-// TODO: Should also consider validation of strings...
 
 /**
  * A segment value must be a string, number or boolean
@@ -27,6 +24,93 @@ export type QueryParameters = Map<string, string | string[]>
  */
 export type HttpHeaders = Map<string, string | string[]>
 
+export enum HttpRequestHeaders {
+  AcceptableInstanceManipulators = "A-IM",
+  Accept = "Accept",
+  AcceptCharset = "Accept-Charset",
+  AcceptDatetime = "Accept-Datetime",
+  AcceptEncoding = "Accept-Encoding",
+  AcceptLanguage = "Accept-Language",
+  AccessControlMethod = "Access-Control-Request-Method",
+  AccessControlHeader = "Access-Control-Request-Headers",
+  Authorization = "Authorization",
+  CacheControl = "Cache-Control",
+  Connection = "Connection",
+  ContentEncoding = "Content-Encoding",
+  ContentLength = "Content-Length",
+  ContentType = "Content-Type",
+  Cookie = "Cookie",
+  Date = "Date",
+  Forwarded = "Forwarded",
+  From = "From",
+  Host = "Host",
+  IfMatch = "If-Match",
+  IfModifiedSince = "If-Modified-Since",
+  IfNoneMatch = "If-None-Match",
+  IfRange = "If-Range",
+  IfUnmodifiedSince = "If-Unmodified-Since",
+  MaxForwards = "Max-Forwards",
+  Origin = "Origin",
+  Pragma = "Pragma",
+  Prefer = "Prefer",
+  ProxyAuthorization = "Proxy-Authorization",
+  Range = "Range",
+  Referrer = "Referrer",
+  TransferEncodings = "TE",
+  Trailer = "Trailer",
+  TransferEncoding = "Transfer-Encoding",
+  UserAgent = "User-Agent",
+  Upgrade = "Upgrade",
+  Via = "Via",
+}
+
+export enum HttpResponseHeaders {
+  AccessControlAllowOrigin = "Access-Control-Allow-Origin",
+  AccessControlAllowCredentials = "Access-Control-Allow-Credentials",
+  AccessControlExposeHeaders = "Access-Control-Expose-Headers",
+  AccessControlMaxAge = "Access-Control-Max-Age",
+  AccessControlAllowMethods = "Access-Control-Allow-Methods",
+  AccessControlAllowHeaders = "Access-Control-Allow-Headers",
+  AcceptPatch = "Accept-Patch",
+  AcceptRange = "Accept-Ranges",
+  Age = "Age",
+  Allow = "Allow",
+  AlternativeServices = "Alt-Svc",
+  CacheControl = "Cache-Control",
+  Connection = "Connection",
+  ContentDisposition = "Content-Disposition",
+  ContentEncoding = "Content-Encoding",
+  ContentLanguage = "Content-Language",
+  ContentLength = "Content-Length",
+  ContentLocation = "Content-Location",
+  ContentRange = "Content-Range",
+  ContentSecurityPolicy = "Content-Security-Policy",
+  ContentType = "Content-Type",
+  Date = "Date",
+  DeltaBase = "Delta-Base",
+  ETag = "ETag",
+  Expires = "Expires",
+  InstanceManipulations = "IM",
+  LastModified = "Last-Modified",
+  Link = "Link",
+  Location = "Location",
+  Pragma = "Pragma",
+  PreferenceApplied = "Preference-Applied",
+  ProxyAuthenticate = "Proxy-Authenticate",
+  PublicKeyPins = "Public-Key-Pins",
+  RetryAfter = "Retry-After",
+  Server = "Server",
+  SetCookie = "Set-Cookie",
+  StrictTransportSecurity = "Strict-Transport-Security",
+  Trailer = "Trailer",
+  TransferEncoding = "Transfer-Encoding",
+  TrackingStatus = "Tk",
+  Upgrade = "Upgrade",
+  Vary = "Vary",
+  Via = "Via",
+  WWWAuthenticate = "WWW-Authenticate",
+}
+
 /**
  * Supported methods for HTTP operations
  */
@@ -39,19 +123,6 @@ export enum HttpMethod {
   POST = "POST",
   PUT = "PUT",
 }
-
-/**
- * Valid {@link HttpMethod} values as an array
- */
-export const HTTP_METHODS = [
-  HttpMethod.DELETE,
-  HttpMethod.GET,
-  HttpMethod.HEAD,
-  HttpMethod.OPTIONS,
-  HttpMethod.PATCH,
-  HttpMethod.POST,
-  HttpMethod.PUT,
-] as HttpMethod[]
 
 /**
  * Supported HTTP Versions
@@ -219,6 +290,18 @@ export interface HttpOperation extends Emitter<HttpOperationEvents> {
   readonly request: Readonly<HttpRequest>
   /** The {@link HttpResponse} that was paired with the operation */
   response?: Readonly<HttpResponse>
+
+  /**
+   * Move the operation out of a queued {@link HttpOperationState}
+   */
+  dequeue(): boolean
+
+  /**
+   * Handle failures in processing the operation
+   *
+   * @param cause The optional cause for the state change
+   */
+  fail(cause?: unknown): void
 }
 
 /**
@@ -241,7 +324,7 @@ export interface HttpResponse {
   /** The {@link HttpStatus} to return */
   readonly status: HttpStatus
   /** The {@link HttpHeaders} to include in the response */
-  readonly headers?: HttpHeaders
+  readonly headers: HttpHeaders
   /** The {@link HttpBody} to return */
   readonly body?: HttpBody
 }
@@ -280,6 +363,67 @@ export type HttpOperationSource = Emitter<HttpOperationSourceEvents>
  */
 export interface TLSConfig {
   certificateAuthority?: Buffer | string
-  privateKey: Buffer | string
+  privateKey?: Buffer | string
   publicCertificate: Buffer | string
+  mutualAuthentication?: boolean
 }
+
+/**
+ * Represents a MediaType (alternatively MimeType)
+ *
+ * {@link https://www.rfc-editor.org/rfc/rfc2046.html}
+ */
+export interface MediaType {
+  type: TopLevelMediaTypes
+  tree?: MediaTreeTypes
+  subType?: string
+  suffix?: string
+  /** Note it's up to the type implementation to verify the parameters after parsing */
+  parameters: Map<string, string>
+  toString(): string
+}
+
+/**
+ * Handling composite media types with special handling
+ */
+export interface CompositeMediaType extends MediaType {
+  type: CompositeMediaTypes
+}
+
+/**
+ * Represents multipart content types
+ */
+export class MultipartMediaType implements CompositeMediaType {
+  readonly type: CompositeMediaTypes = "multipart"
+  readonly parameters = new Map<string, string>()
+}
+
+/**
+ * Represents message content types
+ */
+export class MessageMediaType implements CompositeMediaType {
+  readonly type: CompositeMediaTypes = "message"
+  readonly parameters = new Map<string, string>()
+}
+/**
+ * The official composite types
+ */
+export type CompositeMediaTypes = "multipart" | "message"
+
+/**
+ * The simple and composite type set for all top level MediaTypes
+ */
+export type TopLevelMediaTypes =
+  | "application"
+  | "text"
+  | "image"
+  | "audio"
+  | "video"
+  | "model"
+  | "font"
+  | CompositeMediaTypes
+
+/**
+ * Supported media tree types
+ */
+export type MediaTreeTypes = "vnd" | "prs" | "x"

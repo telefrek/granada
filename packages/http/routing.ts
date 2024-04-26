@@ -4,7 +4,20 @@
 
 import type { Optional } from "@telefrek/core/type/utils.js"
 import { AsyncLocalStorage } from "async_hooks"
-import { HTTP_METHODS, HttpHandler, HttpMethod, SegmentValue } from "./index.js"
+import { HttpHandler, HttpMethod, SegmentValue } from "./index.js"
+
+/**
+ * Valid {@link HttpMethod} values as an array
+ */
+const HTTP_METHODS = [
+  HttpMethod.DELETE,
+  HttpMethod.GET,
+  HttpMethod.HEAD,
+  HttpMethod.OPTIONS,
+  HttpMethod.PATCH,
+  HttpMethod.POST,
+  HttpMethod.PUT,
+] as HttpMethod[]
 
 export type RoutingParameters = Map<string, SegmentValue>
 

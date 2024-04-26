@@ -1,4 +1,4 @@
-import { parseMediaType } from "./content.js"
+import { parseMediaType } from "./media.js"
 
 describe("Content handling should be correctly identified and processed", () => {
   it("Should be able to handle simple media types", () => {
