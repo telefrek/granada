@@ -3,7 +3,7 @@
  */
 
 import { DeferredPromise, type MaybeAwaitable } from "@telefrek/core/index.js"
-import type { EmptyCallback, Optional } from "@telefrek/core/type/utils.js"
+import type { Optional } from "@telefrek/core/type/utils.js"
 import type { IncomingHttpHeaders, OutgoingHttpHeaders } from "http"
 import {
   constants as Http2Constants,
@@ -27,10 +27,12 @@ import { extractHeaders, injectHeaders } from "../utils.js"
 /**
  * A default HTTP2 client using the Node `http2` package
  */
-export class Http2ClientTransport implements HttpClientTransport {
+export class Http2ClientTransport<T extends HttpTransportOptions>
+  implements HttpClientTransport
+{
   private _client: ClientHttp2Session
 
-  constructor(config: HttpTransportOptions) {
+  constructor(config: T) {
     const options: SecureClientSessionOptions = {
       ca: config.tls?.certificateAuthority,
       key: config.tls?.privateKey,
@@ -45,8 +47,7 @@ export class Http2ClientTransport implements HttpClientTransport {
 
   marshal(
     request: HttpRequest,
-    onHeadersWritten: EmptyCallback,
-    abortSignal: AbortSignal,
+    abort?: AbortSignal,
   ): MaybeAwaitable<HttpResponse> {
     const deferred = new DeferredPromise<HttpResponse>()
 
@@ -58,7 +59,7 @@ export class Http2ClientTransport implements HttpClientTransport {
 
       const http2Stream = this._client
         .request(outgoingHeaders, {
-          signal: abortSignal,
+          signal: abort,
         })
         .on("error", (err) => {
           deferred.reject(err)
@@ -104,8 +105,6 @@ export class Http2ClientTransport implements HttpClientTransport {
           },
         )
         .setDefaultEncoding("utf8")
-
-      onHeadersWritten()
 
       // Check if we need to write the body
       if (request.body) {

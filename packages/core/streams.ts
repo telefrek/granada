@@ -1,4 +1,4 @@
-import { Stream, TransformCallback } from "stream"
+import { Stream, TransformCallback, type TransformOptions } from "stream"
 import { MaybeAwaitable } from "./index.js"
 import type { Optional } from "./type/utils.js"
 
@@ -8,13 +8,21 @@ import type { Optional } from "./type/utils.js"
 export type TransformFunc<T, U> = (data: T) => MaybeAwaitable<Optional<U>>
 
 /**
+ * Type for stream callbacks
+ */
+export type StreamCallback = (error?: Error | null | undefined) => void
+
+/**
  * Create a generic {@link Stream.Transform} using a {@link TransformFunc}
  */
 export class GenericTransform<T, U> extends Stream.Transform {
   private transform: TransformFunc<T, U>
 
-  constructor(transform: TransformFunc<T, U>) {
-    super({ objectMode: true })
+  constructor(
+    transform: TransformFunc<T, U>,
+    options: TransformOptions = { objectMode: true },
+  ) {
+    super(options)
     this.transform = transform
   }
 

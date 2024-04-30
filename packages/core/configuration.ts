@@ -2,12 +2,12 @@
  * Package for handling configuration in an application
  */
 
-import EventEmitter from "events"
-import type { Emitter } from "./events.js"
 import { DeferredPromise, type MaybeAwaitable } from "./index.js"
 
+import EventEmitter from "events"
 import fs from "fs"
 import path, { join } from "path"
+import type { EventMap } from "./events.js"
 import { fileExists } from "./fileSystem.js"
 import {
   DefaultLogger,
@@ -44,7 +44,7 @@ export interface ConfigurationEvents {
  * Manages configuration values
  */
 export interface ConfigurationManager
-  extends Emitter<ConfigurationEvents>,
+  extends EventEmitter<EventMap<ConfigurationEvents>>,
     Disposable {
   /**
    * Iterate over the known keys
@@ -98,7 +98,7 @@ export interface FileSystemConfigurationManagerOptions {
  * file system
  */
 export class FileSystemConfigurationManager
-  extends EventEmitter
+  extends EventEmitter<EventMap<ConfigurationEvents>>
   implements ConfigurationManager
 {
   private readonly _configDirectory: string

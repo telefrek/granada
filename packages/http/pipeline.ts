@@ -3,7 +3,7 @@
  */
 
 import { Signal } from "@telefrek/core/concurrency.js"
-import { Emitter } from "@telefrek/core/events.js"
+import type { EventMap } from "@telefrek/core/events.js"
 import { MaybeAwaitable } from "@telefrek/core/index.js"
 import { LifecycleEvents } from "@telefrek/core/lifecycle.js"
 import {
@@ -12,21 +12,23 @@ import {
   type LogWriter,
   type Logger,
 } from "@telefrek/core/logging.js"
-import { type TransformFunc } from "@telefrek/core/streams.js"
-import { CircularArrayBuffer } from "@telefrek/core/structures/circularBuffer"
-import EventEmitter from "events"
-import { Readable, Writable } from "stream"
 import {
+  GenericTransform,
+  type StreamCallback,
+  type TransformFunc,
+} from "@telefrek/core/streams.js"
+import EventEmitter, { on } from "events"
+import { Readable, Transform, Writable, type TransformOptions } from "stream"
+import { translateHttpError } from "./errors.js"
+import {
+  HttpStatusCode,
+  type HttpHandler,
   type HttpOperation,
   type HttpOperationSource,
   type HttpRequest,
   type HttpResponse,
 } from "./index.js"
-
-/**
- * A simple type representing a stream transform on a {@link HttpOperation}
- */
-export type HttpTransform = TransformFunc<HttpOperation, HttpOperation>
+import { emptyHeaders } from "./utils.js"
 
 /**
  * The default {@link Logger} for {@link HttpPipeline} operations
@@ -100,19 +102,25 @@ export enum HttpPipelineState {
 /**
  * Represents an abstract pipeline for processing requests
  */
-export interface HttpPipeline extends Emitter<HttpPipelineEvents> {
+export interface HttpPipeline
+  extends EventEmitter<EventMap<HttpPipelineEvents>> {
   readonly state: HttpPipelineState
 
   /**
    * Adds the given {@link HttpOperationSource} to this pipeline using the
    * specified {@link HttpPipelineOptions} for controlling behavior.
    *
-   * @param options The {@link HttpPipelineOptions} for this source
    * @param source The {@link HttpOperationSource} to add
+   * @param handler The {@link HttpHandler} to use
+   * @param options The {@link HttpPipelineOptions} for this source
    *
    * @returns True if the {@link HttpOperationSource} was successfully added
    */
-  add(options: HttpPipelineOptions, source: HttpOperationSource): boolean
+  add(
+    source: HttpOperationSource,
+    handler: HttpHandler,
+    options?: HttpPipelineOptions,
+  ): boolean
 
   /**
    * Attempts to remove the given {@link HttpOperationSource} from this pipeline
@@ -160,10 +168,134 @@ export type HttpOperationHandler = (
   abort: AbortSignal,
 ) => MaybeAwaitable<HttpResponse>
 
-export class PassthroughPipeline extends EventEmitter implements HttpPipeline {
+/**
+ * Explicitly define the stages of a pipeline
+ */
+export enum HttpPipelineStage {
+  AUDITING = "auditing",
+  AUTHENTICATION = "authentication",
+  AUTHORIZATION = "authorization",
+  COMPLETED = "completed",
+  CONTENT_PARSING = "contentParsing",
+  LOAD_SHEDDING = "loadShedding",
+  MIDDLEWARE = "middleware",
+  RATE_LIMITING = "rateLimiting",
+  ROUTING = "routing",
+}
+
+/**
+ * Context for the current {@link HttpOperation} as it moves through a {@link HttpPipeline}
+ */
+export interface HttpOperationContext {
+  stage: HttpPipelineStage
+  operation: HttpOperation
+  response?: HttpResponse
+  handler?: HttpHandler
+}
+
+/**
+ * A simple type representing a stream transform on a {@link HttpOperation}
+ */
+export type HttpTransform = TransformFunc<
+  HttpOperationContext,
+  HttpOperationContext
+>
+
+export interface HttpPipelineConfiguration {
+  requestTransforms?: HttpTransform[]
+  responseTransforms?: HttpTransform[]
+  logger?: Logger
+}
+
+export function createPipeline(
+  configuration: HttpPipelineConfiguration,
+): HttpPipeline {
+  return new DefaultHttpPipeline(configuration)
+}
+
+function createReadable(
+  source: HttpOperationSource,
+  logger: Logger,
+  options?: HttpPipelineOptions,
+): Readable {
+  return Readable.from(on(source, "received"), {
+    highWaterMark: options?.highWaterMark,
+    objectMode: true,
+    emitClose: true,
+    autoDestroy: true,
+    destroy(error, callback) {
+      if (error) {
+        logger.info(`Source pipeline destroyed: ${error}`)
+      }
+
+      callback()
+    },
+  }).pipe(
+    new Transform({
+      objectMode: true,
+      highWaterMark: options?.highWaterMark,
+      write(
+        chunk: unknown,
+        encoding: BufferEncoding,
+        callback: StreamCallback,
+      ) {
+        // Stupid iterator pushes the tuple...
+        const operation: HttpOperation = Array.isArray(chunk)
+          ? (chunk[0] as HttpOperation)
+          : (chunk as HttpOperation)
+        this.push(
+          <HttpOperationContext>{
+            operation,
+            stage: HttpPipelineStage.AUDITING,
+          },
+          encoding,
+        )
+
+        callback()
+      },
+    }),
+  )
+}
+
+function createHandlerTransform(handler: HttpHandler): HttpTransform {
+  return async (
+    context: HttpOperationContext,
+  ): Promise<HttpOperationContext> => {
+    // Only process if we're not completed and there are no other responses already
+    if (
+      context.stage !== HttpPipelineStage.COMPLETED &&
+      !(context.operation.response || context.response)
+    ) {
+      try {
+        // Call the handler
+        context.response = await handler(
+          context.operation.request,
+          context.operation.signal,
+        )
+      } catch (err) {
+        context.operation.fail(translateHttpError(err))
+      }
+    }
+
+    return context
+  }
+}
+
+const DEFAULT_TRANSFORM_OPTS = <TransformOptions>{
+  objectMode: true,
+  allowHalfOpen: false,
+  autoDestroy: true,
+  emitClose: true,
+}
+
+class DefaultHttpPipeline
+  extends EventEmitter<EventMap<HttpPipelineEvents>>
+  implements HttpPipeline
+{
   private _state: HttpPipelineState
-  private _writer: Writable
-  private _signal: Signal
+  private readonly _signal: Signal
+  private readonly _logger: Logger
+  private readonly _configuration: HttpPipelineConfiguration
 
   private _sources: Map<HttpOperationSource, Readable> = new Map()
 
@@ -171,36 +303,115 @@ export class PassthroughPipeline extends EventEmitter implements HttpPipeline {
     return this._state
   }
 
-  constructor() {
+  constructor(configuration: HttpPipelineConfiguration) {
     super()
 
     this._state = HttpPipelineState.PROCESSING
     this._signal = new Signal()
+    this._logger = configuration.logger ?? PIPELINE_LOGGER
+    this._configuration = configuration
+  }
+
+  private _buildPipeline(
+    source: HttpOperationSource,
+    handler: HttpHandler,
+    options?: HttpPipelineOptions,
+  ): Readable {
+    const logger = this._logger
+    logger.info("Building pipeline...")
+
+    const readable = createReadable(source, logger, options)
+
+    // Start building the pipeline stages after dequeueing
+    let current = readable.pipe(
+      new GenericTransform((context: HttpOperationContext) => {
+        logger.info("dequeueing")
+        context.operation.dequeue()
+        return context
+      }, DEFAULT_TRANSFORM_OPTS),
+      { end: true },
+    )
+
+    // Check for any request transforms
+    if (this._configuration.requestTransforms) {
+      for (const transform of this._configuration.requestTransforms) {
+        current = current.pipe(
+          new GenericTransform(transform, DEFAULT_TRANSFORM_OPTS),
+          { end: true },
+        )
+      }
+    }
+
+    // Add the handler stage
+    current = current.pipe(
+      new GenericTransform(
+        createHandlerTransform(handler),
+        DEFAULT_TRANSFORM_OPTS,
+      ),
+      { end: true },
+    )
+
+    // Check for any response transforms
+    if (this._configuration.responseTransforms) {
+      for (const transform of this._configuration.responseTransforms) {
+        current = current.pipe(
+          new GenericTransform(transform, DEFAULT_TRANSFORM_OPTS),
+          { end: true },
+        )
+      }
+    }
 
     const check = this._checkState.bind(this)
 
-    this._writer = new Writable({
-      objectMode: true,
-      async write(operation: HttpOperation, _, callback) {
-        try {
-          PIPELINE_LOGGER.info("checking")
-          // Ensure we are not stopped
-          await check()
+    // Finally set the write
+    current
+      .pipe(
+        new Writable({
+          objectMode: true,
+          emitClose: true,
+          highWaterMark: options?.highWaterMark,
+          destroy: (err, callback) => {
+            if (err) {
+              logger.error(`Error during pipeline causing destroy: ${err}`)
+            }
+            logger.info(`Closing pipeline`)
+            callback()
+          },
+          write(
+            context: HttpOperationContext,
+            _: BufferEncoding,
+            callback: StreamCallback,
+          ) {
+            logger.info("calling write...")
+            check()
+              .catch((err) => {
+                logger.error(`Error during pipeline: ${err}`)
+              })
+              .then(() => {
+                context.stage = HttpPipelineStage.COMPLETED
+                if (!context.operation.response) {
+                  context.operation.complete(
+                    context.response ?? {
+                      status: {
+                        code: HttpStatusCode.NOT_FOUND,
+                      },
+                      headers: emptyHeaders(),
+                    },
+                  )
+                }
+              })
+              .finally(() => {
+                callback()
+              })
+          },
+        }),
+        { end: true },
+      )
+      .on("finish", () => {
+        logger.info(`Finished pipeline!`)
+      })
 
-          // Dequeue the operation
-          operation.dequeue()
-
-          PIPELINE_LOGGER.info("dequeued operation")
-
-          // Fire the callback
-          callback()
-        } catch (err) {
-          PIPELINE_LOGGER.info("error during write of operation")
-          // Indicate an error
-          callback(err as Error)
-        }
-      },
-    })
+    return readable
   }
 
   private async _checkState(): Promise<void> {
@@ -209,51 +420,19 @@ export class PassthroughPipeline extends EventEmitter implements HttpPipeline {
     }
   }
 
-  add(options: HttpPipelineOptions, source: HttpOperationSource): boolean {
+  add(
+    source: HttpOperationSource,
+    handler: HttpHandler,
+    options?: HttpPipelineOptions,
+  ): boolean {
     if (this._state !== HttpPipelineState.COMPLETED) {
       let readable = this._sources.get(source)
       if (readable) {
         return false
       }
 
-      // Create a buffer for holding
-      const buffer = new CircularArrayBuffer<HttpOperation>({
-        highWaterMark: options.highWaterMark,
-      })
-
-      source.on("received", (operation) => {
-        PIPELINE_LOGGER.info("received operation")
-        if (!buffer.tryAdd(operation)) {
-          operation.fail()
-        }
-        PIPELINE_LOGGER.info("added operation")
-      })
-
-      // Clean the buffer state
-      const cleanBuffer = () => {
-        // Close the buffer
-        buffer.close()
-
-        // Fail any remaining items
-        const items = buffer.tryRemoveRange(buffer.size)
-        if (items.length > 0) {
-          for (const item of items) {
-            item.fail()
-          }
-        }
-      }
-
       // Create the readable
-      readable = Readable.from(buffer, {
-        highWaterMark: options.maxConcurrency,
-        objectMode: true,
-      })
-        .on("close", cleanBuffer)
-        .on("error", cleanBuffer)
-
-      // Pipe it through this writer and set the source but don't close the
-      // writer on the end of this stream
-      readable.pipe(this._writer, { end: false })
+      readable = this._buildPipeline(source, handler, options)
       this._sources.set(source, readable)
 
       return true
@@ -265,7 +444,6 @@ export class PassthroughPipeline extends EventEmitter implements HttpPipeline {
   remove(source: HttpOperationSource): boolean {
     const readable = this._sources.get(source)
     if (readable) {
-      readable.unpipe(this._writer)
       readable.destroy()
     }
 
@@ -299,22 +477,7 @@ export class PassthroughPipeline extends EventEmitter implements HttpPipeline {
   }
 }
 
-export const NOOP_PIPELINE: HttpPipeline = new PassthroughPipeline()
-
-// /**
-//  * Explicitly define the stages of a pipeline
-//  */
-// export enum HttpPipelineStage {
-//   AUDITING = "auditing",
-//   AUTHENTICATION = "authentication",
-//   AUTHORIZATION = "authorization",
-//   CONTENT_PARSING = "contentParsing",
-//   HANDLER = "handler",
-//   LOAD_SHEDDING = "loadShedding",
-//   MIDDLEWARE = "middleware",
-//   RATE_LIMITING = "rateLimiting",
-//   ROUTING = "routing",
-// }
+export const NOOP_PIPELINE: HttpPipeline = new DefaultHttpPipeline({})
 
 // /** Defines the stage processing order */
 // export const PIPELINE_PROCESSING_ORDER = [

@@ -2,12 +2,15 @@
  * Http Error Information
  */
 
+import { getErrorMessage, isAbortError } from "@telefrek/core/errors.js"
+
 /**
  * Set of expected HTTP Errors
  */
 export enum HttpErrorCode {
   ABORTED = "aborted",
   TIMEOUT = "timeout",
+  CLOSED = "closed",
   UNKNOWN = "unknown",
 }
 
@@ -17,6 +20,22 @@ export enum HttpErrorCode {
 export interface HttpError {
   errorCode: HttpErrorCode
   description?: string
+  cause?: unknown
+}
+
+export function mapErrorCode(error: unknown): HttpErrorCode {
+  // TODO: Clean this up...
+  return isAbortError(error) ? HttpErrorCode.ABORTED : HttpErrorCode.UNKNOWN
+}
+
+export function translateHttpError(error: unknown): HttpError {
+  return isHttpError(error)
+    ? error
+    : {
+        errorCode: mapErrorCode(error),
+        cause: error,
+        description: getErrorMessage(error),
+      }
 }
 
 /**

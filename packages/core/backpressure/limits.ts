@@ -2,7 +2,8 @@
  * Port of a subset of the Netflix Concurrency Limits functionality {@link https://github.com/Netflix/concurrency-limits}
  */
 
-import { Emitter } from "../events.js"
+import type EventEmitter from "events"
+import type { EventMap } from "../events.js"
 import { Duration } from "../time.js"
 import type { Optional } from "../type/utils.js"
 import { fixedLimit } from "./algorithms.js"
@@ -37,7 +38,7 @@ export interface LimitEvents {
 /**
  * Represents a dynamic limit algorithm
  */
-export interface LimitAlgorithm extends Emitter<LimitEvents> {
+export interface LimitAlgorithm extends EventEmitter<EventMap<LimitEvents>> {
   /**
    * Method used to determine if the limit needs to be changed
    *
