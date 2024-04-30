@@ -3,13 +3,13 @@
  */
 
 import type { Optional } from "@telefrek/core/type/utils.js"
-import { CommonMediaTypes } from "@telefrek/http/content.js"
 import {
   HttpHandler,
   HttpMethod,
   type HttpBody,
   type HttpStatusCode,
 } from "@telefrek/http/index.js"
+import { CommonMediaTypes } from "@telefrek/http/media.js"
 import { Readable } from "stream"
 import type { MaybeAwaitable } from "../core/index.js"
 import type { RoutingParameters } from "../http/routing.js"
