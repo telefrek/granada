@@ -3,7 +3,7 @@
  */
 
 import { isAbortError } from "@telefrek/core/errors.js"
-import type { EventMap } from "@telefrek/core/events.js"
+import { EmitterFor, type Emitter } from "@telefrek/core/events.js"
 import { DeferredPromise, type MaybeAwaitable } from "@telefrek/core/index.js"
 import type { LifecycleEvents } from "@telefrek/core/lifecycle.js"
 import {
@@ -14,7 +14,6 @@ import {
 } from "@telefrek/core/logging.js"
 import { Duration } from "@telefrek/core/time.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
-import EventEmitter from "events"
 import { Http2ClientTransport } from "./client/http2.js"
 import { DEFAULT_CLIENT_PIPELINE_CONFIGURATION } from "./client/pipeline.js"
 import { HttpErrorCode, type HttpError } from "./errors.js"
@@ -63,7 +62,7 @@ export function setHttpClientLogWriter(writer: LogWriter): void {
 /**
  * The interface that represents an Http Client
  */
-export interface HttpClient extends EventEmitter<EventMap<HttpClientEvents>> {
+export interface HttpClient extends Emitter<HttpClientEvents> {
   /**
    * Submit the request to the client to be processed
    *
@@ -185,7 +184,7 @@ export class HttpClientBuilder<
  * Base class for extending Http Client behaviors
  */
 class DefaultHttpClient
-  extends EventEmitter<EventMap<HttpClientEvents>>
+  extends EmitterFor<HttpClientEvents>
   implements HttpClient
 {
   private readonly _logger: Logger

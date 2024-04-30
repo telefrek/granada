@@ -2,12 +2,11 @@
  * Core package definitions and interfaces
  */
 
-import type { EventMap } from "@telefrek/core/events.js"
+import { Emitter, EmitterFor } from "@telefrek/core/events.js"
 import { type MaybeAwaitable } from "@telefrek/core/index.js"
 import { LifecycleEvents } from "@telefrek/core/lifecycle.js"
 import type { Duration } from "@telefrek/core/time.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
-import { EventEmitter } from "events"
 import { Stream, type Readable } from "stream"
 import type { HttpError } from "./errors.js"
 
@@ -286,8 +285,7 @@ export interface HttpOperationEvents extends LifecycleEvents {
 /**
  * An operation that has a request and response pair
  */
-export interface HttpOperation
-  extends EventEmitter<EventMap<HttpOperationEvents>> {
+export interface HttpOperation extends Emitter<HttpOperationEvents> {
   /** The current {@link HttpOperationState} */
   readonly state: HttpOperationState
   /** The {@link HttpRequest} that initiated the operation */
@@ -365,9 +363,7 @@ export interface HttpOperationSourceEvents extends LifecycleEvents {
 /**
  * Custom type for objects that create {@link HttpOperation} via events
  */
-export type HttpOperationSource = EventEmitter<
-  EventMap<HttpOperationSourceEvents>
->
+export type HttpOperationSource = Emitter<HttpOperationSourceEvents>
 
 /**
  * Create a new {@link HttpOperation} that moves through the expected state machine
@@ -384,7 +380,7 @@ export function createHttpOperation(
 }
 
 class DefaultHttpOperation
-  extends EventEmitter<EventMap<HttpOperationEvents>>
+  extends EmitterFor<HttpOperationEvents>
   implements HttpOperation
 {
   private readonly _request: HttpRequest

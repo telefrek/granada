@@ -2,6 +2,9 @@
  * This package contains some useful type manipulations used throughout the framework
  */
 
+/**
+ * All of the literal required keys from a type
+ */
 export type RequiredLiteralKeys<T> = {
   [K in keyof T as string extends K
     ? never
@@ -13,6 +16,9 @@ export type RequiredLiteralKeys<T> = {
         : K]: T[K]
 }
 
+/**
+ * All of the optional (explicit) keys
+ */
 export type OptionalLiteralKeys<T> = {
   [K in keyof T as string extends K
     ? never

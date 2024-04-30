@@ -1,6 +1,5 @@
 import { randomInt } from "crypto"
-import EventEmitter from "events"
-import type { EventMap } from "../events.js"
+import { EmitterFor } from "../events.js"
 import { Duration } from "../time.js"
 import { LOG10, LimitAlgorithm, type LimitEvents } from "./limits.js"
 
@@ -8,7 +7,7 @@ import { LOG10, LimitAlgorithm, type LimitEvents } from "./limits.js"
  * Base class for all implementations of the {@link LimitAlgorithm}
  */
 abstract class AbstractLimitAlgorithm
-  extends EventEmitter<EventMap<LimitEvents>>
+  extends EmitterFor<LimitEvents>
   implements LimitAlgorithm
 {
   _limit: number

@@ -4,10 +4,9 @@
 
 import { DeferredPromise, type MaybeAwaitable } from "./index.js"
 
-import EventEmitter from "events"
 import fs from "fs"
 import path, { join } from "path"
-import type { EventMap } from "./events.js"
+import { EmitterFor, type Emitter } from "./events.js"
 import { fileExists } from "./fileSystem.js"
 import {
   DefaultLogger,
@@ -44,7 +43,7 @@ export interface ConfigurationEvents {
  * Manages configuration values
  */
 export interface ConfigurationManager
-  extends EventEmitter<EventMap<ConfigurationEvents>>,
+  extends Emitter<ConfigurationEvents>,
     Disposable {
   /**
    * Iterate over the known keys
@@ -98,7 +97,7 @@ export interface FileSystemConfigurationManagerOptions {
  * file system
  */
 export class FileSystemConfigurationManager
-  extends EventEmitter<EventMap<ConfigurationEvents>>
+  extends EmitterFor<ConfigurationEvents>
   implements ConfigurationManager
 {
   private readonly _configDirectory: string

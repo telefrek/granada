@@ -2,7 +2,7 @@
  * HTTP Server implementation
  */
 
-import { type EventMap } from "@telefrek/core/events.js"
+import { Emitter, EmitterFor } from "@telefrek/core/events.js"
 import { DeferredPromise, type MaybeAwaitable } from "@telefrek/core/index.js"
 import { LifecycleEvents } from "@telefrek/core/lifecycle.js"
 import {
@@ -12,7 +12,6 @@ import {
   type LogWriter,
 } from "@telefrek/core/logging.js"
 import { type Duration } from "@telefrek/core/time.js"
-import EventEmitter from "events"
 import { HttpErrorCode, type HttpError } from "./errors.js"
 import {
   HttpOperationState,
@@ -78,7 +77,7 @@ interface HttpServerEvents extends LifecycleEvents, HttpOperationSourceEvents {
 /**
  * The interface representing an HTTP Server
  */
-export interface HttpServer extends EventEmitter<EventMap<HttpServerEvents>> {
+export interface HttpServer extends Emitter<HttpServerEvents> {
   /**
    * Starts the server accepting connections on the given port
    *
@@ -112,7 +111,7 @@ export interface HttpServerConfig {
 }
 
 export abstract class HttpServerBase
-  extends EventEmitter<EventMap<HttpServerEvents>>
+  extends EmitterFor<HttpServerEvents>
   implements HttpServer
 {
   protected readonly _config: HttpServerConfig

@@ -3,7 +3,7 @@
  */
 
 import { Signal } from "@telefrek/core/concurrency.js"
-import type { EventMap } from "@telefrek/core/events.js"
+import { Emitter, EmitterFor } from "@telefrek/core/events.js"
 import { MaybeAwaitable } from "@telefrek/core/index.js"
 import { LifecycleEvents } from "@telefrek/core/lifecycle.js"
 import {
@@ -17,7 +17,7 @@ import {
   type StreamCallback,
   type TransformFunc,
 } from "@telefrek/core/streams.js"
-import EventEmitter, { on } from "events"
+import { on } from "events"
 import { Readable, Transform, Writable, type TransformOptions } from "stream"
 import { translateHttpError } from "./errors.js"
 import {
@@ -102,8 +102,7 @@ export enum HttpPipelineState {
 /**
  * Represents an abstract pipeline for processing requests
  */
-export interface HttpPipeline
-  extends EventEmitter<EventMap<HttpPipelineEvents>> {
+export interface HttpPipeline extends Emitter<HttpPipelineEvents> {
   readonly state: HttpPipelineState
 
   /**
@@ -292,7 +291,7 @@ const DEFAULT_TRANSFORM_OPTS = <TransformOptions>{
 }
 
 class DefaultHttpPipeline
-  extends EventEmitter<EventMap<HttpPipelineEvents>>
+  extends EmitterFor<HttpPipelineEvents>
   implements HttpPipeline
 {
   private _state: HttpPipelineState
