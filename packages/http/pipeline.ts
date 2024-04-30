@@ -257,7 +257,7 @@ function createReadable(
   )
 }
 
-function createHandlerTransform(handler: HttpHandler): HttpTransform {
+function createHandlerTransform(defaultHandler: HttpHandler): HttpTransform {
   return async (
     context: HttpOperationContext,
   ): Promise<HttpOperationContext> => {
@@ -267,6 +267,9 @@ function createHandlerTransform(handler: HttpHandler): HttpTransform {
       !(context.operation.response || context.response)
     ) {
       try {
+        // Either use the context handler or the default
+        const handler = context.handler ?? defaultHandler
+
         // Call the handler
         context.response = await handler(
           context.operation.request,
@@ -318,14 +321,13 @@ class DefaultHttpPipeline
     options?: HttpPipelineOptions,
   ): Readable {
     const logger = this._logger
-    logger.info("Building pipeline...")
 
     const readable = createReadable(source, logger, options)
 
     // Start building the pipeline stages after dequeueing
     let current = readable.pipe(
       new GenericTransform((context: HttpOperationContext) => {
-        logger.info("dequeueing")
+        logger.debug("dequeueing")
         context.operation.dequeue()
         return context
       }, DEFAULT_TRANSFORM_OPTS),
@@ -382,7 +384,6 @@ class DefaultHttpPipeline
             _: BufferEncoding,
             callback: StreamCallback,
           ) {
-            logger.info("calling write...")
             check()
               .catch((err) => {
                 logger.error(`Error during pipeline: ${err}`)

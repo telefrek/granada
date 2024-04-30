@@ -3,7 +3,7 @@
  */
 
 import type { EventMap } from "@telefrek/core/events.js"
-import type { MaybeAwaitable } from "@telefrek/core/index.js"
+import { type MaybeAwaitable } from "@telefrek/core/index.js"
 import { LifecycleEvents } from "@telefrek/core/lifecycle.js"
 import type { Duration } from "@telefrek/core/time.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
@@ -225,7 +225,7 @@ export interface HttpQuery {
  */
 export interface HttpPath {
   readonly original: string
-  readonly segments: string[]
+  segments?: string[]
   template?: string
 }
 
@@ -325,7 +325,7 @@ export interface HttpRequest {
   readonly path: HttpPath
   readonly method: HttpMethod
   readonly headers: HttpHeaders
-  readonly version: HttpVersion
+  readonly version?: HttpVersion
   readonly query?: HttpQuery
   readonly body?: HttpBody
 }
@@ -522,6 +522,9 @@ class DefaultHttpOperation
         // Try to complete it now
         return this._process()
       }
+    } else {
+      // eslint-disable-next-line no-console
+      console.log(`Failed to move to read!!`)
     }
 
     return false
@@ -634,7 +637,7 @@ class DefaultHttpOperation
 export interface TLSConfig {
   certificateAuthority?: Buffer | string
   privateKey?: Buffer | string
-  publicCertificate: Buffer | string
+  publicCertificate?: Buffer | string
   mutualAuthentication?: boolean
 }
 

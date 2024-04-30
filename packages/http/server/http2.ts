@@ -2,7 +2,6 @@
  * Custom HTTP2 implementation for the server
  */
 
-import { trace } from "@opentelemetry/api"
 import { DeferredPromise } from "@telefrek/core/index.js"
 import { registerShutdown } from "@telefrek/core/lifecycle.js"
 import { delay } from "@telefrek/core/time.js"
@@ -17,6 +16,7 @@ import {
 import { HttpServerBase, type HttpServerConfig } from "../server.js"
 import { extractHeaders, injectHeaders, parsePath } from "../utils.js"
 
+import type { Logger } from "@telefrek/core/logging"
 import {
   Http2Server,
   Http2ServerRequest,
@@ -31,14 +31,18 @@ import {
  */
 export class NodeHttp2Server extends HttpServerBase {
   private _server: Http2Server
-  private _tracer = trace.getTracer("Granada.HttpServer")
   private _sessions: ServerHttp2Session[] = []
 
-  constructor(config: HttpServerConfig) {
-    super(config)
+  constructor(config: HttpServerConfig, logger?: Logger) {
+    super(config, logger)
     Stream.Duplex.setMaxListeners(128)
 
-    const options: SecureServerOptions = {}
+    const options: SecureServerOptions = {
+      ca: config.tls?.certificateAuthority,
+      key: config.tls?.privateKey,
+      cert: config.tls?.publicCertificate,
+      allowHTTP1: true,
+    }
 
     this._server = createSecureServer(options)
 
@@ -121,19 +125,23 @@ export class NodeHttp2Server extends HttpServerBase {
 
     this._server.on("request", async (req, resp) => {
       // Handle health
-      if (req.url === "/health") {
-        resp.writeHead(HttpStatusCode.NO_CONTENT).end()
-        return
-      }
+      if (req.method === "GET") {
+        if (req.url === "/health") {
+          resp.writeHead(HttpStatusCode.NO_CONTENT).end()
+          return
+        }
 
-      // Handle ready
-      if (req.url === "/ready") {
-        resp
-          .writeHead(
-            this.isReady ? HttpStatusCode.NO_CONTENT : HttpStatusCode.NOT_FOUND,
-          )
-          .end()
-        return
+        // Handle ready
+        if (req.url === "/ready") {
+          resp
+            .writeHead(
+              this.isReady
+                ? HttpStatusCode.NO_CONTENT
+                : HttpStatusCode.BAD_GATEWAY,
+            )
+            .end()
+          return
+        }
       }
 
       // Get the response
@@ -151,6 +159,8 @@ export class NodeHttp2Server extends HttpServerBase {
         response.body.contents.pipe(resp, {
           end: true,
         })
+      } else {
+        resp.end()
       }
     })
   }
@@ -166,8 +176,10 @@ function createHttp2Request(request: Http2ServerRequest): HttpRequest {
     headers: extractHeaders(request.headers),
     version: HttpVersion.HTTP_2,
     method: request.method.toUpperCase() as HttpMethod,
-    body: {
-      contents: request as Readable,
-    },
+    body: request.stream.endAfterHeaders
+      ? undefined
+      : {
+          contents: request as Readable,
+        },
   }
 }

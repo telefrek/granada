@@ -94,6 +94,15 @@ export interface HttpServer extends EventEmitter<EventMap<HttpServerEvents>> {
    * @param graceful Flag to indicate if we want a graceful shutdown
    */
   close(graceful?: boolean): MaybeAwaitable<void>
+
+  /**
+   * Change the readiness flag
+   *
+   * @param enabled A flag to indicate if the readiness is enabled
+   *
+   * @returns True if readiness is supported
+   */
+  setReady(enabled: boolean): boolean
 }
 
 export interface HttpServerConfig {
@@ -126,6 +135,11 @@ export abstract class HttpServerBase
   abstract listen(port: number): MaybeAwaitable<void>
   abstract close(graceful?: boolean): MaybeAwaitable<void>
 
+  setReady(enabled: boolean): boolean {
+    this._ready = enabled
+    return true
+  }
+
   protected handleRequest(request: HttpRequest): Promise<HttpResponse> {
     const operation = createHttpOperation(request, this._config.requestTimeout)
 
@@ -154,7 +168,6 @@ export abstract class HttpServerBase
           break
         case HttpOperationState.COMPLETED:
         case HttpOperationState.WRITING:
-          this._logger.debug(`(${request.id}) Response Available`)
           if (operation.response) {
             deferred.resolve(operation.response)
           } else {
@@ -168,7 +181,6 @@ export abstract class HttpServerBase
       }
     })
 
-    this._logger.info(`Emitting operation...`)
     this.emit("received", operation)
 
     return deferred

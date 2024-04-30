@@ -13,6 +13,7 @@ import {
   type LogWriter,
 } from "@telefrek/core/logging.js"
 import { Duration } from "@telefrek/core/time.js"
+import type { Optional } from "@telefrek/core/type/utils.js"
 import EventEmitter from "events"
 import { Http2ClientTransport } from "./client/http2.js"
 import { DEFAULT_CLIENT_PIPELINE_CONFIGURATION } from "./client/pipeline.js"
@@ -116,6 +117,7 @@ export class HttpClientBuilder<
   private _options: T
   private _transport: ClientTransportConstructor<T> | HttpClientTransport =
     Http2ClientTransport<T>
+  private _logger: Optional<Logger>
 
   private _pipeline: HttpPipeline = createPipeline(
     DEFAULT_CLIENT_PIPELINE_CONFIGURATION,
@@ -123,6 +125,11 @@ export class HttpClientBuilder<
 
   constructor(options: T) {
     this._options = options
+  }
+
+  withLogger(logger: Logger): HttpClientBuilder<T> {
+    this._logger = logger
+    return this
   }
 
   withTransport(
@@ -161,7 +168,7 @@ export class HttpClientBuilder<
       }
     }
 
-    const client = new DefaultHttpClient()
+    const client = new DefaultHttpClient(this._logger)
     if (
       this._pipeline.add(client as HttpOperationSource, handler, {
         highWaterMark: 2,
@@ -230,7 +237,6 @@ class DefaultHttpClient
           break
         case HttpOperationState.WRITING:
         case HttpOperationState.COMPLETED:
-          this._logger.debug(`(${request.id}) Response Available`)
           if (operation.response) {
             deferred.resolve(operation.response)
           } else {
@@ -244,7 +250,6 @@ class DefaultHttpClient
       }
     })
 
-    this._logger.info(`Emitting operation...`)
     this.emit("received", operation)
 
     return deferred

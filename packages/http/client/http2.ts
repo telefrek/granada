@@ -54,12 +54,14 @@ export class Http2ClientTransport<T extends HttpTransportOptions>
     try {
       const outgoingHeaders: OutgoingHttpHeaders = {
         [Http2Constants.HTTP2_HEADER_PATH]: request.path.original,
+        [Http2Constants.HTTP2_HEADER_METHOD]: request.method,
       }
       injectHeaders(request.headers, outgoingHeaders)
 
       const http2Stream = this._client
         .request(outgoingHeaders, {
           signal: abort,
+          endStream: true,
         })
         .on("error", (err) => {
           deferred.reject(err)
