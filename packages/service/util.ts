@@ -1,16 +1,17 @@
 import { DeferredPromise } from "@telefrek/core/index.js"
 import type { Optional } from "@telefrek/core/type/utils"
 import {
-  DefaultHttpMethodStatus,
   HttpStatusCode,
   type HttpHandler,
   type HttpRequest,
+  type HttpResponse,
 } from "@telefrek/http/index.js"
 import {
   createRouter,
   getRoutingParameters,
   type Router,
 } from "@telefrek/http/routing.js"
+import { DefaultHttpMethodStatus, emptyHeaders } from "@telefrek/http/utils"
 import type { Readable } from "stream"
 import {
   SerializationFormat,
@@ -66,7 +67,7 @@ export function buildHandler<T>(
   service: unknown,
   serviceRoute: ServiceRouteInfo<T>,
 ): HttpHandler {
-  return async (request: HttpRequest): Promise<void> => {
+  return async (request: HttpRequest): Promise<HttpResponse> => {
     let args: Optional<unknown[]>
 
     // Read the body
@@ -90,36 +91,45 @@ export function buildHandler<T>(
       response = serviceRoute.options.errorHandler
         ? serviceRoute.options.errorHandler(err)
         : {
-            status: HttpStatusCode.INTERNAL_SERVER_ERROR,
+            code: HttpStatusCode.INTERNAL_SERVER_ERROR,
           }
     }
 
     if (isServiceError(response)) {
-      request.respond({
-        status: response.status,
-        statusMessage: response.statusMessage,
+      return {
+        status: {
+          code: response.code,
+          message: response.message,
+        },
         body: response.body,
-      })
+        headers: emptyHeaders(),
+      }
     } else {
       // Start with the default status code or route definition
-      const status =
+      const code =
         serviceRoute.options.statusCode ??
         DefaultHttpMethodStatus[request.method]
 
       // If no contents, return NO_CONTENT
       if (response === undefined || response === null) {
-        request.respond({
-          status: HttpStatusCode.NO_CONTENT,
-        })
+        return {
+          status: {
+            code: HttpStatusCode.NO_CONTENT,
+          },
+          headers: emptyHeaders(),
+        }
       } else {
-        request.respond({
-          status,
+        return {
+          status: {
+            code,
+          },
+          headers: emptyHeaders(),
           body:
             (serviceRoute.options.format ?? SerializationFormat.JSON) ===
             SerializationFormat.JSON
               ? createJsonBody(response)
               : createTextBody(response as string),
-        })
+        }
       }
     }
   }

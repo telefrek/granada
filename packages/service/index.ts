@@ -49,8 +49,8 @@ export interface Service {
 
 /** A service error */
 export interface ServiceError {
-  status: HttpStatusCode
-  statusMessage?: string
+  code: HttpStatusCode
+  message?: string
   body?: HttpBody
 }
 
@@ -78,13 +78,10 @@ export function isServiceError(response: unknown): response is ServiceError {
   if (
     typeof response === "object" &&
     response !== null &&
-    "status" in response &&
-    typeof response.status === "number"
+    "code" in response &&
+    typeof response.code === "number"
   ) {
-    if (
-      "statusMessage" in response &&
-      typeof response.statusMessage !== "string"
-    ) {
+    if ("message" in response && typeof response.message !== "string") {
       return false
     }
 

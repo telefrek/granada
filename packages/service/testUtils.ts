@@ -39,7 +39,7 @@ export class TestService {
   })
   createItem(create: ItemData): ServiceResponse<TestItem> {
     if (create === undefined) {
-      return { status: 400, statusMessage: "Missing body" }
+      return { code: 400, message: "Missing body" }
     }
 
     const item: TestItem = {
@@ -75,7 +75,7 @@ export class TestService {
   })
   updateItem(itemId: number, update: ItemData): ServiceResponse<TestItem> {
     if (update === undefined) {
-      return { status: 400, statusMessage: "Missing body" }
+      return { code: 400, message: "Missing body" }
     }
 
     const item = this.items.get(itemId)
@@ -84,6 +84,6 @@ export class TestService {
       return item
     }
 
-    return { status: 404, statusMessage: "Item does not exist" }
+    return { code: 404, message: "Item does not exist" }
   }
 }
