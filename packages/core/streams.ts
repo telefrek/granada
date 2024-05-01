@@ -20,7 +20,7 @@ export class GenericTransform<T, U> extends Stream.Transform {
 
   constructor(
     transform: TransformFunc<T, U>,
-    options: TransformOptions = { objectMode: true },
+    options: TransformOptions = { objectMode: true, autoDestroy: true },
   ) {
     super(options)
     this.transform = transform

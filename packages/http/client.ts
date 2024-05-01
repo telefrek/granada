@@ -167,7 +167,7 @@ export class HttpClientBuilder<
       }
     }
 
-    const client = new DefaultHttpClient(this._logger)
+    const client = new DefaultHttpClient(this._options.name, this._logger)
     if (
       this._pipeline.add(client as HttpOperationSource, handler, {
         highWaterMark: 2,
@@ -190,11 +190,14 @@ class DefaultHttpClient
   private readonly _logger: Logger
   private _closed: boolean
 
-  constructor(logger: Logger = HTTP_CLIENT_LOGGER) {
+  readonly id: string
+
+  constructor(id: string, logger: Logger = HTTP_CLIENT_LOGGER) {
     super({ captureRejections: true })
 
     this._closed = false
     this._logger = logger
+    this.id = id
   }
 
   close(): MaybeAwaitable<void> {}

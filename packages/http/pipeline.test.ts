@@ -34,7 +34,7 @@ describe("Pipelines should support clients and servers end to end", () => {
     }
 
     // Let any logs clear
-    await delay(10)
+    await delay(50)
   })
 
   it("Server should respond to health requests", async () => {

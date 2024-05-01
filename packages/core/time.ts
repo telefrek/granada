@@ -103,6 +103,15 @@ export class Timestamp {
     return begin.difference(end)
   }
 
+  /**
+   * Create a timestamp object for measuring runtime execution
+   *
+   * @returns A newly initialized {@link Timestamp}
+   */
+  static now(): Timestamp {
+    return new Timestamp()
+  }
+
   constructor(timestamp: bigint | number = Date.now()) {
     this._hiRes = typeof timestamp === "bigint"
     this._value = timestamp

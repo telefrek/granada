@@ -17,8 +17,15 @@ import {
   type StreamCallback,
   type TransformFunc,
 } from "@telefrek/core/streams.js"
+import { Timestamp } from "@telefrek/core/time"
 import { on } from "events"
-import { Readable, Transform, Writable, type TransformOptions } from "stream"
+import {
+  Readable,
+  promises as StreamPromise,
+  Transform,
+  Writable,
+  type TransformOptions,
+} from "stream"
 import { translateHttpError } from "./errors.js"
 import {
   HttpStatusCode,
@@ -128,7 +135,7 @@ export interface HttpPipeline extends Emitter<HttpPipelineEvents> {
    *
    * @returns True if the {@link HttpOperationSource} was removed
    */
-  remove(source: HttpOperationSource): boolean
+  remove(source: HttpOperationSource): MaybeAwaitable<boolean>
 
   /**
    * Stops the {@link HttpPipeline} from processing any further requests
@@ -201,9 +208,14 @@ export type HttpTransform = TransformFunc<
 >
 
 export interface HttpPipelineConfiguration {
+  /** Transforms for the request handling portion */
   requestTransforms?: HttpTransform[]
+  /** Transforms for the response handling portion */
   responseTransforms?: HttpTransform[]
+  /** Logger to use (default to the core pipeline logger) */
   logger?: Logger
+  /** Flag to automatically cleanup the pipeline when all sources are removed */
+  autoDestroy?: boolean
 }
 
 export function createPipeline(
@@ -212,75 +224,15 @@ export function createPipeline(
   return new DefaultHttpPipeline(configuration)
 }
 
-function createReadable(
-  source: HttpOperationSource,
-  logger: Logger,
-  options?: HttpPipelineOptions,
-): Readable {
-  return Readable.from(on(source, "received"), {
-    highWaterMark: options?.highWaterMark,
-    objectMode: true,
-    emitClose: true,
-    autoDestroy: true,
-    destroy(error, callback) {
-      if (error) {
-        logger.info(`Source pipeline destroyed: ${error}`)
-      }
-
-      callback()
-    },
-  }).pipe(
-    new Transform({
-      objectMode: true,
-      highWaterMark: options?.highWaterMark,
-      write(
-        chunk: unknown,
-        encoding: BufferEncoding,
-        callback: StreamCallback,
-      ) {
-        // Stupid iterator pushes the tuple...
-        const operation: HttpOperation = Array.isArray(chunk)
-          ? (chunk[0] as HttpOperation)
-          : (chunk as HttpOperation)
-        this.push(
-          <HttpOperationContext>{
-            operation,
-            stage: HttpPipelineStage.AUDITING,
-          },
-          encoding,
-        )
-
-        callback()
-      },
-    }),
-  )
-}
-
-function createHandlerTransform(defaultHandler: HttpHandler): HttpTransform {
-  return async (
-    context: HttpOperationContext,
-  ): Promise<HttpOperationContext> => {
-    // Only process if we're not completed and there are no other responses already
-    if (
-      context.stage !== HttpPipelineStage.COMPLETED &&
-      !(context.operation.response || context.response)
-    ) {
-      try {
-        // Either use the context handler or the default
-        const handler = context.handler ?? defaultHandler
-
-        // Call the handler
-        context.response = await handler(
-          context.operation.request,
-          context.operation.signal,
-        )
-      } catch (err) {
-        context.operation.fail(translateHttpError(err))
-      }
-    }
-
-    return context
-  }
+/**
+ * Contains details about the pipelines that are running
+ */
+interface PipelineDetails {
+  destination: Writable
+  middleware: Middleware
+  source: Readable
+  started: Timestamp
+  options: HttpPipelineOptions
 }
 
 const DEFAULT_TRANSFORM_OPTS = <TransformOptions>{
@@ -288,6 +240,11 @@ const DEFAULT_TRANSFORM_OPTS = <TransformOptions>{
   allowHalfOpen: false,
   autoDestroy: true,
   emitClose: true,
+}
+
+type Middleware = {
+  start: GenericTransform<HttpOperationContext, HttpOperationContext>
+  end: GenericTransform<HttpOperationContext, HttpOperationContext>
 }
 
 class DefaultHttpPipeline
@@ -299,7 +256,7 @@ class DefaultHttpPipeline
   private readonly _logger: Logger
   private readonly _configuration: HttpPipelineConfiguration
 
-  private _sources: Map<HttpOperationSource, Readable> = new Map()
+  private _sources: Map<HttpOperationSource, PipelineDetails> = new Map()
 
   get state(): HttpPipelineState {
     return this._state
@@ -314,104 +271,203 @@ class DefaultHttpPipeline
     this._configuration = configuration
   }
 
-  private _buildPipeline(
-    source: HttpOperationSource,
-    handler: HttpHandler,
-    options?: HttpPipelineOptions,
-  ): Readable {
+  private _createHandlerTransform(defaultHandler: HttpHandler): HttpTransform {
+    return async (
+      context: HttpOperationContext,
+    ): Promise<HttpOperationContext> => {
+      // Only process if we're not completed and there are no other responses already
+      if (
+        context.stage !== HttpPipelineStage.COMPLETED &&
+        !(context.operation.response || context.response)
+      ) {
+        try {
+          // Either use the context handler or the default
+          const handler = context.handler ?? defaultHandler
+
+          // Call the handler
+          context.response = await handler(
+            context.operation.request,
+            context.operation.signal,
+          )
+        } catch (err) {
+          context.operation.fail(translateHttpError(err))
+        }
+      }
+
+      return context
+    }
+  }
+
+  private _buildMiddleware(handler: HttpHandler): Middleware {
     const logger = this._logger
+    const start = new GenericTransform((context: HttpOperationContext) => {
+      logger.debug("dequeueing")
+      context.operation.dequeue()
+      return context
+    }, DEFAULT_TRANSFORM_OPTS)
 
-    const readable = createReadable(source, logger, options)
-
-    // Start building the pipeline stages after dequeueing
-    let current = readable.pipe(
-      new GenericTransform((context: HttpOperationContext) => {
-        logger.debug("dequeueing")
-        context.operation.dequeue()
-        return context
-      }, DEFAULT_TRANSFORM_OPTS),
-      { end: true },
-    )
+    let end = start
 
     // Check for any request transforms
     if (this._configuration.requestTransforms) {
       for (const transform of this._configuration.requestTransforms) {
-        current = current.pipe(
-          new GenericTransform(transform, DEFAULT_TRANSFORM_OPTS),
-          { end: true },
-        )
+        end = end
+          .on("error", (err) => {
+            logger.error(`Error in pipeline during requestTransform: ${err}`)
+          })
+          .pipe(new GenericTransform(transform, DEFAULT_TRANSFORM_OPTS), {
+            end: true,
+          })
       }
     }
 
     // Add the handler stage
-    current = current.pipe(
-      new GenericTransform(
-        createHandlerTransform(handler),
-        DEFAULT_TRANSFORM_OPTS,
-      ),
-      { end: true },
-    )
+    end = end
+      .on("error", (err) => {
+        logger.error(`Error in pipeline during before handler: ${err}`)
+      })
+      .pipe(
+        new GenericTransform(
+          this._createHandlerTransform(handler),
+          DEFAULT_TRANSFORM_OPTS,
+        ),
+        { end: true },
+      )
 
     // Check for any response transforms
     if (this._configuration.responseTransforms) {
       for (const transform of this._configuration.responseTransforms) {
-        current = current.pipe(
-          new GenericTransform(transform, DEFAULT_TRANSFORM_OPTS),
-          { end: true },
-        )
+        end = end
+          .on("error", (err) => {
+            logger.error(`Error in pipeline during responseTransform: ${err}`)
+          })
+          .pipe(new GenericTransform(transform, DEFAULT_TRANSFORM_OPTS), {
+            end: true,
+          })
       }
     }
 
-    const check = this._checkState.bind(this)
+    return { start, end }
+  }
 
-    // Finally set the write
-    current
-      .pipe(
-        new Writable({
-          objectMode: true,
-          emitClose: true,
-          highWaterMark: options?.highWaterMark,
-          destroy: (err, callback) => {
-            if (err) {
-              logger.error(`Error during pipeline causing destroy: ${err}`)
-            }
-            logger.info(`Closing pipeline`)
-            callback()
-          },
-          write(
-            context: HttpOperationContext,
-            _: BufferEncoding,
-            callback: StreamCallback,
-          ) {
-            check()
-              .catch((err) => {
-                logger.error(`Error during pipeline: ${err}`)
-              })
-              .then(() => {
-                context.stage = HttpPipelineStage.COMPLETED
-                if (!context.operation.response) {
-                  context.operation.complete(
-                    context.response ?? {
-                      status: {
-                        code: HttpStatusCode.NOT_FOUND,
-                      },
-                      headers: emptyHeaders(),
-                    },
-                  )
-                }
-              })
-              .finally(() => {
-                callback()
-              })
-          },
-        }),
-        { end: true },
-      )
-      .on("finish", () => {
-        logger.info(`Finished pipeline!`)
-      })
+  private _buildReadable(
+    source: HttpOperationSource,
+    options: HttpPipelineOptions,
+  ): Readable {
+    const logger = this._logger
+
+    const readable = Readable.from(on(source, "received"), {
+      highWaterMark: options.highWaterMark,
+      objectMode: true,
+      emitClose: true,
+      autoDestroy: true,
+    })
+
+    source.once("finished", () => {
+      // Destroy the readable stream
+      readable.destroy()
+    })
 
     return readable
+      .on("error", (err) => {
+        logger.error(`Error in pipeline ${err}`)
+      })
+      .pipe(
+        new Transform({
+          objectMode: true,
+          highWaterMark: options.highWaterMark,
+          write(
+            chunk: unknown,
+            encoding: BufferEncoding,
+            callback: StreamCallback,
+          ) {
+            // Stupid iterator pushes the tuple...
+            const operation: HttpOperation = Array.isArray(chunk)
+              ? (chunk[0] as HttpOperation)
+              : (chunk as HttpOperation)
+            this.push(
+              <HttpOperationContext>{
+                operation,
+                stage: HttpPipelineStage.AUDITING,
+              },
+              encoding,
+            )
+
+            callback()
+          },
+        }),
+      )
+  }
+
+  private _buildConsumer(options: HttpPipelineOptions): Writable {
+    const logger = this._logger
+    const check = this._checkState.bind(this)
+
+    return new Writable({
+      objectMode: true,
+      emitClose: true,
+      highWaterMark: options?.highWaterMark,
+      destroy: (err, callback) => {
+        if (err) {
+          logger.error(`Error during pipeline causing destroy: ${err}`)
+        }
+        logger.debug(`Closing pipeline`)
+        callback()
+      },
+      write(
+        context: HttpOperationContext,
+        _: BufferEncoding,
+        callback: StreamCallback,
+      ) {
+        check()
+          .then(() => {
+            context.stage = HttpPipelineStage.COMPLETED
+            if (!context.operation.response) {
+              context.operation.complete(
+                context.response ?? {
+                  status: {
+                    code: HttpStatusCode.NOT_FOUND,
+                  },
+                  headers: emptyHeaders(),
+                },
+              )
+            }
+          })
+          .finally(() => {
+            callback()
+          })
+      },
+    })
+  }
+
+  private _buildPipeline(
+    source: HttpOperationSource,
+    handler: HttpHandler,
+    options: HttpPipelineOptions,
+  ): PipelineDetails {
+    const logger = this._logger
+
+    const details: PipelineDetails = {
+      started: Timestamp.now(),
+      source: this._buildReadable(source, options),
+      middleware: this._buildMiddleware(handler),
+      destination: this._buildConsumer(options),
+      options,
+    }
+
+    // Link the pipelines
+    details.source
+      .on("error", (err) => {
+        logger.error(`Error in pipeline source: ${err}`)
+      })
+      .pipe(details.middleware.start, { end: true })
+    details.middleware.end
+      .on("error", (err) => {
+        logger.error(`Error in pipeline middleware: ${err}`)
+      })
+      .pipe(details.destination, { end: true })
+
+    return details
   }
 
   private async _checkState(): Promise<void> {
@@ -423,17 +479,23 @@ class DefaultHttpPipeline
   add(
     source: HttpOperationSource,
     handler: HttpHandler,
-    options?: HttpPipelineOptions,
+    options: HttpPipelineOptions = {},
   ): boolean {
     if (this._state !== HttpPipelineState.COMPLETED) {
-      let readable = this._sources.get(source)
-      if (readable) {
+      let details = this._sources.get(source)
+      if (details) {
         return false
       }
 
       // Create the readable
-      readable = this._buildPipeline(source, handler, options)
-      this._sources.set(source, readable)
+      details = this._buildPipeline(source, handler, options)
+      this._sources.set(source, details)
+
+      // Remove the source if it's still attached
+      const remove = this.remove.bind(this)
+      source.once("finished", () => {
+        void remove(source)
+      })
 
       return true
     }
@@ -441,10 +503,17 @@ class DefaultHttpPipeline
     return false
   }
 
-  remove(source: HttpOperationSource): boolean {
-    const readable = this._sources.get(source)
-    if (readable) {
-      readable.destroy()
+  async remove(source: HttpOperationSource): Promise<boolean> {
+    const details = this._sources.get(source)
+    if (details) {
+      this._logger.debug(`Removing source: ${source.id}`)
+
+      const finished = StreamPromise.finished(details.destination, {
+        error: true,
+        writable: true,
+      })
+
+      await finished
     }
 
     return this._sources.delete(source)

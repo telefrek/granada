@@ -32,6 +32,7 @@ export function createHttp2Server(
   ),
 ): HttpServer {
   const config: HttpServerConfig = {
+    name: "TestServer",
     tls: {
       mutualAuthentication: false,
       publicCertificate: readFileSync(
@@ -53,11 +54,6 @@ export function createHttp2Server(
   if (!pipeline.add(server as HttpOperationSource, NOT_FOUND_HANDLER, {})) {
     TEST_LOGGER.error(`Failed to add server to pipeline!`)
   }
-
-  server.on("finished", () => {
-    TEST_LOGGER.info(`Server finished, removing from pipeline`)
-    pipeline.remove(server as HttpOperationSource)
-  })
 
   return server
 }

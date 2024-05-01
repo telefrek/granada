@@ -79,6 +79,11 @@ interface HttpServerEvents extends LifecycleEvents, HttpOperationSourceEvents {
  */
 export interface HttpServer extends Emitter<HttpServerEvents> {
   /**
+   * The identifier for the server
+   */
+  id: string
+
+  /**
    * Starts the server accepting connections on the given port
    *
    * @param port The port to listen on
@@ -105,6 +110,7 @@ export interface HttpServer extends Emitter<HttpServerEvents> {
 }
 
 export interface HttpServerConfig {
+  name: string
   tls?: TLSConfig
   enabledOnStart?: boolean
   requestTimeout?: Duration
@@ -117,6 +123,8 @@ export abstract class HttpServerBase
   protected readonly _config: HttpServerConfig
   protected readonly _logger: Logger
 
+  readonly id: string
+
   private _ready: boolean
 
   protected get isReady(): boolean {
@@ -126,6 +134,7 @@ export abstract class HttpServerBase
   constructor(config: HttpServerConfig, logger: Logger = HTTP_SERVER_LOGGER) {
     super({ captureRejections: true })
 
+    this.id = config.name
     this._config = config
     this._logger = logger
     this._ready = config.enabledOnStart ?? true
