@@ -24,7 +24,7 @@ describe("Pipelines should support clients and servers end to end", () => {
 
   beforeAll(async () => {
     const port = 20000 + ~~(Math.random() * 10000)
-    server = createHttp2Server(async (request, abort) => {
+    server = createHttp2Server(async (request, _abort) => {
       if (
         request.path.original === "/json" &&
         request.method === HttpMethod.GET
@@ -211,7 +211,7 @@ describe("Pipelines should support clients and servers end to end", () => {
   })
 
   it("Server should be able to accept a body from the client", async () => {
-    let response = await client.submit({
+    const response = await client.submit({
       id: v4(),
       headers: emptyHeaders(),
       path: {

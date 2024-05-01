@@ -8,5 +8,6 @@
   "editor.codeActionsOnSave": {
     "source.fixAll.eslint": "explicit"
   },
-  "eslint.options": { "overrideConfigFile": "eslintrc.cjs" }
+  "eslint.workingDirectories": ["./packages"],
+  "eslint.options": {}
 }

@@ -100,7 +100,7 @@ class JsonReadableStream extends Transform {
   }
 
   override _transform(
-    chunk: any,
+    chunk: unknown,
     encoding: BufferEncoding,
     callback: TransformCallback,
   ): void {
