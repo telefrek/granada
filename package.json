@@ -3,6 +3,7 @@
     "./packages/*"
   ],
   "scripts": {
+    "init:devEnv": "npm install -g lerna && npm install -g turbo",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --coverageProvider=v8 --detectOpenHandles --forceExit -c jest.config.js",
     "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --coverageProvider=v8 --detectOpenHandles --forceExit -c jest.unit.config.js",
     "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --coverageProvider=v8 --detectOpenHandles --forceExit -c jest.integration.config.js",
@@ -15,13 +16,13 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.0.2",
-    "@eslint/js": "^9.0.0",
+    "@eslint/js": "^9.1.1",
     "@types/jest": "^29.5.12",
     "@types/node": "^20.12.7",
-    "@typescript-eslint/eslint-plugin": "^7.7.0",
-    "@typescript-eslint/parser": "^7.7.0",
+    "@typescript-eslint/eslint-plugin": "^7.7.1",
+    "@typescript-eslint/parser": "^7.7.1",
     "@typescript/analyze-trace": "^0.10.1",
-    "eslint": "^9.0.0",
+    "eslint": "^9.1.1",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.1.3",
     "identity-obj-proxy": "^3.0.0",
@@ -30,7 +31,7 @@
     "prettier": "^3.2.5",
     "ts-jest": "^29.1.2",
     "ts-node": "^10.9.2",
-    "turbo": "^1.13.2",
+    "turbo": "^1.13.3",
     "typescript": "^5.4.5"
   },
   "dependencies": {

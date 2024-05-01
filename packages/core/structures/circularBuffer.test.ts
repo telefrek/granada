@@ -64,33 +64,33 @@ describe("Circular buffers should behave as infinite lists with fixed memory", (
     expect(buffer.finished).toBeFalsy()
 
     // Shouldn't be able to remove
-    expect(await buffer.remove(Duration.fromMilli(5))).toBeFalsy()
+    expect(await buffer.remove(Duration.ofMilli(5))).toBeFalsy()
 
     // Should be able to add
     for (let n = 0; n < 32; ++n) {
-      expect(await buffer.add(n, Duration.fromMilli(2))).toBeTruthy()
+      expect(await buffer.add(n, Duration.ofMilli(2))).toBeTruthy()
     }
 
     // Shouldn't be able to add
-    expect(await buffer.add(0, Duration.fromMilli(5))).toBeFalsy()
+    expect(await buffer.add(0, Duration.ofMilli(5))).toBeFalsy()
 
     // Should be able to add after we do a write on the event loop
     setTimeout(() => expect(buffer.tryRemove()).not.toBeUndefined(), 10)
-    expect(await buffer.add(32, Duration.fromMilli(20))).toBeTruthy()
+    expect(await buffer.add(32, Duration.ofMilli(20))).toBeTruthy()
 
     // Should be able to remove 10
     expect(
-      (await buffer.removeRange(5, 10, Duration.fromMilli(2))).length,
+      (await buffer.removeRange(5, 10, Duration.ofMilli(2))).length,
     ).toEqual(10)
 
     // Can't get min in time
     expect(
-      (await buffer.removeRange(25, 32, Duration.fromMilli(2))).length,
+      (await buffer.removeRange(25, 32, Duration.ofMilli(2))).length,
     ).toEqual(0)
 
     // Should get more than min but less than max
     expect(
-      (await buffer.removeRange(15, 32, Duration.fromMilli(2))).length,
+      (await buffer.removeRange(15, 32, Duration.ofMilli(2))).length,
     ).toEqual(22)
 
     expect(buffer.size).toBe(0)

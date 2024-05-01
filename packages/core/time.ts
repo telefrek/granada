@@ -51,7 +51,7 @@ export class Timer {
       this.stopped = process.hrtime.bigint()
       this.running = false
       try {
-        return Duration.fromNano(this.stopped - this.started)
+        return Duration.ofNano(this.stopped - this.started)
       } finally {
         // Clear the timings
         this.started = 0n
@@ -69,7 +69,7 @@ export class Timer {
    */
   elapsed(): Duration {
     return this.running
-      ? Duration.fromNano(process.hrtime.bigint() - this.started)
+      ? Duration.ofNano(process.hrtime.bigint() - this.started)
       : Duration.ZERO
   }
 }
@@ -103,6 +103,15 @@ export class Timestamp {
     return begin.difference(end)
   }
 
+  /**
+   * Create a timestamp object for measuring runtime execution
+   *
+   * @returns A newly initialized {@link Timestamp}
+   */
+  static now(): Timestamp {
+    return new Timestamp()
+  }
+
   constructor(timestamp: bigint | number = Date.now()) {
     this._hiRes = typeof timestamp === "bigint"
     this._value = timestamp
@@ -126,7 +135,7 @@ export class Timestamp {
       return Duration.ZERO
     }
 
-    return Duration.fromNano(otherNano - currentNano)
+    return Duration.ofNano(otherNano - currentNano)
   }
 
   /**
@@ -193,7 +202,7 @@ export class Duration {
    * @param nanoseconds The number of nanoseconds elapsed
    * @returns A new {@link Duration} object
    */
-  static fromNano(nanoseconds: bigint): Duration {
+  static ofNano(nanoseconds: bigint): Duration {
     return new Duration(nanoseconds)
   }
 
@@ -203,14 +212,24 @@ export class Duration {
    * @param milliseconds The number of milliseconds elapsed
    * @returns A new {@link Duration} object
    */
-  static fromMilli(milliseconds: number): Duration {
-    return new Duration(BigInt(1_000_000 * milliseconds))
+  static ofMilli(milliseconds: number): Duration {
+    return new Duration(1_000_000n * BigInt(milliseconds))
+  }
+
+  /**
+   * Create a {@link Duration} from the second measurement
+   *
+   * @param seconds The number of seconds elapsed
+   * @returns A new {@link Duration} object
+   */
+  static ofSeconds(seconds: number): Duration {
+    return new Duration(1_000_000_000n * BigInt(seconds))
   }
 
   /**
    * Helper to identify an empty or zero time elapsed duration
    */
-  static ZERO: Duration = Duration.fromNano(0n)
+  static ZERO: Duration = Duration.ofNano(0n)
 }
 
 /**

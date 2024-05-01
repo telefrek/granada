@@ -243,10 +243,8 @@ class DefaultCircuitBreaker implements CircuitBreaker {
 
       // Raise the error with the given information
       throw new CircuitOpenError("CircuitBreaker is open", {
-        openDuration: Duration.fromMilli(openMs),
-        timeToClose: Duration.fromMilli(
-          Math.max(0, this._retryAfterMs - openMs),
-        ),
+        openDuration: Duration.ofMilli(openMs),
+        timeToClose: Duration.ofMilli(Math.max(0, this._retryAfterMs - openMs)),
       })
     }
   }

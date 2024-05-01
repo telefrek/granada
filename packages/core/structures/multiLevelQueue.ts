@@ -238,7 +238,7 @@ class MultiLevelWorkerThread implements MultiLevelWorker {
           task.promise.reject(err)
         }
       } else {
-        await this._signal.wait(Duration.fromMilli(500))
+        await this._signal.wait(Duration.ofMilli(500))
       }
     }
   }

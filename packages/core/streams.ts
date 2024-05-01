@@ -1,4 +1,11 @@
-import { Stream, TransformCallback } from "stream"
+import {
+  Stream,
+  TransformCallback,
+  type Duplex,
+  type Readable,
+  type TransformOptions,
+  type Writable,
+} from "stream"
 import { MaybeAwaitable } from "./index.js"
 import type { Optional } from "./type/utils.js"
 
@@ -8,13 +15,47 @@ import type { Optional } from "./type/utils.js"
 export type TransformFunc<T, U> = (data: T) => MaybeAwaitable<Optional<U>>
 
 /**
+ * Type for stream callbacks
+ */
+export type StreamCallback = (error?: Error | null | undefined) => void
+
+/**
+ * Pipes the source to the destination while handling errors
+ *
+ * @param source The {@link Readable} to pipe from
+ * @param destination The destination to pipe to
+ * @param onError The error behavior
+ *
+ * @returns The destination end of the pipe
+ */
+export function pipe<T extends Writable | Duplex>(
+  source: Readable,
+  destination: T,
+  onError: "propogate" | "suppress" = "propogate",
+): T {
+  switch (onError) {
+    case "propogate":
+      return source
+        .on("error", (err) => {
+          destination.emit("error", err)
+        })
+        .pipe(destination) as T
+    case "suppress":
+      return source.on("error", (_) => {}).pipe(destination) as T
+  }
+}
+
+/**
  * Create a generic {@link Stream.Transform} using a {@link TransformFunc}
  */
 export class GenericTransform<T, U> extends Stream.Transform {
   private transform: TransformFunc<T, U>
 
-  constructor(transform: TransformFunc<T, U>) {
-    super({ objectMode: true })
+  constructor(
+    transform: TransformFunc<T, U>,
+    options: TransformOptions = { objectMode: true, autoDestroy: true },
+  ) {
+    super(options)
     this.transform = transform
   }
 

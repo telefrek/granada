@@ -268,7 +268,7 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
         this._closed ||
         !(await this._readSignal.wait(
           expiration !== Number.MAX_VALUE
-            ? Duration.fromMilli(Math.max(1, Date.now() - expiration))
+            ? Duration.ofMilli(Math.max(1, Date.now() - expiration))
             : undefined,
         ))
       ) {
@@ -368,7 +368,7 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
       if (
         !(await this._readSignal.wait(
           expiration !== Number.MAX_VALUE
-            ? Duration.fromMilli(Math.max(1, Date.now() - expiration))
+            ? Duration.ofMilli(Math.max(1, Date.now() - expiration))
             : undefined,
         ))
       ) {

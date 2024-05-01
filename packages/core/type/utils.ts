@@ -2,6 +2,9 @@
  * This package contains some useful type manipulations used throughout the framework
  */
 
+/**
+ * All of the literal required keys from a type
+ */
 export type RequiredLiteralKeys<T> = {
   [K in keyof T as string extends K
     ? never
@@ -13,6 +16,9 @@ export type RequiredLiteralKeys<T> = {
         : K]: T[K]
 }
 
+/**
+ * All of the optional (explicit) keys
+ */
 export type OptionalLiteralKeys<T> = {
   [K in keyof T as string extends K
     ? never
@@ -86,6 +92,11 @@ export type Func<Args extends unknown[], Result> = (...args: Args) => Result
  * Type to represent a method that takes some arguments and returns nothing
  */
 export type Callback<Args extends unknown[]> = (...args: Args) => void
+
+/**
+ * A {@link Callback} that takes no arguments
+ */
+export type EmptyCallback = () => void
 
 /**
  * A value of type {@link T} or undefined

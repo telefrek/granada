@@ -1,40 +1,37 @@
+import { EventEmitter } from "events"
+
 /**
- * Helper interface for defining structured events that will be emitted
+ * Helper for interfaces that extends Event Emitters
  */
-export interface Emitter<E> {
-  /**
-   * Match all EventEmitter.on functionality
-   *
-   * @param event The event that was raised
-   * @param listener The listener to add
-   */
-  on<T extends keyof E>(event: T, listener: E[T]): this
+export type Emitter<E> = EventEmitter<EventMap<E>>
 
-  /**
-   * Match all EventEmitter.on functionality
-   *
-   * @param event The event that was raised
-   * @param listener The listener to add to the next invocation only
-   */
-  once<T extends keyof E>(event: T, listener: E[T]): this
-
-  /**
-   * Match all EventEmitter.off functionality
-   *
-   * @param event The event that was raised
-   * @param listener The listener to remove
-   */
-  off<T extends keyof E>(event: T, listener: E[T]): this
-
-  /**
-   * Match all EventEmitter.emit functionality
-   *
-   * @param event The event that was raised
-   * @param args  The parameters for the function to invoke
-   */
-  emit<T extends keyof E>(
-    event: T,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ...args: Parameters<any>
-  ): boolean
+/**
+ * Helper type to do the mapping for names
+ */
+export class EmitterFor<E> extends EventEmitter<EventMap<E>> {
+  constructor(options?: EventEmitterOptions) {
+    super(options)
+  }
 }
+
+/**
+ * Custom type to help map functions into the EventEmitter expected schema
+ */
+type EventMap<E> = {
+  [Key in EventKeys<E>]: EventFunc<E[Key]>
+}
+
+interface EventEmitterOptions {
+  /**
+   * Enables automatic capturing of promise rejection.
+   */
+  captureRejections?: boolean | undefined
+}
+
+type EventKeys<E> = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [Key in keyof E]: E[Key] extends (...args: any[]) => void ? Key : never
+}[keyof E]
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type EventFunc<E> = E extends (...args: any[]) => void ? Parameters<E> : never

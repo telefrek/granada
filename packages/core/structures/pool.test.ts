@@ -40,7 +40,7 @@ describe("Pools should satisfy all runtime constraints expected", () => {
     expect(pool).not.toBeUndefined()
     expect(pool.size).toBe(0)
 
-    const timeout = Duration.fromMilli(100)
+    const timeout = Duration.ofMilli(100)
 
     let item = await pool.get(timeout)
     expect(item).not.toBeUndefined()
@@ -84,7 +84,7 @@ describe("Pools should satisfy all runtime constraints expected", () => {
       scaleInThreshold: 2,
     })
 
-    const timeout = Duration.fromMilli(10)
+    const timeout = Duration.ofMilli(10)
 
     async function runLoop(check: SynchronizedValue<boolean>): Promise<void> {
       for (; check.value; ) {

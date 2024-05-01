@@ -2,16 +2,17 @@
  * Common components used by this package
  */
 
-import { CommonMediaTypes } from "@telefrek/http/content.js"
+import type { Optional } from "@telefrek/core/type/utils.js"
 import {
   HttpHandler,
   HttpMethod,
   type HttpBody,
-  type HttpStatus,
-  type SegmentValue,
+  type HttpStatusCode,
 } from "@telefrek/http/index.js"
+import { CommonMediaTypes } from "@telefrek/http/media.js"
 import { Readable } from "stream"
 import type { MaybeAwaitable } from "../core/index.js"
+import type { RoutingParameters } from "../http/routing.js"
 
 /**
  * The target platform the service will be running on for optimizing some operations
@@ -48,8 +49,8 @@ export interface Service {
 
 /** A service error */
 export interface ServiceError {
-  status: HttpStatus
-  statusMessage?: string
+  code: HttpStatusCode
+  message?: string
   body?: HttpBody
 }
 
@@ -77,13 +78,10 @@ export function isServiceError(response: unknown): response is ServiceError {
   if (
     typeof response === "object" &&
     response !== null &&
-    "status" in response &&
-    typeof response.status === "number"
+    "code" in response &&
+    typeof response.code === "number"
   ) {
-    if (
-      "statusMessage" in response &&
-      typeof response.statusMessage !== "string"
-    ) {
+    if ("message" in response && typeof response.message !== "string") {
       return false
     }
 
@@ -141,7 +139,7 @@ export interface RoutableApiOptions {
  * Allows for mapping of parameters
  */
 export type ParameterMapping = <T = unknown>(
-  parameters: Map<string, SegmentValue>,
+  parameters: Optional<RoutingParameters>,
   body?: T,
 ) => unknown[]
 
@@ -160,7 +158,7 @@ export interface RouteOptions {
   /** the {@link ParameterMapping} for calling this method */
   mapping?: ParameterMapping
   /** The status code to return on success */
-  statusCode?: HttpStatus
+  statusCode?: HttpStatusCode
   /** Optional error handler */
   errorHandler?: ServiceErrorHandler
 }

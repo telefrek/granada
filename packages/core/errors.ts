@@ -1,3 +1,5 @@
+import type { Optional } from "./type/utils.js"
+
 /**
  * Error representing an issue related to something not being started in time
  */
@@ -11,6 +13,25 @@ export class TimeoutError extends Error {
       TimeoutError.TIMEOUT_ERR_SYMBOL in error
     )
   }
+}
+
+/**
+ * Try to extract the message field of the error
+ *
+ * @param error The error object to extract from
+ * @returns The error message if it exists or undefined
+ */
+export function getErrorMessage(error: unknown): Optional<string> {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof error.message === "string"
+  ) {
+    return error.message
+  }
+
+  return
 }
 
 /**

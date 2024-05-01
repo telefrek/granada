@@ -3,7 +3,7 @@ import {
   createRouter,
   type RoutableApi,
   type Router,
-} from "@telefrek/http/server/routing.js"
+} from "@telefrek/http/routing.js"
 import {
   type RoutableApiOptions,
   type RoutableMethod,

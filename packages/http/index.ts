@@ -2,19 +2,121 @@
  * Core package definitions and interfaces
  */
 
-import { Emitter } from "@telefrek/core/events.js"
+import { Emitter, EmitterFor } from "@telefrek/core/events.js"
+import { type MaybeAwaitable } from "@telefrek/core/index.js"
 import { LifecycleEvents } from "@telefrek/core/lifecycle.js"
-import type { TraceableContext } from "@telefrek/core/observability/tracing"
-import type { TransformFunc } from "@telefrek/core/streams.js"
-import type { Readable } from "stream"
-import type { MediaType } from "./content.js"
+import type { Duration } from "@telefrek/core/time.js"
+import type { Optional } from "@telefrek/core/type/utils.js"
+import { Stream, type Readable } from "stream"
+import type { HttpError } from "./errors.js"
 
-export type StringOrArray = string | string[]
-
+/**
+ * A segment value must be a string, number or boolean
+ *
+ */
 export type SegmentValue = string | number | boolean
 
-// TODO: Replace references with this for parameters...
-export type ParameterMap = Map<string, SegmentValue>
+/**
+ * Query parameters are named parameters that can be singular or an array
+ */
+export type QueryParameters = Map<string, string | string[]>
+
+/**
+ * HttpHeaders are collections of key, value pairs where the value can be singular or an array
+ */
+export type HttpHeaders = Map<string, string | string[]>
+
+/**
+ * Common headers for requests and responses (lowercase)
+ */
+export enum CommonHttpHeaders {
+  CacheControl = "cache-control",
+  ContentEncoding = "content-encoding",
+  ContentLength = "content-length",
+  ContentType = "content-type",
+  Date = "date",
+  Upgrade = "upgrade",
+  Via = "via",
+}
+
+/**
+ * Headers for requests (lowercase)
+ */
+export enum HttpRequestHeaders {
+  AcceptableInstanceManipulators = "a-im",
+  Accept = "accept",
+  AcceptCharset = "accept-charset",
+  AcceptDatetime = "accept-datetime",
+  AcceptEncoding = "accept-encoding",
+  AcceptLanguage = "accept-language",
+  AccessControlMethod = "access-control-request-method",
+  AccessControlHeader = "access-control-request-headers",
+  Authorization = "authorization",
+  Connection = "connection",
+  Cookie = "cookie",
+  Forwarded = "forwarded",
+  From = "from",
+  Host = "host",
+  IfMatch = "if-match",
+  IfModifiedSince = "if-modified-since",
+  IfNoneMatch = "if-none-match",
+  IfRange = "if-range",
+  IfUnmodifiedSince = "if-unmodified-since",
+  MaxForwards = "max-forwards",
+  Origin = "origin",
+  Pragma = "pragma",
+  Prefer = "prefer",
+  ProxyAuthorization = "proxy-authorization",
+  Range = "range",
+  Referrer = "referrer",
+  TransferEncodings = "te",
+  Trailer = "trailer",
+  TransferEncoding = "transfer-encoding",
+  UserAgent = "user-agent",
+}
+
+/**
+ * Headers for responses (lowercase)
+ */
+export enum HttpResponseHeaders {
+  AccessControlAllowOrigin = "access-control-allow-origin",
+  AccessControlAllowCredentials = "access-control-allow-credentials",
+  AccessControlExposeHeaders = "access-control-expose-headers",
+  AccessControlMaxAge = "access-control-max-age",
+  AccessControlAllowMethods = "access-control-allow-methods",
+  AccessControlAllowHeaders = "access-control-allow-headers",
+  AcceptPatch = "accept-patch",
+  AcceptRange = "accept-ranges",
+  Age = "age",
+  Allow = "allow",
+  AlternativeServices = "alt-svc",
+  Connection = "connection",
+  ContentDisposition = "content-disposition",
+  ContentLanguage = "content-language",
+  ContentLocation = "content-location",
+  ContentRange = "content-range",
+  ContentSecurityPolicy = "content-security-policy",
+  DeltaBase = "delta-base",
+  ETag = "etag",
+  Expires = "expires",
+  InstanceManipulations = "im",
+  LastModified = "last-modified",
+  Link = "link",
+  Location = "location",
+  Pragma = "pragma",
+  PreferenceApplied = "preference-applied",
+  ProxyAuthenticate = "proxy-authenticate",
+  PublicKeyPins = "public-key-pins",
+  RetryAfter = "retry-after",
+  Server = "server",
+  SetCookie = "set-cookie",
+  StrictTransportSecurity = "strict-transport-security",
+  Trailer = "trailer",
+  TransferEncoding = "transfer-encoding",
+  TrackingStatus = "tk",
+  Vary = "vary",
+  WWWAuthenticate = "www-authenticate",
+}
 
 /**
  * Supported methods for HTTP operations
@@ -30,19 +132,6 @@ export enum HttpMethod {
 }
 
 /**
- * Valid {@link HttpMethod} values as an array
- */
-export const HTTP_METHODS = [
-  HttpMethod.DELETE,
-  HttpMethod.GET,
-  HttpMethod.HEAD,
-  HttpMethod.OPTIONS,
-  HttpMethod.PATCH,
-  HttpMethod.POST,
-  HttpMethod.PUT,
-] as HttpMethod[]
-
-/**
  * Supported HTTP Versions
  */
 export enum HttpVersion {
@@ -51,93 +140,9 @@ export enum HttpVersion {
 }
 
 /**
- * HttpHeaders are collections of key, value pairs where the value can be singular or an array
- */
-export type HttpHeaders = Map<string, StringOrArray>
-
-/**
- * Create an empty set of {@link HttpHeaders}
- * @returns An empty set of {@link HttpHeaders}
- */
-export function emptyHeaders(): HttpHeaders {
-  return new Map()
-}
-
-/**
- * An interface defining the query portion of a request
- */
-export interface HttpQuery {
-  readonly original: string
-  parameters: Map<string, StringOrArray>
-}
-
-/**
- * An interface defining the path portion of a request
- */
-export interface HttpPath {
-  readonly original: string
-  segments: string[]
-  parameters?: Map<string, SegmentValue>
-}
-
-/**
- * An interface defining the body that is transmitted as part of the request/response cycle
- */
-export interface HttpBody {
-  mediaType?: MediaType
-  contents?: Readable
-}
-
-/**
- * Set of states that a {@link HttpRequest} can be in
- */
-export enum HttpRequestState {
-  /** The request is waiting to be processed */
-  PENDING = "pending",
-  /** The request is being read but not processed via handler */
-  READING = "reading",
-  /** The request is being processed via a handler */
-  PROCESSING = "processing",
-  /** The request has response data being written to it */
-  WRITING = "writing",
-  /**  The request was fully written and completed */
-  COMPLETED = "completed",
-  /** The request timed out before being handled */
-  TIMEOUT = "timeout",
-  /** The request encountered some error */
-  ERROR = "error",
-  /** The request was dropped (shed) for some reason */
-  DROPPED = "dropped",
-}
-
-/**
- * Specific extra
- */
-export interface HttpRequestEvents extends LifecycleEvents {
-  stateChanged: (from: HttpRequestState, to: HttpRequestState) => void
-}
-
-/**
- * An interface defining the behavior of an HTTP Request
- */
-export interface HttpRequest
-  extends Emitter<HttpRequestEvents>,
-    TraceableContext {
-  path: HttpPath
-  method: HttpMethod
-  headers: HttpHeaders
-  version: HttpVersion
-  state: HttpRequestState
-  query?: HttpQuery
-  body?: HttpBody
-
-  respond(response: HttpResponse, state?: HttpRequestState): void
-}
-
-/**
  * Set of status codes with names
  */
-export enum HttpStatus {
+export enum HttpStatusCode {
   CONTINUE = 100,
   SWITCH_PROTOCOLS = 101,
   PROCESSING = 102,
@@ -204,120 +209,502 @@ export enum HttpStatus {
 }
 
 /**
+ * Represents the HTTP Status object
+ */
+export interface HttpStatus {
+  code: HttpStatusCode
+  message?: string
+}
+
+/**
+ * An interface defining the query portion of a request
+ */
+export interface HttpQuery {
+  readonly original: string
+  parameters: QueryParameters
+}
+
+/**
+ * An interface defining the path portion of a request
+ */
+export interface HttpPath {
+  readonly original: string
+  segments?: string[]
+  template?: string
+}
+
+/**
+ * An interface defining the body that is transmitted as part of the request/response cycle
+ */
+export interface HttpBody {
+  /** The {@link MediaType} if known */
+  mediaType?: MediaType
+  /** The {@link Readable} contents */
+  contents: Readable
+}
+
+/**
+ * Set of states that a {@link HttpOperation} can be in
+ */
+export enum HttpOperationState {
+  /** The operation was aborted by either side */
+  ABORTED = "aborted",
+  /**  The operation has been fully completed */
+  COMPLETED = "completed",
+  /** The operation is being processed via a handler */
+  PROCESSING = "processing",
+  /** The operation is waiting to be processed */
+  QUEUED = "queued",
+  /** The operation contents are being read */
+  READING = "reading",
+  /** The operation timed out before being handled */
+  TIMEOUT = "timeout",
+  /** The operation contents are being written */
+  WRITING = "writing",
+}
+
+/**
+ * Specific operations that occur during {@link HttpOperation} processing
+ */
+export interface HttpOperationEvents extends LifecycleEvents {
+  /**
+   * Event raised when there is a state change
+   *
+   * @param previousState The previous {@link HttpOperationState}
+   */
+  changed: (previousState: HttpOperationState) => void
+
+  /**
+   * Event raised when the operation receives a {@link HttpResponse}
+   *
+   * @param response The {@link HttpResponse}
+   */
+  response: (response: HttpResponse) => void
+
+  /**
+   * Event fired on an error during the processing of the operation
+   *
+   * @param error The error that was encountered
+   */
+  error: (error: unknown) => void
+}
+
+/**
+ * An operation that has a request and response pair
+ */
+export interface HttpOperation extends Emitter<HttpOperationEvents> {
+  /** The current {@link HttpOperationState} */
+  readonly state: HttpOperationState
+  /** The {@link HttpRequest} that initiated the operation */
+  readonly request: Readonly<HttpRequest>
+  /** The {@link AbortSignal} for this operation */
+  readonly signal?: AbortSignal
+  /** The {@link HttpError} associated with failure if available */
+  readonly error?: HttpError
+  /** The {@link HttpResponse} that was paired with the operation */
+  readonly response?: Readonly<HttpResponse>
+
+  /**
+   * Move the operation out of a queued {@link HttpOperationState}
+   */
+  dequeue(): boolean
+
+  /**
+   * Move the operation into a complete {@link HttpOperationState}
+   */
+  complete(response: HttpResponse): boolean
+
+  /**
+   * Handle failures in processing the operation
+   *
+   * @param cause The optional cause for the state change
+   */
+  fail(cause?: HttpError): void
+}
+
+/**
+ * An interface defining the behavior of an HTTP Request
+ */
+export interface HttpRequest {
+  readonly id: string
+  readonly path: HttpPath
+  readonly method: HttpMethod
+  readonly headers: HttpHeaders
+  readonly version?: HttpVersion
+  readonly query?: HttpQuery
+  readonly body?: HttpBody
+}
+
+/**
  * An interface defining the shape of an HTTP Response
  */
 export interface HttpResponse {
   /** The {@link HttpStatus} to return */
-  status: HttpStatus
+  readonly status: HttpStatus
   /** The {@link HttpHeaders} to include in the response */
-  headers?: HttpHeaders
-  /** The optional status message to return */
-  statusMessage?: string
+  readonly headers: HttpHeaders
   /** The {@link HttpBody} to return */
-  body?: HttpBody
+  readonly body?: HttpBody
 }
 
 /**
- * Default {@link HttpStatus} for each {@link HttpMethod}
+ * Simple type for handling a {@link HttpRequest}
  */
-export const DefaultHttpMethodStatus = {
-  [HttpMethod.DELETE]: HttpStatus.NO_CONTENT,
-  [HttpMethod.GET]: HttpStatus.OK,
-  [HttpMethod.HEAD]: HttpStatus.NO_CONTENT,
-  [HttpMethod.OPTIONS]: HttpStatus.OK,
-  [HttpMethod.PATCH]: HttpStatus.ACCEPTED,
-  [HttpMethod.POST]: HttpStatus.CREATED,
-  [HttpMethod.PUT]: HttpStatus.ACCEPTED,
-} as const
+export type HttpHandler = (
+  request: HttpRequest,
+  abort?: AbortSignal,
+) => MaybeAwaitable<HttpResponse>
 
 /**
- * Utility method to check for {@link FileContentResponse} objects
+ * Definition of events for {@link HttpOperation} providers
+ */
+export interface HttpOperationSourceEvents extends LifecycleEvents {
+  /**
+   * Fired when a new {@link HttpOperation} is available
+   *
+   * @param operation The {@link HttpOperation} that was received
+   */
+  received: (operation: HttpOperation) => void
+}
+
+/**
+ * Custom type for objects that create {@link HttpOperation} via events
+ */
+export interface HttpOperationSource
+  extends Emitter<HttpOperationSourceEvents> {
+  /** The identifier for the operation source */
+  id: string
+}
+
+/**
+ * Create a new {@link HttpOperation} that moves through the expected state machine
  *
- * @param response A {@link HttpResponse} to inspect
- * @returns True if the response is a {@link FileContentResponse}
+ * @param request The {@link HttpRequest} that started the operation
+ * @param timeout The optional {@link Duration} before the request should timeout
+ * @returns A new {@link HttpOperation}
  */
-export function isFileContent(
-  response: HttpResponse,
-): response is FileContentResponse {
-  return (
-    response !== undefined &&
-    "filePath" in response &&
-    typeof response.filePath === "string"
-  )
+export function createHttpOperation(
+  request: HttpRequest,
+  timeout: Optional<Duration>,
+): HttpOperation {
+  return new DefaultHttpOperation(request, timeout)
 }
 
-/**
- * An interface for defining the shape of a file HTTP Response
- */
-export interface FileContentResponse extends HttpResponse {
-  filePath: string
-}
+class DefaultHttpOperation
+  extends EmitterFor<HttpOperationEvents>
+  implements HttpOperation
+{
+  private readonly _request: HttpRequest
 
-/**
- * Simple type for contracting the async model for an HTTP request/response operation
- */
-export type HttpHandler = (request: HttpRequest) => Promise<void>
+  private _state: HttpOperationState
+  private _abortController: AbortController
+  private _error: Optional<HttpError>
+  private _response: Optional<HttpResponse>
+  private _timer?: NodeJS.Timeout
 
-export type HttpTransform = TransformFunc<HttpRequest, HttpRequest>
-
-/**
- * Parse the path string into it's corresponding {@link HttpPath} and {@link HttpQuery}
- *
- * @param path The path to parse
- * @returns A {@link HttpPath} and {@link HttpQuery} representing the path
- */
-export function parsePath(path: string): { path: HttpPath; query?: HttpQuery } {
-  // Remove any URI encoding
-  const uri = decodeURI(path).split("?")
-
-  // Parse out the path and the query, removing leading and trailing '/' characters
-  return {
-    path: {
-      original: uri[0],
-      segments: uri[0].replace(/^\//, "").replace(/\/$/, "").split("/"),
-      parameters: new Map(),
-    },
-    query:
-      uri.length > 1
-        ? {
-            original: uri[1],
-            parameters: uri[1].split("&").reduce((map, segment) => {
-              const kv = segment.split("=")
-              if (kv.length === 2) {
-                if (map.has(kv[0])) {
-                  if (Array.isArray(map.get(kv[0]))) {
-                    ;(map.get(kv[0])! as string[]).push(kv[1])
-                  } else {
-                    map.set(kv[0], [map.get(kv[0])! as string, kv[1]])
-                  }
-                } else {
-                  map.set(kv[0], kv[1])
-                }
-              }
-              return map
-            }, new Map<string, StringOrArray>()),
-          }
-        : undefined,
+  get signal(): Optional<AbortSignal> {
+    return this._abortController.signal
   }
-}
 
-/**
- * Check to see if the request is in a terminal state (should not require
- * further processing))
- *
- * @param request The {@link HttpRequest} to check
- *
- * @returns True if the request is in a state indicating no further processing
- * is allowed
- */
-export function isTerminal(request: HttpRequest): boolean {
-  switch (request.state) {
-    case HttpRequestState.COMPLETED:
-    case HttpRequestState.TIMEOUT:
-    case HttpRequestState.ERROR:
-    case HttpRequestState.DROPPED:
+  get state(): HttpOperationState {
+    return this._state
+  }
+
+  get response(): HttpResponse | undefined {
+    return this._response
+  }
+
+  get request(): Readonly<HttpRequest> {
+    return this._request
+  }
+
+  get error(): Optional<HttpError> {
+    return this._error
+  }
+
+  dequeue(): boolean {
+    return this._read()
+  }
+
+  fail(cause?: HttpError): boolean {
+    this._error = cause
+
+    if (cause) {
+      this.emit("error", cause)
+    }
+
+    // Stop any further processing
+    return this._abort()
+  }
+
+  complete(response: HttpResponse): boolean {
+    if (this._response === undefined) {
+      this._response = response
+
+      return this._write()
+    }
+
+    return false
+  }
+
+  constructor(request: HttpRequest, timeout?: Duration) {
+    super({ captureRejections: true })
+
+    this._request = request
+    this._state = HttpOperationState.QUEUED
+    this._abortController = new AbortController()
+
+    if (timeout) {
+      this._timer = setTimeout(() => {
+        // Try to abort the call
+        this._timeout()
+      }, ~~timeout.milliseconds())
+    }
+  }
+
+  /**
+   * Private setter the changes the state and emits the status change
+   */
+  private set state(newState: HttpOperationState) {
+    const previousState = this._state
+    this._state = newState
+    this.emit("changed", previousState)
+
+    // Fire the finished event
+    switch (newState) {
+      case HttpOperationState.ABORTED:
+      case HttpOperationState.COMPLETED:
+      case HttpOperationState.TIMEOUT:
+        this.emit("finished")
+        break
+      case HttpOperationState.WRITING:
+        this.emit("started")
+        break
+    }
+  }
+
+  private _write(): boolean {
+    // Make sure it's valid to switch this to writing
+    if (this._check(HttpOperationState.WRITING)) {
+      // Clear any pending timeouts
+      clearTimeout(this._timer)
+
+      // Check for a body and hook the consumption events
+      if (this._response?.body) {
+        const complete = this._complete.bind(this)
+        Stream.finished(
+          this._response.body.contents,
+          (err: NodeJS.ErrnoException | null | undefined) => {
+            if (!err) {
+              complete()
+            }
+          },
+        )
+        return true
+      } else {
+        // Try to complete it now
+        return this._complete()
+      }
+    }
+
+    return false
+  }
+
+  private _read(): boolean {
+    // Verify we can move to a reading state
+    if (this._check(HttpOperationState.READING)) {
+      // Check for a body and hook the consumption events
+      if (this._request?.body) {
+        const process = this._process.bind(this)
+        Stream.finished(
+          this._request.body.contents,
+          (err: NodeJS.ErrnoException | null | undefined) => {
+            if (!err) {
+              process()
+            }
+          },
+        )
+        return true
+      } else {
+        // Try to complete it now
+        return this._process()
+      }
+    } else {
+      // eslint-disable-next-line no-console
+      console.log(`Failed to move to read!!`)
+    }
+
+    return false
+  }
+
+  /**
+   * Aborts the request if it is valid to do so
+   *
+   * @returns True if the operation was successful
+   */
+  private _abort(): boolean {
+    if (this._check(HttpOperationState.ABORTED)) {
+      // Abort with a message from the root cause or generic message
+      this._abortController.abort(
+        this._error?.description ?? "Operation was aborted",
+      )
       return true
-    default:
-      return false
+    }
+
+    return false
+  }
+
+  /**
+   * Times the request out if it is valid to do so
+   *
+   * @returns True if the operation was successful
+   */
+  private _timeout(): boolean {
+    if (this._check(HttpOperationState.TIMEOUT)) {
+      this._abortController.abort("Operation timed out")
+      return true
+    }
+
+    return false
+  }
+
+  /**
+   * Completes the request if it is valid to do so
+   *
+   * @returns True if the operation was successful
+   */
+  private _complete(): boolean {
+    return this._check(HttpOperationState.COMPLETED)
+  }
+
+  /**
+   * Indicates the {@link HttpRequest} has been fully written
+   *
+   * @returns True if the operation was successful
+   */
+  private _process(): boolean {
+    return this._check(HttpOperationState.PROCESSING)
+  }
+
+  /**
+   * Check if the state transition is valid
+   *
+   * @param state The state to transition to
+   * @returns True if the transition was successful
+   */
+  private _check(state: HttpOperationState): boolean {
+    if (this._verifyTransition(this._state, state)) {
+      this.state = state
+      return true
+    }
+
+    return false
+  }
+
+  /**
+   * Verify state transitions
+   *
+   * @param current The current state
+   * @param target The target state
+   * @returns True if the transition is valid
+   */
+  private _verifyTransition(
+    current: HttpOperationState,
+    target: HttpOperationState,
+  ): boolean {
+    switch (target) {
+      case HttpOperationState.QUEUED:
+        return false // You can never move backwards
+      case HttpOperationState.READING:
+        return current === HttpOperationState.QUEUED
+      case HttpOperationState.PROCESSING:
+        return current === HttpOperationState.READING
+      case HttpOperationState.WRITING:
+        return current === HttpOperationState.PROCESSING
+
+      // These are terminal states and should be reachable by any other
+      // non-terminal state
+      case HttpOperationState.ABORTED:
+      case HttpOperationState.TIMEOUT:
+      case HttpOperationState.COMPLETED:
+        return (
+          current !== HttpOperationState.COMPLETED &&
+          current !== HttpOperationState.TIMEOUT &&
+          current !== HttpOperationState.ABORTED
+        )
+      default:
+        return false
+    }
   }
 }
+
+/**
+ * Common TLS Options
+ */
+export interface TLSConfig {
+  certificateAuthority?: Buffer | string
+  privateKey?: Buffer | string
+  publicCertificate?: Buffer | string
+  mutualAuthentication?: boolean
+}
+
+/**
+ * Represents a MediaType (alternatively MimeType)
+ *
+ * {@link https://www.rfc-editor.org/rfc/rfc2046.html}
+ */
+export interface MediaType {
+  type: TopLevelMediaTypes
+  tree?: MediaTreeTypes
+  subType?: string
+  suffix?: string
+  /** Note it's up to the type implementation to verify the parameters after parsing */
+  parameters: Map<string, string>
+  /** Encode the media type */
+  toString(): string
+}
+
+/**
+ * Handling composite media types with special handling
+ */
+export interface CompositeMediaType extends MediaType {
+  type: CompositeMediaTypes
+}
+
+/**
+ * Represents multipart content types
+ */
+export class MultipartMediaType implements CompositeMediaType {
+  readonly type: CompositeMediaTypes = "multipart"
+  readonly parameters = new Map<string, string>()
+}
+
+/**
+ * Represents message content types
+ */
+export class MessageMediaType implements CompositeMediaType {
+  readonly type: CompositeMediaTypes = "message"
+  readonly parameters = new Map<string, string>()
+}
+/**
+ * The official composite types
+ */
+export type CompositeMediaTypes = "multipart" | "message"
+
+/**
+ * The simple and composite type set for all top level MediaTypes
+ */
+export type TopLevelMediaTypes =
+  | "application"
+  | "text"
+  | "image"
+  | "audio"
+  | "video"
+  | "model"
+  | "font"
+  | CompositeMediaTypes
+
+/**
+ * Supported media tree types
+ */
+export type MediaTreeTypes = "vnd" | "prs" | "x"
