@@ -28,6 +28,7 @@ import {
 } from "stream"
 import { translateHttpError } from "./errors.js"
 import {
+  HttpOperationState,
   HttpStatusCode,
   type HttpHandler,
   type HttpOperation,
@@ -35,6 +36,7 @@ import {
   type HttpRequest,
   type HttpResponse,
 } from "./index.js"
+import { clearRoutingParameters } from "./routing.js"
 import { emptyHeaders } from "./utils.js"
 
 /**
@@ -197,6 +199,36 @@ export interface HttpOperationContext {
   operation: HttpOperation
   response?: HttpResponse
   handler?: HttpHandler
+}
+
+/**
+ * Check to see if the context is in a request processing phase
+ *
+ * @param context The {@link HttpOperationContext} to examine
+ */
+export function isInRequestPhase(context: HttpOperationContext): boolean {
+  switch (context.operation.state) {
+    case HttpOperationState.READING:
+    case HttpOperationState.PROCESSING:
+      return !context.response
+  }
+
+  return false
+}
+
+/**
+ * Check to see if the context is in a response processing phase
+ *
+ * @param context The {@link HttpOperationContext} to examine
+ */
+export function isInResponsePhase(context: HttpOperationContext): boolean {
+  switch (context.operation.state) {
+    case HttpOperationState.WRITING:
+    case HttpOperationState.PROCESSING:
+      return context.response !== undefined
+  }
+
+  return false
 }
 
 /**
@@ -383,6 +415,9 @@ class DefaultHttpPipeline
             encoding: BufferEncoding,
             callback: StreamCallback,
           ) {
+            // Ensure we are working with a clean slate
+            clearRoutingParameters()
+
             // Stupid iterator pushes the tuple...
             const operation: HttpOperation = Array.isArray(chunk)
               ? (chunk[0] as HttpOperation)

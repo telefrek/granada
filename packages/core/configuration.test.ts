@@ -12,7 +12,7 @@ import type { Optional } from "./type/utils.js"
 const logger = new DefaultLogger({
   writer: new ConsoleLogWriter(),
   name: "configTest",
-  level: LogLevel.DEBUG,
+  level: LogLevel.INFO,
 })
 
 describe("configuration should work for basic file system integrations", () => {
@@ -56,7 +56,7 @@ describe("configuration should work for basic file system integrations", () => {
     manager = new FileSystemConfigurationManager({
       configDirectory: directory,
       logWriter: new ConsoleLogWriter(),
-      logLevel: LogLevel.DEBUG,
+      logLevel: LogLevel.INFO,
     })
 
     await verifyEmpty()
