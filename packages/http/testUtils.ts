@@ -12,12 +12,14 @@ import { readFileSync } from "fs"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { HttpClientBuilder, type HttpClient } from "./client.js"
-import { DEFAULT_CLIENT_PIPELINE_CONFIGURATION } from "./client/pipeline.js"
-import { type HttpOperationSource } from "./index.js"
+import { type HttpHandler, type HttpOperationSource } from "./index.js"
 import { createPipeline, type HttpPipeline } from "./pipeline.js"
 import type { HttpServer, HttpServerConfig } from "./server.js"
 import { NodeHttp2Server } from "./server/http2.js"
-import { NOT_FOUND_HANDLER } from "./server/pipeline.js"
+import {
+  DEFAULT_SERVER_PIPELINE_CONFIGURATION,
+  NOT_FOUND_HANDLER,
+} from "./server/pipeline.js"
 
 export const TEST_LOGGER: Logger = new DefaultLogger({
   name: "test.logger",
@@ -27,8 +29,9 @@ export const TEST_LOGGER: Logger = new DefaultLogger({
 })
 
 export function createHttp2Server(
+  handler: HttpHandler = NOT_FOUND_HANDLER,
   pipeline: HttpPipeline = createPipeline(
-    DEFAULT_CLIENT_PIPELINE_CONFIGURATION,
+    DEFAULT_SERVER_PIPELINE_CONFIGURATION,
   ),
 ): HttpServer {
   const config: HttpServerConfig = {
@@ -51,7 +54,7 @@ export function createHttp2Server(
   }
 
   const server: HttpServer = new NodeHttp2Server(config, TEST_LOGGER)
-  if (!pipeline.add(server as HttpOperationSource, NOT_FOUND_HANDLER, {})) {
+  if (!pipeline.add(server as HttpOperationSource, handler, {})) {
     TEST_LOGGER.error(`Failed to add server to pipeline!`)
   }
 

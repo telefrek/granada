@@ -26,91 +26,96 @@ export type QueryParameters = Map<string, string | string[]>
  */
 export type HttpHeaders = Map<string, string | string[]>
 
-export enum HttpRequestHeaders {
-  AcceptableInstanceManipulators = "A-IM",
-  Accept = "Accept",
-  AcceptCharset = "Accept-Charset",
-  AcceptDatetime = "Accept-Datetime",
-  AcceptEncoding = "Accept-Encoding",
-  AcceptLanguage = "Accept-Language",
-  AccessControlMethod = "Access-Control-Request-Method",
-  AccessControlHeader = "Access-Control-Request-Headers",
-  Authorization = "Authorization",
-  CacheControl = "Cache-Control",
-  Connection = "Connection",
-  ContentEncoding = "Content-Encoding",
-  ContentLength = "Content-Length",
-  ContentType = "Content-Type",
-  Cookie = "Cookie",
-  Date = "Date",
-  Forwarded = "Forwarded",
-  From = "From",
-  Host = "Host",
-  IfMatch = "If-Match",
-  IfModifiedSince = "If-Modified-Since",
-  IfNoneMatch = "If-None-Match",
-  IfRange = "If-Range",
-  IfUnmodifiedSince = "If-Unmodified-Since",
-  MaxForwards = "Max-Forwards",
-  Origin = "Origin",
-  Pragma = "Pragma",
-  Prefer = "Prefer",
-  ProxyAuthorization = "Proxy-Authorization",
-  Range = "Range",
-  Referrer = "Referrer",
-  TransferEncodings = "TE",
-  Trailer = "Trailer",
-  TransferEncoding = "Transfer-Encoding",
-  UserAgent = "User-Agent",
-  Upgrade = "Upgrade",
-  Via = "Via",
+/**
+ * Common headers for requests and responses (lowercase)
+ */
+export enum CommonHttpHeaders {
+  CacheControl = "cache-control",
+  ContentEncoding = "content-encoding",
+  ContentLength = "content-length",
+  ContentType = "content-type",
+  Date = "date",
+  Upgrade = "upgrade",
+  Via = "via",
 }
 
+/**
+ * Headers for requests (lowercase)
+ */
+export enum HttpRequestHeaders {
+  AcceptableInstanceManipulators = "a-im",
+  Accept = "accept",
+  AcceptCharset = "accept-charset",
+  AcceptDatetime = "accept-datetime",
+  AcceptEncoding = "accept-encoding",
+  AcceptLanguage = "accept-language",
+  AccessControlMethod = "access-control-request-method",
+  AccessControlHeader = "access-control-request-headers",
+  Authorization = "authorization",
+  Connection = "connection",
+  Cookie = "cookie",
+  Forwarded = "forwarded",
+  From = "from",
+  Host = "host",
+  IfMatch = "if-match",
+  IfModifiedSince = "if-modified-since",
+  IfNoneMatch = "if-none-match",
+  IfRange = "if-range",
+  IfUnmodifiedSince = "if-unmodified-since",
+  MaxForwards = "max-forwards",
+  Origin = "origin",
+  Pragma = "pragma",
+  Prefer = "prefer",
+  ProxyAuthorization = "proxy-authorization",
+  Range = "range",
+  Referrer = "referrer",
+  TransferEncodings = "te",
+  Trailer = "trailer",
+  TransferEncoding = "transfer-encoding",
+  UserAgent = "user-agent",
+}
+
+/**
+ * Headers for responses (lowercase)
+ */
 export enum HttpResponseHeaders {
-  AccessControlAllowOrigin = "Access-Control-Allow-Origin",
-  AccessControlAllowCredentials = "Access-Control-Allow-Credentials",
-  AccessControlExposeHeaders = "Access-Control-Expose-Headers",
-  AccessControlMaxAge = "Access-Control-Max-Age",
-  AccessControlAllowMethods = "Access-Control-Allow-Methods",
-  AccessControlAllowHeaders = "Access-Control-Allow-Headers",
-  AcceptPatch = "Accept-Patch",
-  AcceptRange = "Accept-Ranges",
-  Age = "Age",
-  Allow = "Allow",
-  AlternativeServices = "Alt-Svc",
-  CacheControl = "Cache-Control",
-  Connection = "Connection",
-  ContentDisposition = "Content-Disposition",
-  ContentEncoding = "Content-Encoding",
-  ContentLanguage = "Content-Language",
-  ContentLength = "Content-Length",
-  ContentLocation = "Content-Location",
-  ContentRange = "Content-Range",
-  ContentSecurityPolicy = "Content-Security-Policy",
-  ContentType = "Content-Type",
-  Date = "Date",
-  DeltaBase = "Delta-Base",
-  ETag = "ETag",
-  Expires = "Expires",
-  InstanceManipulations = "IM",
-  LastModified = "Last-Modified",
-  Link = "Link",
-  Location = "Location",
-  Pragma = "Pragma",
-  PreferenceApplied = "Preference-Applied",
-  ProxyAuthenticate = "Proxy-Authenticate",
-  PublicKeyPins = "Public-Key-Pins",
-  RetryAfter = "Retry-After",
-  Server = "Server",
-  SetCookie = "Set-Cookie",
-  StrictTransportSecurity = "Strict-Transport-Security",
-  Trailer = "Trailer",
-  TransferEncoding = "Transfer-Encoding",
-  TrackingStatus = "Tk",
-  Upgrade = "Upgrade",
-  Vary = "Vary",
-  Via = "Via",
-  WWWAuthenticate = "WWW-Authenticate",
+  AccessControlAllowOrigin = "access-control-allow-origin",
+  AccessControlAllowCredentials = "access-control-allow-credentials",
+  AccessControlExposeHeaders = "access-control-expose-headers",
+  AccessControlMaxAge = "access-control-max-age",
+  AccessControlAllowMethods = "access-control-allow-methods",
+  AccessControlAllowHeaders = "access-control-allow-headers",
+  AcceptPatch = "accept-patch",
+  AcceptRange = "accept-ranges",
+  Age = "age",
+  Allow = "allow",
+  AlternativeServices = "alt-svc",
+  Connection = "connection",
+  ContentDisposition = "content-disposition",
+  ContentLanguage = "content-language",
+  ContentLocation = "content-location",
+  ContentRange = "content-range",
+  ContentSecurityPolicy = "content-security-policy",
+  DeltaBase = "delta-base",
+  ETag = "etag",
+  Expires = "expires",
+  InstanceManipulations = "im",
+  LastModified = "last-modified",
+  Link = "link",
+  Location = "location",
+  Pragma = "pragma",
+  PreferenceApplied = "preference-applied",
+  ProxyAuthenticate = "proxy-authenticate",
+  PublicKeyPins = "public-key-pins",
+  RetryAfter = "retry-after",
+  Server = "server",
+  SetCookie = "set-cookie",
+  StrictTransportSecurity = "strict-transport-security",
+  Trailer = "trailer",
+  TransferEncoding = "transfer-encoding",
+  TrackingStatus = "tk",
+  Vary = "vary",
+  WWWAuthenticate = "www-authenticate",
 }
 
 /**
@@ -232,7 +237,9 @@ export interface HttpPath {
  * An interface defining the body that is transmitted as part of the request/response cycle
  */
 export interface HttpBody {
+  /** The {@link MediaType} if known */
   mediaType?: MediaType
+  /** The {@link Readable} contents */
   contents: Readable
 }
 
@@ -653,6 +660,7 @@ export interface MediaType {
   suffix?: string
   /** Note it's up to the type implementation to verify the parameters after parsing */
   parameters: Map<string, string>
+  /** Encode the media type */
   toString(): string
 }
 

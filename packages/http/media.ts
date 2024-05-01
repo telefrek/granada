@@ -5,7 +5,7 @@
 import type { Optional } from "@telefrek/core/type/utils.js"
 import { createReadStream, promises } from "fs"
 import {
-  HttpResponseHeaders,
+  CommonHttpHeaders,
   HttpStatusCode,
   type HttpHeaders,
   type HttpResponse,
@@ -175,8 +175,8 @@ export async function createFileContentResponse(
 
   // Get the stats to report file size information
   const stats = await promises.stat(filePath, { bigint: true })
-  headers.set(HttpResponseHeaders.ContentType, mediaType.toString())
-  headers.set(HttpResponseHeaders.ContentLength, stats.size.toString())
+  headers.set(CommonHttpHeaders.ContentType, mediaType.toString())
+  headers.set(CommonHttpHeaders.ContentLength, stats.size.toString())
 
   // Send back the file content response
   return {

@@ -61,7 +61,7 @@ export class Http2ClientTransport<T extends HttpTransportOptions>
       const http2Stream = this._client
         .request(outgoingHeaders, {
           signal: abort,
-          endStream: true,
+          endStream: request.body === undefined,
         })
         .on("error", (err) => {
           deferred.reject(err)
@@ -91,7 +91,10 @@ export class Http2ClientTransport<T extends HttpTransportOptions>
               case HttpStatusCode.NOT_MODIFIED:
                 break
               default:
-                if (incomingHeaders["content-type"]) {
+                if (
+                  incomingHeaders["content-type"] ||
+                  incomingHeaders["content-length"]
+                ) {
                   body = { contents: http2Stream }
                 }
                 break
@@ -110,11 +113,7 @@ export class Http2ClientTransport<T extends HttpTransportOptions>
 
       // Check if we need to write the body
       if (request.body) {
-        request.body.contents.pipe(http2Stream, {
-          end: true,
-        })
-      } else {
-        http2Stream.end()
+        request.body.contents.pipe(http2Stream)
       }
     } catch (err) {
       deferred.reject(err)

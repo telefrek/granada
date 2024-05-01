@@ -4,10 +4,9 @@
 
 import { DeferredPromise, type MaybeAwaitable } from "./index.js"
 
-import fs from "fs"
+import fs, { existsSync, statSync } from "fs"
 import path, { join } from "path"
 import { EmitterFor, type Emitter } from "./events.js"
-import { fileExists } from "./fileSystem.js"
 import {
   DefaultLogger,
   type LogLevel,
@@ -370,4 +369,21 @@ export class FileSystemConfigurationManager
 
     return []
   }
+}
+
+/**
+ * This is a temporary fix while waiting for the NodeJS backing recursive checks
+ * to make it into the LTS version
+ *
+ * @param fileName The file to check
+ * @returns True if the file exists
+ */
+function fileExists(fileName: string): boolean {
+  // File might exist but have no valid stats
+  if (existsSync(fileName)) {
+    const stats = statSync(fileName, { throwIfNoEntry: false })
+    return stats ? stats.birthtimeMs !== 0 : false
+  }
+
+  return false
 }

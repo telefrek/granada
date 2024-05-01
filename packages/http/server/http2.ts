@@ -17,6 +17,7 @@ import { HttpServerBase, type HttpServerConfig } from "../server.js"
 import { extractHeaders, injectHeaders, parsePath } from "../utils.js"
 
 import type { Logger } from "@telefrek/core/logging"
+import { pipe } from "@telefrek/core/streams"
 import {
   Http2Server,
   Http2ServerRequest,
@@ -156,9 +157,7 @@ export class NodeHttp2Server extends HttpServerBase {
       resp.writeHead(response.status.code, outgoing)
 
       if (response.body) {
-        response.body.contents.pipe(resp, {
-          end: true,
-        })
+        pipe(response.body.contents, resp)
       } else {
         resp.end()
       }

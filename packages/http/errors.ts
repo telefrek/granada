@@ -11,6 +11,7 @@ export enum HttpErrorCode {
   ABORTED = "aborted",
   TIMEOUT = "timeout",
   CLOSED = "closed",
+  UNSUPPORTED_ENCODING = "unsupportedEncoding",
   UNKNOWN = "unknown",
 }
 

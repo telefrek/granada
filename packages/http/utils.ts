@@ -65,6 +65,7 @@ export const DefaultHttpMethodStatus = {
 
 /**
  * Extract the incoming headers to our framework representation
+ *
  * @param incomingHttpHeaders The {@link IncomingHttpHeaders} to extract
  * @returns A new {@link HttpHeaders} object
  */
