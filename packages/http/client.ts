@@ -18,15 +18,17 @@ import { Http2ClientTransport } from "./client/http2.js"
 import { DEFAULT_CLIENT_PIPELINE_CONFIGURATION } from "./client/pipeline.js"
 import { HttpErrorCode, type HttpError } from "./errors.js"
 import {
-  HttpOperationState,
-  createHttpOperation,
   type HttpHandler,
-  type HttpOperationSource,
-  type HttpOperationSourceEvents,
   type HttpRequest,
   type HttpResponse,
   type TLSConfig,
 } from "./index.js"
+import {
+  HttpOperationState,
+  createHttpOperation,
+  type HttpOperationSource,
+  type HttpOperationSourceEvents,
+} from "./operations.js"
 import { createPipeline, type HttpPipeline } from "./pipeline.js"
 
 /** The logger used for HTTP Clients */

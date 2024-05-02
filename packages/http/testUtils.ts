@@ -17,9 +17,9 @@ import {
   HttpMethod,
   HttpStatusCode,
   type HttpHandler,
-  type HttpOperationSource,
   type HttpResponse,
 } from "./index.js"
+import type { HttpOperationSource } from "./operations.js"
 import { createPipeline, type HttpPipeline } from "./pipeline.js"
 import { createRouter, getRoutingParameters, type Router } from "./routing.js"
 import type { HttpServer, HttpServerConfig } from "./server.js"

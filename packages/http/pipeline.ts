@@ -27,18 +27,20 @@ import {
   Writable,
   type TransformOptions,
 } from "stream"
+import {
+  clearOperationContext,
+  isTerminal,
+  setOperationContext,
+  type HttpOperationContext,
+} from "./context.js"
 import { translateHttpError } from "./errors.js"
 import {
-  HttpOperationState,
-  HttpStatusCode,
   type HttpHandler,
-  type HttpOperation,
-  type HttpOperationSource,
   type HttpRequest,
   type HttpResponse,
 } from "./index.js"
-import { clearRoutingParameters } from "./routing.js"
-import { emptyHeaders } from "./utils.js"
+import { type HttpOperation, type HttpOperationSource } from "./operations.js"
+import { notFound } from "./utils.js"
 
 /**
  * The default {@link Logger} for {@link HttpPipeline} operations
@@ -71,6 +73,16 @@ export function setPipelineWriter(writer: LogWriter): void {
     writer: writer,
     includeTimestamps: true,
   })
+}
+
+/**
+ * Log an error in the pipeline logger
+ *
+ * @param message The message to send as an error
+ * @param reason The reason for the error
+ */
+export function pipelineError(message: string, reason?: unknown): void {
+  PIPELINE_LOGGER.error(message, reason)
 }
 
 /**
@@ -193,46 +205,6 @@ export enum HttpPipelineStage {
 }
 
 /**
- * Context for the current {@link HttpOperation} as it moves through a {@link HttpPipeline}
- */
-export interface HttpOperationContext {
-  stage: HttpPipelineStage
-  operation: HttpOperation
-  response?: HttpResponse
-  handler?: HttpHandler
-}
-
-/**
- * Check to see if the context is in a request processing phase
- *
- * @param context The {@link HttpOperationContext} to examine
- */
-export function isInRequestPhase(context: HttpOperationContext): boolean {
-  switch (context.operation.state) {
-    case HttpOperationState.READING:
-    case HttpOperationState.PROCESSING:
-      return !context.response
-  }
-
-  return false
-}
-
-/**
- * Check to see if the context is in a response processing phase
- *
- * @param context The {@link HttpOperationContext} to examine
- */
-export function isInResponsePhase(context: HttpOperationContext): boolean {
-  switch (context.operation.state) {
-    case HttpOperationState.WRITING:
-    case HttpOperationState.PROCESSING:
-      return context.response !== undefined
-  }
-
-  return false
-}
-
-/**
  * A simple type representing a stream transform on a {@link HttpOperation}
  */
 export type HttpTransform = TransformFunc<
@@ -314,6 +286,8 @@ class DefaultHttpPipeline
         context.stage !== HttpPipelineStage.COMPLETED &&
         !(context.operation.response || context.response)
       ) {
+        // Set the context
+        setOperationContext(context)
         try {
           // Either use the context handler or the default
           const handler = context.handler ?? defaultHandler
@@ -326,6 +300,9 @@ class DefaultHttpPipeline
         } catch (err) {
           context.operation.fail(translateHttpError(err))
         } finally {
+          // Clear the context
+          clearOperationContext()
+
           if (
             context.operation.request.body &&
             !context.operation.request.body.contents.readableEnded
@@ -422,9 +399,6 @@ class DefaultHttpPipeline
             encoding: BufferEncoding,
             callback: StreamCallback,
           ) {
-            // Ensure we are working with a clean slate
-            clearRoutingParameters()
-
             // Stupid iterator pushes the tuple...
             const operation: HttpOperation = Array.isArray(chunk)
               ? (chunk[0] as HttpOperation)
@@ -465,16 +439,8 @@ class DefaultHttpPipeline
       ) {
         check()
           .then(() => {
-            context.stage = HttpPipelineStage.COMPLETED
-            if (!context.operation.response) {
-              context.operation.complete(
-                context.response ?? {
-                  status: {
-                    code: HttpStatusCode.NOT_FOUND,
-                  },
-                  headers: emptyHeaders(),
-                },
-              )
+            if (!isTerminal(context)) {
+              context.operation.complete(context.response ?? notFound())
             }
           })
           .finally(() => {

@@ -13,14 +13,12 @@ import {
 } from "@telefrek/core/logging.js"
 import { type Duration } from "@telefrek/core/time.js"
 import { HttpErrorCode, type HttpError } from "./errors.js"
+import { HttpRequest, HttpResponse, type TLSConfig } from "./index.js"
 import {
   HttpOperationState,
-  HttpRequest,
-  HttpResponse,
   createHttpOperation,
   type HttpOperationSourceEvents,
-  type TLSConfig,
-} from "./index.js"
+} from "./operations.js"
 
 /**
  * The default {@link Logger} for {@link HttpPipeline} operations

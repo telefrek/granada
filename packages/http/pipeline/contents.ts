@@ -11,6 +11,7 @@ import {
   createGzip,
   createInflate,
 } from "zlib"
+import type { HttpOperationContext } from "../context.js"
 import { HttpErrorCode, type HttpError } from "../errors.js"
 import {
   CommonHttpHeaders,
@@ -18,7 +19,7 @@ import {
   type HttpResponse,
 } from "../index.js"
 import { CommonMediaTypes, getMediaType } from "../media.js"
-import type { HttpOperationContext, HttpTransform } from "../pipeline.js"
+import type { HttpTransform } from "../pipeline.js"
 
 /**
  * Parse the response body

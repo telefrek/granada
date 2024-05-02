@@ -3,7 +3,11 @@
  */
 
 import type { Optional } from "@telefrek/core/type/utils.js"
-import { AsyncLocalStorage } from "async_hooks"
+import {
+  getOperationContextKey,
+  setOperationContextKey,
+  type HttpOperationContext,
+} from "./context.js"
 import { HttpHandler, HttpMethod, SegmentValue } from "./index.js"
 
 /**
@@ -21,8 +25,7 @@ const HTTP_METHODS = [
 
 export type RoutingParameters = Map<string, SegmentValue>
 
-const HTTP_ROUTING_STORE: AsyncLocalStorage<RoutingParameters> =
-  new AsyncLocalStorage()
+const ROUTING_PARAMETERS: unique symbol = Symbol()
 
 /**
  * Get the current routing parameters for this operation
@@ -30,7 +33,7 @@ const HTTP_ROUTING_STORE: AsyncLocalStorage<RoutingParameters> =
  * @returns The current {@link RoutingParameters}
  */
 export function getRoutingParameters(): Optional<RoutingParameters> {
-  return HTTP_ROUTING_STORE.getStore()
+  return getOperationContextKey(ROUTING_PARAMETERS)
 }
 
 /**
@@ -38,15 +41,15 @@ export function getRoutingParameters(): Optional<RoutingParameters> {
  *
  * @param parameters The {@link RoutingParameters} to set
  */
-export function setRoutingParameters(parameters: RoutingParameters): void {
-  HTTP_ROUTING_STORE.enterWith(parameters)
-}
-
-/**
- * Clear the routing parameters for this operation
- */
-export function clearRoutingParameters(): void {
-  HTTP_ROUTING_STORE.disable()
+export function setRoutingParameters(
+  parameters: RoutingParameters,
+  context?: HttpOperationContext,
+): void {
+  if (context) {
+    context[ROUTING_PARAMETERS] = parameters
+  } else {
+    setOperationContextKey(ROUTING_PARAMETERS, parameters)
+  }
 }
 
 /**
@@ -87,6 +90,9 @@ export function isRoutableApi(routable: unknown): routable is RoutableApi {
 export interface RouteInfo {
   /** Any parameters that were retrieved */
   parameters?: RoutingParameters
+
+  /** The route template */
+  template: string
 
   /** The handler to invoke */
   handler: HttpHandler
@@ -286,12 +292,24 @@ class RouterImpl implements Router {
     if (isHandlerNode(current)) {
       if (current.handlers[request.method]) {
         return {
+          template: current.template,
           handler: current.handlers[request.method]!,
           parameters,
         }
       }
     } else if (isRouterNode(current)) {
-      return current.router.lookup({ method: request.method, path: remainder })
+      // Get the info
+      const info = current.router.lookup({
+        method: request.method,
+        path: remainder,
+      })
+
+      // Merge the templates
+      if (info) {
+        info.template = `${current.template}${info.template}`
+      }
+
+      return info
     }
 
     return
@@ -330,6 +348,7 @@ class RouterImpl implements Router {
           parameter: final.parameter,
           info: final.info,
           handlers: {},
+          template,
         }
 
         if (method !== undefined) {
@@ -415,6 +434,7 @@ class RouterImpl implements Router {
           parameter: final.parameter,
           info: final.info,
           router,
+          template: template,
         }
 
         // Add this to the root, no need for collision checks
@@ -807,6 +827,7 @@ interface RouteTrieNode {
  */
 interface RouterNode extends RouteTrieNode {
   router: Router
+  template: string
 }
 
 /**
@@ -814,6 +835,7 @@ interface RouterNode extends RouteTrieNode {
  */
 interface HandlerNode extends RouteTrieNode {
   handlers: RouteHandler
+  template: string
 }
 
 interface RootNode extends RouteTrieNode {

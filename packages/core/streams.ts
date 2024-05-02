@@ -6,7 +6,7 @@ import {
   type TransformOptions,
   type Writable,
 } from "stream"
-import { MaybeAwaitable } from "./index.js"
+import { DeferredPromise, MaybeAwaitable } from "./index.js"
 import type { Optional } from "./type/utils.js"
 
 /**
@@ -98,12 +98,32 @@ export class GenericTransform<T, U> extends Stream.Transform {
     callback: TransformCallback,
   ): Promise<void> {
     try {
+      // Invoke the transform
       const val = await this.transform(chunk)
-      if (val !== undefined) this.push(val)
+      if (val !== undefined) {
+        // Ensure we push or wait for backpressure to clear
+        while (!this.push(val)) {
+          await this._waitForBackpressure()
+        }
+      }
       callback()
     } catch (err) {
       callback(err as Error, chunk)
     }
+  }
+
+  /**
+   * Wait for backpressure to clear
+   *
+   * @returns A {@link Promise} that will resolve when backpressure has cleared
+   */
+  private async _waitForBackpressure(): Promise<void> {
+    const deferred = new DeferredPromise()
+    this.once("drain", () => {
+      this.removeListener("error", deferred.reject)
+      deferred.resolve()
+    }).once("error", deferred.reject)
+    return deferred
   }
 }
 

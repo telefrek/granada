@@ -32,6 +32,8 @@
   "dependencies": {
     "@opentelemetry/api": "^1.8.0",
     "@opentelemetry/semantic-conventions": "^1.24.0",
+    "@opentelemetry/sdk-trace-base": "^1.24.0",
+    "@opentelemetry/sdk-node": "^0.51.0",
     "@telefrek/core": "^1.0.0-alpha.41"
   },
   "gitHead": "1be6bb3a61aab8ae5361827b54f8428682b9d536"

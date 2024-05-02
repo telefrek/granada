@@ -9,13 +9,10 @@
 import { fatal, type LoggerOptions } from "@telefrek/core/logging.js"
 import { existsSync } from "fs"
 import { join, resolve } from "path"
+import { isInRequestPhase, type HttpOperationContext } from "../context.js"
 import { HttpMethod, HttpStatusCode } from "../index.js"
 import { createFileContentResponse } from "../media.js"
-import {
-  isInRequestPhase,
-  type HttpOperationContext,
-  type HttpTransform,
-} from "../pipeline.js"
+import { type HttpTransform } from "../pipeline.js"
 import { emptyHeaders } from "../utils.js"
 
 /**

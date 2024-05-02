@@ -44,8 +44,8 @@ export const HttpServerMetrics = {
  * Metrics related to routing statistics
  */
 export const ApiRouteMetrics = {
-  RouteRequests: getGranadaMeter().createCounter("incoming_route_requests", {
-    description: "The total number of incoming requests to a specific route",
+  RouteErrors: getGranadaMeter().createCounter("unhandled_route_errors", {
+    description: "The total number of unhandled errors from a specific route",
     valueType: ValueType.INT,
   }),
   RouteRequestDuration: getGranadaMeter().createHistogram(

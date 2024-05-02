@@ -1,4 +1,4 @@
-import { trace, type Span, type Tracer } from "@opentelemetry/api"
+import { context, trace, type Span, type Tracer } from "@opentelemetry/api"
 import { AsyncLocalStorage } from "async_hooks"
 import type { Optional } from "../type/utils.js"
 import { GRANADA_VERSION } from "../version.js"
@@ -47,6 +47,7 @@ export class Scope implements Disposable {
     if (!this._active && !this._finished) {
       this._previous = getActiveSpan()
       ACTIVE_SPAN_STORE.enterWith(this.span)
+      trace.setSpan(context.active(), this.span)
       this._active = true
     }
   }
@@ -59,9 +60,13 @@ export class Scope implements Disposable {
       this._active = false
       if (this._previous && this._previous.isRecording()) {
         ACTIVE_SPAN_STORE.enterWith(this._previous)
+        if (this._previous) {
+          trace.setSpan(context.active(), this._previous)
+        }
         this._previous = undefined
       } else {
         ACTIVE_SPAN_STORE.disable()
+        trace.deleteSpan(context.active())
       }
     }
   }

@@ -2,11 +2,17 @@
  * Exercise the pipelines!
  */
 
-import { type MaybeAwaitable } from "@telefrek/core"
-import { consumeJsonStream } from "@telefrek/core/json"
+import { trace } from "@opentelemetry/api"
+import { node } from "@opentelemetry/sdk-node"
+import {
+  ConsoleSpanExporter,
+  SimpleSpanProcessor,
+} from "@opentelemetry/sdk-trace-base"
+import { type MaybeAwaitable } from "@telefrek/core/index.js"
+import { consumeJsonStream } from "@telefrek/core/json.js"
 import { ConsoleLogWriter, LogLevel } from "@telefrek/core/logging"
-import { consumeString, drain } from "@telefrek/core/streams"
-import { Duration, delay } from "@telefrek/core/time"
+import { consumeString, drain } from "@telefrek/core/streams.js"
+import { Duration, delay } from "@telefrek/core/time.js"
 import { randomUUID as v4 } from "crypto"
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "fs"
 import { join } from "path"
@@ -40,7 +46,11 @@ describe("Pipelines should support clients and servers end to end", () => {
   let promise: MaybeAwaitable<void>
 
   beforeAll(async () => {
-    setPipelineWriter(new ConsoleLogWriter())
+    const provider = new node.NodeTracerProvider()
+    provider.addSpanProcessor(
+      new SimpleSpanProcessor(new ConsoleSpanExporter()),
+    )
+    trace.setGlobalTracerProvider(provider)
     directory = mkdtempSync("granada-hosting-test", "utf8")
 
     // Create the index html file

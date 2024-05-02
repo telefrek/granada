@@ -39,6 +39,34 @@ export function noContents(): HttpResponse {
 }
 
 /**
+ * Creates a new internal server error {@link HttpResponse}
+ *
+ * @returns A new {@link HttpResponse}
+ */
+export function serverError(): HttpResponse {
+  return {
+    status: {
+      code: HttpStatusCode.INTERNAL_SERVER_ERROR,
+    },
+    headers: emptyHeaders(),
+  }
+}
+
+/**
+ * Creates a new content not found {@link HttpResponse}
+ *
+ * @returns A new {@link HttpResponse}
+ */
+export function notFound(): HttpResponse {
+  return {
+    status: {
+      code: HttpStatusCode.NOT_FOUND,
+    },
+    headers: emptyHeaders(),
+  }
+}
+
+/**
  * Creates a new method not allowed {@link HttpResponse}
  *
  * @returns A new {@link HttpResponse}

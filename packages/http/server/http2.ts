@@ -131,6 +131,7 @@ export class NodeHttp2Server extends HttpServerBase {
       const timer = Timer.startNew()
       const socket = req.stream.session?.socket
 
+      // TODO: Get tracing from headers to set the parent...
       const span = getTracer().startSpan("http.request", {
         root: true,
         kind: SpanKind.SERVER,
