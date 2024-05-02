@@ -20,6 +20,32 @@ export type TransformFunc<T, U> = (data: T) => MaybeAwaitable<Optional<U>>
 export type StreamCallback = (error?: Error | null | undefined) => void
 
 /**
+ * Consume the {@link Readable} and return the contents as a string
+ *
+ * @param readable The {@link Readable} to consume
+ * @returns The contents of the {@link Readable} as a string
+ */
+export async function consumeString(readable: Readable): Promise<string> {
+  // TODO: This can probably be optimized but it's a utility for now so...
+  let s = ""
+  for await (const chunk of readable) {
+    s += Buffer.isBuffer(chunk) ? chunk.toString() : (chunk as string)
+  }
+
+  return s
+}
+
+/**
+ * Drains the readable
+ *
+ * @param readable The {@link Readable} to ensure we drain
+ */
+export async function drain(readable: Readable): Promise<void> {
+  for await (const _ of readable) {
+  }
+}
+
+/**
  * Pipes the source to the destination while handling errors
  *
  * @param source The {@link Readable} to pipe from

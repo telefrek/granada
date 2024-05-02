@@ -86,7 +86,7 @@ export function hostFolder(options: HostingOptions): HttpTransform {
           // Someone is doing something shady, stop it here
           context.response = {
             status: {
-              code: HttpStatusCode.NOT_FOUND,
+              code: HttpStatusCode.FORBIDDEN,
             },
             headers: emptyHeaders(),
           }

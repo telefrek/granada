@@ -9,11 +9,7 @@ import { getGranadaMeter } from "@telefrek/core/observability/metrics.js"
  * Metrics related to http request handling (server)
  */
 export const HttpServerMetrics = {
-  IncomingRequests: getGranadaMeter().createCounter("http_incoming_requests", {
-    description:
-      "The total number of incoming requests that a server has received",
-    valueType: ValueType.INT,
-  }),
+  /** Record the incoming request duration in seconds */
   IncomingRequestDuration: getGranadaMeter().createHistogram(
     "http_incoming_request_duration",
     {
@@ -27,6 +23,7 @@ export const HttpServerMetrics = {
       },
     },
   ),
+  /** Record the number of requests that were shed */
   RequestsShedCounter: getGranadaMeter().createCounter(
     "http_incoming_request_shed_counter",
     {
@@ -35,6 +32,7 @@ export const HttpServerMetrics = {
       valueType: ValueType.INT,
     },
   ),
+  /** Record the status for responses */
   ResponseStatus: getGranadaMeter().createCounter("http_response_status", {
     description:
       "The total number responses by status type the server has returned",

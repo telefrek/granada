@@ -14,6 +14,7 @@ import {
 } from "@telefrek/core/logging.js"
 import {
   GenericTransform,
+  drain,
   type StreamCallback,
   type TransformFunc,
 } from "@telefrek/core/streams.js"
@@ -304,6 +305,7 @@ class DefaultHttpPipeline
   }
 
   private _createHandlerTransform(defaultHandler: HttpHandler): HttpTransform {
+    const logger = this._logger
     return async (
       context: HttpOperationContext,
     ): Promise<HttpOperationContext> => {
@@ -323,6 +325,16 @@ class DefaultHttpPipeline
           )
         } catch (err) {
           context.operation.fail(translateHttpError(err))
+        } finally {
+          if (
+            context.operation.request.body &&
+            !context.operation.request.body.contents.readableEnded
+          ) {
+            logger.error(
+              `[${context.operation.request.method}] ${context.operation.request.path.original} didn't read, draining body`,
+            )
+            await drain(context.operation.request.body.contents)
+          }
         }
       }
 
@@ -349,9 +361,7 @@ class DefaultHttpPipeline
           .on("error", (err) => {
             logger.error(`Error in pipeline during requestTransform: ${err}`)
           })
-          .pipe(new GenericTransform(transform, DEFAULT_TRANSFORM_OPTS), {
-            end: true,
-          })
+          .pipe(new GenericTransform(transform, DEFAULT_TRANSFORM_OPTS))
       }
     }
 
@@ -365,7 +375,6 @@ class DefaultHttpPipeline
           this._createHandlerTransform(handler),
           DEFAULT_TRANSFORM_OPTS,
         ),
-        { end: true },
       )
 
     // Check for any response transforms
@@ -375,9 +384,7 @@ class DefaultHttpPipeline
           .on("error", (err) => {
             logger.error(`Error in pipeline during responseTransform: ${err}`)
           })
-          .pipe(new GenericTransform(transform, DEFAULT_TRANSFORM_OPTS), {
-            end: true,
-          })
+          .pipe(new GenericTransform(transform, DEFAULT_TRANSFORM_OPTS))
       }
     }
 
@@ -497,12 +504,12 @@ class DefaultHttpPipeline
       .on("error", (err) => {
         logger.error(`Error in pipeline source: ${err}`)
       })
-      .pipe(details.middleware.start, { end: true })
+      .pipe(details.middleware.start)
     details.middleware.end
       .on("error", (err) => {
         logger.error(`Error in pipeline middleware: ${err}`)
       })
-      .pipe(details.destination, { end: true })
+      .pipe(details.destination)
 
     return details
   }

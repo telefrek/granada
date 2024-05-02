@@ -3,80 +3,61 @@
  */
 
 import { type MaybeAwaitable } from "@telefrek/core"
-import { fromJsonStream, streamJson } from "@telefrek/core/json.js"
+import { consumeJsonStream } from "@telefrek/core/json"
+import { ConsoleLogWriter, LogLevel } from "@telefrek/core/logging"
+import { consumeString, drain } from "@telefrek/core/streams"
 import { Duration, delay } from "@telefrek/core/time"
 import { randomUUID as v4 } from "crypto"
-import type { HttpClient } from "./client.js"
-import { HttpMethod, HttpRequestHeaders, HttpStatusCode } from "./index.js"
-import { CommonMediaTypes } from "./media.js"
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "fs"
+import { join } from "path"
+import { type HttpClient } from "./client.js"
+import { HttpMethod, HttpStatusCode } from "./index.js"
+import {
+  createPipeline,
+  setPipelineLogLevel,
+  setPipelineWriter,
+} from "./pipeline.js"
+import { hostFolder } from "./pipeline/hosting.js"
+import { USE_ROUTER } from "./pipeline/routing.js"
 import type { HttpServer } from "./server.js"
 import {
-  TEST_LOGGER,
+  DEFAULT_SERVER_PIPELINE_CONFIGURATION,
+  NOT_FOUND_HANDLER,
+} from "./server/pipeline.js"
+import {
   createHttp2Client,
   createHttp2Server,
+  createTestRouter,
 } from "./testUtils.js"
-import { emptyHeaders } from "./utils.js"
+import { createRequest, emptyHeaders, jsonBody } from "./utils.js"
+
+const INDEX_HTML = `<!doctype html><html><head><title>Test</title></head><body>Test Page</body></html>`
 
 describe("Pipelines should support clients and servers end to end", () => {
   let server: HttpServer
   let client: HttpClient
+  let directory: string
   let promise: MaybeAwaitable<void>
 
   beforeAll(async () => {
-    const port = 20000 + ~~(Math.random() * 10000)
-    server = createHttp2Server(async (request, _abort) => {
-      if (
-        request.path.original === "/json" &&
-        request.method === HttpMethod.GET
-      ) {
-        return {
-          status: {
-            code: HttpStatusCode.OK,
-          },
-          headers: emptyHeaders(),
-          body: {
-            mediaType: CommonMediaTypes.JSON,
-            contents: streamJson({ hello: "world" }),
-          },
-        }
-      } else if (
-        request.path.original === "/upload" &&
-        request.method === HttpMethod.POST
-      ) {
-        const uploadContents: unknown[] = []
-        if (request.body && request.body.mediaType?.subType === "json") {
-          TEST_LOGGER.info("Reading body contents on request")
-          for await (const obj of fromJsonStream(request.body.contents)) {
-            uploadContents.push(obj)
-          }
+    setPipelineWriter(new ConsoleLogWriter())
+    directory = mkdtempSync("granada-hosting-test", "utf8")
 
-          return {
-            status: {
-              code: HttpStatusCode.ACCEPTED,
-            },
-            headers: emptyHeaders(),
-            body: {
-              mediaType: CommonMediaTypes.JSON,
-              contents: streamJson(uploadContents),
-            },
-          }
-        } else {
-          return {
-            status: {
-              code: HttpStatusCode.BAD_REQUEST,
-            },
-            headers: emptyHeaders(),
-          }
-        }
-      }
-
-      return {
-        status: {
-          code: HttpStatusCode.NOT_FOUND,
-        },
-        headers: emptyHeaders(),
-      }
+    // Create the index html file
+    writeFileSync(join(directory, "index.html"), INDEX_HTML, {
+      encoding: "utf-8",
     })
+
+    const port = 20000 + ~~(Math.random() * 10000)
+    const config = { ...DEFAULT_SERVER_PIPELINE_CONFIGURATION }
+
+    // Host before api to ensure no routing issues since we are storing at '/'
+    config.requestTransforms?.push(hostFolder({ baseDir: directory }))
+
+    // Add routing
+    config.requestTransforms?.push(USE_ROUTER(createTestRouter()))
+
+    server = createHttp2Server(NOT_FOUND_HANDLER, createPipeline(config))
     promise = server.listen(port)
 
     await delay(20)
@@ -85,6 +66,13 @@ describe("Pipelines should support clients and servers end to end", () => {
   })
 
   afterAll(async () => {
+    if (directory && existsSync(directory)) {
+      rmSync(directory, {
+        recursive: true,
+        force: true,
+      })
+    }
+
     if (client) {
       await client.close()
     }
@@ -99,14 +87,7 @@ describe("Pipelines should support clients and servers end to end", () => {
   })
 
   it("Server should respond to health requests", async () => {
-    const response = await client.submit({
-      id: v4(),
-      headers: emptyHeaders(),
-      path: {
-        original: "/health",
-      },
-      method: HttpMethod.GET,
-    })
+    const response = await client.submit(createRequest({ path: "/health" }))
 
     // Expect a response with no content
     expect(response.status.code).toBe(HttpStatusCode.NO_CONTENT)
@@ -116,14 +97,10 @@ describe("Pipelines should support clients and servers end to end", () => {
   it("Should respond with the default handler if not mapped", async () => {
     for (const original of ["/health", "/ready", "/not/mapped"]) {
       const response = await client.submit(
-        {
-          id: v4(),
-          headers: emptyHeaders(),
-          path: {
-            original,
-          },
+        createRequest({
+          path: original,
           method: HttpMethod.POST,
-        },
+        }),
         Duration.ofSeconds(1),
       )
 
@@ -132,122 +109,82 @@ describe("Pipelines should support clients and servers end to end", () => {
     }
   })
 
-  it("Server should response with contents compressed when accept-passed", async () => {
-    const acceptBRHeaders = emptyHeaders()
-    acceptBRHeaders.set(HttpRequestHeaders.AcceptEncoding, "br")
-
-    const acceptGzipHeaders = emptyHeaders()
-    acceptGzipHeaders.set(HttpRequestHeaders.AcceptEncoding, "gzip")
-
-    let response = await client.submit({
-      id: v4(),
-      headers: acceptBRHeaders,
-      path: {
-        original: "/json",
-      },
-      method: HttpMethod.GET,
-    })
-
+  it("Should support hosting requests", async () => {
+    let response = await client.submit(createRequest({ path: "/" }))
     expect(response.status.code).toBe(HttpStatusCode.OK)
     expect(response.body).not.toBeUndefined()
-    expect(response.body?.mediaType).not.toBeUndefined()
-    expect(response.body?.mediaType?.type).toBe("application")
-    expect(response.body?.mediaType?.subType).toBe("json")
+    expect(response.body!.mediaType?.toString()).toBe("text/html;charset=utf-8")
 
-    let count = 0
-    for await (const obj of fromJsonStream(response.body!.contents)) {
-      count++
-      expect(obj).toStrictEqual({ hello: "world" })
-    }
+    const results = await consumeString(response.body!.contents)
+    expect(results).toBeTruthy()
+    expect(results).toBe(INDEX_HTML)
 
-    expect(count).toBe(1)
-
-    response = await client.submit({
-      id: v4(),
-      headers: acceptGzipHeaders,
-      path: {
-        original: "/json",
-      },
-      method: HttpMethod.GET,
-    })
-
-    expect(response.status.code).toBe(HttpStatusCode.OK)
-    expect(response.body).not.toBeUndefined()
-    expect(response.body?.mediaType).not.toBeUndefined()
-    expect(response.body?.mediaType?.type).toBe("application")
-    expect(response.body?.mediaType?.subType).toBe("json")
-
-    count = 0
-    for await (const obj of fromJsonStream(response.body!.contents)) {
-      count++
-      expect(obj).toStrictEqual({ hello: "world" })
-    }
-
-    expect(count).toBe(1)
-
-    // Default compression accepted should still work
-    response = await client.submit({
-      id: v4(),
-      headers: emptyHeaders(),
-      path: {
-        original: "/json",
-      },
-      method: HttpMethod.GET,
-    })
-
-    expect(response.status.code).toBe(HttpStatusCode.OK)
-    expect(response.body).not.toBeUndefined()
-    expect(response.body?.mediaType).not.toBeUndefined()
-    expect(response.body?.mediaType?.type).toBe("application")
-    expect(response.body?.mediaType?.subType).toBe("json")
-
-    count = 0
-    for await (const obj of fromJsonStream(response.body!.contents)) {
-      count++
-      expect(obj).toStrictEqual({ hello: "world" })
-    }
-
-    expect(count).toBe(1)
+    response = await client.submit(
+      createRequest({ path: "/file/does/not/exist" }),
+    )
+    expect(response.status.code).toBe(HttpStatusCode.NOT_FOUND)
+    expect(response.body).toBeUndefined()
   })
 
-  it("Server should be able to accept a body from the client", async () => {
-    const response = await client.submit({
-      id: v4(),
-      headers: emptyHeaders(),
-      path: {
-        original: "/upload",
-      },
-      method: HttpMethod.POST,
-      body: {
-        mediaType: CommonMediaTypes.JSON,
-        contents: streamJson([{ hello: "world" }]),
-      },
-    })
+  it("Should support routing requests", async () => {
+    setPipelineLogLevel(LogLevel.INFO)
+    setPipelineWriter(new ConsoleLogWriter())
+    let response = await client.submit(createRequest({ path: "/route1" }))
+    expect(response.status.code).toBe(HttpStatusCode.NO_CONTENT)
+    expect(response.body).toBeUndefined()
 
+    response = await client.submit(
+      createRequest({ path: "/route2/123", method: HttpMethod.GET }),
+    )
+    expect(response.status.code).toBe(HttpStatusCode.OK)
+    expect(response.body).not.toBeUndefined()
+    let body = await consumeJsonStream(response.body!.contents)
+    expect(body).not.toBeUndefined()
+    expect(body).toStrictEqual({ itemId: 123 })
+
+    response = await client.submit(
+      createRequest({ path: "/route2/foo", method: HttpMethod.GET }),
+    )
+    expect(response.status.code).toBe(HttpStatusCode.OK)
+    expect(response.body).not.toBeUndefined()
+    body = await consumeJsonStream(response.body!.contents)
+    expect(body).not.toBeUndefined()
+    expect(body).toStrictEqual({ itemId: "foo" })
+
+    response = await client.submit(
+      createRequest({
+        path: "/route2/1",
+        method: HttpMethod.PUT,
+        body: jsonBody({ itemId: 1, updated: true }),
+      }),
+    )
     expect(response.status.code).toBe(HttpStatusCode.ACCEPTED)
     expect(response.body).not.toBeUndefined()
-    expect(response.body?.mediaType).not.toBeUndefined()
-    expect(response.body?.mediaType?.type).toBe("application")
-    expect(response.body?.mediaType?.subType).toBe("json")
+    body = await consumeJsonStream(response.body!.contents)
+    expect(body).not.toBeUndefined()
+    expect(body).toStrictEqual({ itemId: 1, updated: true })
 
-    let count = 0
-    for await (const obj of fromJsonStream(response.body!.contents)) {
-      count++
-      expect(obj).toStrictEqual({ hello: "world" })
-    }
+    response = await client.submit(
+      createRequest({
+        path: "/route3",
+        body: jsonBody({ some: "body" }),
+      }),
+    )
 
-    expect(count).toBe(1)
+    expect(response.status.code).toBe(HttpStatusCode.OK)
+    expect(response.body).not.toBeUndefined()
+    expect(response.body!.mediaType).not.toBeUndefined()
+    expect(response.body!.mediaType!.toString()).toBe("application/json")
+
+    await drain(response.body!.contents)
   })
 
   it("Server should respond to ready requests", async () => {
-    let response = await client.submit({
-      id: v4(),
-      headers: emptyHeaders(),
-      path: {
-        original: "/ready",
-      },
-      method: HttpMethod.GET,
-    })
+    let response = await client.submit(
+      createRequest({
+        path: "/ready",
+      }),
+    )
 
     // Expect a response with no content
     expect(response.status.code).toBe(HttpStatusCode.NO_CONTENT)

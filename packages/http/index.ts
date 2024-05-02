@@ -229,7 +229,6 @@ export interface HttpQuery {
  */
 export interface HttpPath {
   readonly original: string
-  segments?: string[]
   template?: string
 }
 
@@ -381,13 +380,15 @@ export interface HttpOperationSource
  *
  * @param request The {@link HttpRequest} that started the operation
  * @param timeout The optional {@link Duration} before the request should timeout
+ * @param controller The {@link AbortController} that aborts the operation
  * @returns A new {@link HttpOperation}
  */
 export function createHttpOperation(
   request: HttpRequest,
   timeout: Optional<Duration>,
+  controller?: AbortController,
 ): HttpOperation {
-  return new DefaultHttpOperation(request, timeout)
+  return new DefaultHttpOperation(request, timeout, controller)
 }
 
 class DefaultHttpOperation
@@ -447,12 +448,16 @@ class DefaultHttpOperation
     return false
   }
 
-  constructor(request: HttpRequest, timeout?: Duration) {
+  constructor(
+    request: HttpRequest,
+    timeout?: Duration,
+    controller?: AbortController,
+  ) {
     super({ captureRejections: true })
 
     this._request = request
     this._state = HttpOperationState.QUEUED
-    this._abortController = new AbortController()
+    this._abortController = controller ?? new AbortController()
 
     if (timeout) {
       this._timer = setTimeout(() => {
@@ -529,9 +534,6 @@ class DefaultHttpOperation
         // Try to complete it now
         return this._process()
       }
-    } else {
-      // eslint-disable-next-line no-console
-      console.log(`Failed to move to read!!`)
     }
 
     return false

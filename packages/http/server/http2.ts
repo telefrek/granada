@@ -4,7 +4,7 @@
 
 import { DeferredPromise } from "@telefrek/core/index.js"
 import { registerShutdown } from "@telefrek/core/lifecycle.js"
-import { delay } from "@telefrek/core/time.js"
+import { Timer, delay } from "@telefrek/core/time.js"
 import { randomUUID as v4 } from "crypto"
 import { Stream, type Readable } from "stream"
 import {
@@ -16,8 +16,10 @@ import {
 import { HttpServerBase, type HttpServerConfig } from "../server.js"
 import { extractHeaders, injectHeaders, parsePath } from "../utils.js"
 
+import { SpanKind } from "@opentelemetry/api"
 import type { Logger } from "@telefrek/core/logging"
-import { pipe } from "@telefrek/core/streams"
+import { activateSpan, getTracer } from "@telefrek/core/observability/tracing"
+import { drain, pipe } from "@telefrek/core/streams"
 import {
   Http2Server,
   Http2ServerRequest,
@@ -26,6 +28,7 @@ import {
   createSecureServer,
   type OutgoingHttpHeaders,
 } from "http2"
+import { HttpServerMetrics } from "../metrics.js"
 
 /**
  * Default implementation of the {@link HttpServer} using the node `http2` package
@@ -125,6 +128,28 @@ export class NodeHttp2Server extends HttpServerBase {
     })
 
     this._server.on("request", async (req, resp) => {
+      const timer = Timer.startNew()
+      const socket = req.stream.session?.socket
+
+      const span = getTracer().startSpan("http.request", {
+        root: true,
+        kind: SpanKind.SERVER,
+        attributes: {
+          SEMATTRS_NET_HOST_IP: socket?.localAddress,
+          SEMATTRS_NET_HOST_PORT: socket?.localPort,
+          SEMATTRS_NET_PEER_IP: socket?.remoteAddress,
+          SEMATTRS_NET_PEER_PORT: socket?.remotePort,
+          SEMATTRS_HTTP_CLIENT_IP: socket?.remoteAddress,
+          SEMATTRS_HTTP_HOST: req.headers["host"],
+          SEMATTRS_HTTP_METHOD: req.headers[":method"],
+          SEMATTRS_HTTP_SCHEME: req.headers[":scheme"],
+          SEMATTRS_HTTP_FLAVOR: req.httpVersion,
+          SEMATTRS_HTTP_ROUTE: req.url,
+        },
+      })
+
+      const scope = activateSpan(span)
+
       // Handle health
       if (req.method === "GET") {
         if (req.url === "/health") {
@@ -146,20 +171,53 @@ export class NodeHttp2Server extends HttpServerBase {
       }
 
       // Get the response
-      // TODO: Detect aborts and handle errors
-      const response = await this.handleRequest(createHttp2Request(req))
+      const controller = new AbortController()
+      req.on("aborted", () => {
+        controller.abort("Request was abandoned")
+      })
 
-      // Deal with HTTP2 specific stuff
-      const outgoing = <OutgoingHttpHeaders>{}
+      try {
+        const response = await this.handleRequest(
+          createHttp2Request(req),
+          controller,
+        )
 
-      // Inject remaining
-      injectHeaders(response.headers, outgoing)
-      resp.writeHead(response.status.code, outgoing)
+        // Deal with HTTP2 specific stuff
+        const outgoing = <OutgoingHttpHeaders>{}
 
-      if (response.body) {
-        pipe(response.body.contents, resp)
-      } else {
-        resp.end()
+        // Inject remaining
+        injectHeaders(response.headers, outgoing)
+        resp.writeHead(response.status.code, outgoing)
+
+        if (response.body) {
+          pipe(response.body.contents, resp)
+        } else {
+          resp.end()
+        }
+      } catch (err) {
+        this._logger.error(`[${req.method} -> ${req.url}]: ${err}`)
+
+        if (!req.stream.endAfterHeaders && !req.readableEnded) {
+          try {
+            await drain(req)
+          } catch {
+            this._logger.fatal(`Failed to consume outstanding request body`)
+          }
+        }
+
+        if (!resp.headersSent) {
+          resp.writeHead(HttpStatusCode.INTERNAL_SERVER_ERROR).end()
+        } else {
+          resp.end()
+        }
+      } finally {
+        HttpServerMetrics.ResponseStatus.add(1, {
+          status: resp.statusCode.toString(),
+        })
+
+        HttpServerMetrics.IncomingRequestDuration.record(timer.stop().seconds())
+        scope.finish()
+        span.end()
       }
     })
   }

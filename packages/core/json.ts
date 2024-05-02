@@ -20,6 +20,26 @@ export function streamJson(contents: unknown): Readable {
 }
 
 /**
+ * Consumes the {@link Readable} and returns the contents as either undefined
+ * (nothing read), single item or array
+ *
+ * @param contents The {@link Readable} to parse as JSON
+ *
+ * @returns The contents of the {@link Readable} if available
+ */
+export async function consumeJsonStream<T = unknown>(
+  contents: Readable,
+): Promise<T | T[] | undefined> {
+  const json: T[] = []
+
+  for await (const obj of fromJsonStream<T>(contents)) {
+    json.push(obj)
+  }
+
+  return json.length === 0 ? undefined : json.length === 1 ? json[0] : json
+}
+
+/**
  * Iterate the {@link Readable} objects parsed as JSON
  *
  * @param contents The {@link Readable} to process

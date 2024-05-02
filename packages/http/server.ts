@@ -148,8 +148,15 @@ export abstract class HttpServerBase
     return true
   }
 
-  protected handleRequest(request: HttpRequest): Promise<HttpResponse> {
-    const operation = createHttpOperation(request, this._config.requestTimeout)
+  protected handleRequest(
+    request: HttpRequest,
+    controller?: AbortController,
+  ): Promise<HttpResponse> {
+    const operation = createHttpOperation(
+      request,
+      this._config.requestTimeout,
+      controller,
+    )
 
     this._logger.debug(
       `(${request.id}): Received [${request.method}] ${request.path.original}${request.query ? request.query.original : ""}`,
