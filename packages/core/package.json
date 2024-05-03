@@ -1,6 +1,6 @@
 {
   "name": "@telefrek/core",
-  "version": "1.0.0-alpha.41",
+  "version": "1.0.0-alpha.42",
   "description": "This package contains the core utilities that are referenced throughout the Granada framework",
   "author": "nathan@telefrek.com",
   "license": "MIT",
@@ -31,9 +31,9 @@
   },
   "dependencies": {
     "@opentelemetry/api": "^1.8.0",
-    "@opentelemetry/semantic-conventions": "^1.24.0",
+    "@opentelemetry/context-async-hooks": "^1.24.0",
     "@opentelemetry/resources": "^1.24.0",
-    "@opentelemetry/context-async-hooks": "^1.24.0"
+    "@opentelemetry/semantic-conventions": "^1.24.0"
   },
   "devDependencies": {
     "@opentelemetry/core": "^1.24.0"
