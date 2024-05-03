@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "init:devEnv": "npm install -g lerna && npm install -g turbo",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --coverageProvider=v8 --detectOpenHandles --forceExit -c jest.config.js",
-    "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --coverageProvider=v8 --detectOpenHandles --forceExit -c jest.unit.config.js",
-    "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --coverageProvider=v8 --detectOpenHandles --forceExit -c jest.integration.config.js",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --coverageProvider=v8 --detectOpenHandles --forceExit -c jest.config.cjs",
+    "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --coverageProvider=v8 --detectOpenHandles --forceExit -c jest.unit.config.cjs",
+    "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --coverageProvider=v8 --detectOpenHandles --forceExit -c jest.integration.config.cjs",
     "format": "npx prettier --write .",
     "ci": "npm install --legacy-peer-deps && turbo lint && turbo build && npm run test:unit",
     "upgrade-all": "npx npm-check-updates -u && npm install --legacy-peer-deps && npm run upgrade --workspaces --if-present",

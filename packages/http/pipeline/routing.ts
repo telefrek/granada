@@ -3,7 +3,10 @@
  */
 
 import { trace } from "@opentelemetry/api"
-import { TracingContext, getTracer } from "@telefrek/core/observability/tracing"
+import {
+  TracingContext,
+  getTracer,
+} from "@telefrek/core/observability/tracing.js"
 import { Timer } from "@telefrek/core/time.js"
 import { isPromise } from "util/types"
 import { isInRequestPhase, type HttpOperationContext } from "../context.js"

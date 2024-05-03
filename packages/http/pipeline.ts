@@ -18,7 +18,7 @@ import {
   type StreamCallback,
   type TransformFunc,
 } from "@telefrek/core/streams.js"
-import { Timestamp } from "@telefrek/core/time"
+import { Timestamp } from "@telefrek/core/time.js"
 import { on } from "events"
 import {
   Readable,

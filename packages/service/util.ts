@@ -1,4 +1,4 @@
-import { type MaybeAwaitable } from "@telefrek/core"
+import { type MaybeAwaitable } from "@telefrek/core/index.js"
 import { consumeStream } from "@telefrek/core/streams.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
 import {
@@ -7,22 +7,22 @@ import {
   type HttpRequest,
   type HttpResponse,
 } from "@telefrek/http/index.js"
-import type { HttpOperationSource } from "@telefrek/http/operations"
+import type { HttpOperationSource } from "@telefrek/http/operations.js"
 import {
   createPipeline,
   type HttpPipelineConfiguration,
-} from "@telefrek/http/pipeline"
-import { USE_ROUTER } from "@telefrek/http/pipeline/routing"
+} from "@telefrek/http/pipeline.js"
+import { USE_ROUTER } from "@telefrek/http/pipeline/routing.js"
 import {
   createRouter,
   getRoutingParameters,
   type Router,
 } from "@telefrek/http/routing.js"
-import type { HttpServer } from "@telefrek/http/server"
+import type { HttpServer } from "@telefrek/http/server.js"
 import {
   DEFAULT_SERVER_PIPELINE_CONFIGURATION,
   NOT_FOUND_HANDLER,
-} from "@telefrek/http/server/pipeline"
+} from "@telefrek/http/server/pipeline.js"
 import {
   DefaultHttpMethodStatus,
   emptyHeaders,
