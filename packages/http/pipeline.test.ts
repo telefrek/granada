@@ -2,27 +2,18 @@
  * Exercise the pipelines!
  */
 
-import { trace } from "@opentelemetry/api"
-import { node } from "@opentelemetry/sdk-node"
-import {
-  ConsoleSpanExporter,
-  SimpleSpanProcessor,
-} from "@opentelemetry/sdk-trace-base"
 import { type MaybeAwaitable } from "@telefrek/core/index.js"
 import { consumeJsonStream } from "@telefrek/core/json.js"
-import { ConsoleLogWriter, LogLevel } from "@telefrek/core/logging"
 import { consumeString, drain } from "@telefrek/core/streams.js"
 import { Duration, delay } from "@telefrek/core/time.js"
 import { randomUUID as v4 } from "crypto"
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "fs"
-import { join } from "path"
+import { dirname, join } from "path"
+import { fileURLToPath } from "url"
 import { type HttpClient } from "./client.js"
 import { HttpMethod, HttpStatusCode } from "./index.js"
-import {
-  createPipeline,
-  setPipelineLogLevel,
-  setPipelineWriter,
-} from "./pipeline.js"
+import type { HttpOperationSource } from "./operations.js"
+import { createPipeline, type HttpPipeline } from "./pipeline.js"
 import { hostFolder } from "./pipeline/hosting.js"
 import { USE_ROUTER } from "./pipeline/routing.js"
 import type { HttpServer } from "./server.js"
@@ -31,6 +22,7 @@ import {
   NOT_FOUND_HANDLER,
 } from "./server/pipeline.js"
 import {
+  TEST_LOGGER,
   createHttp2Client,
   createHttp2Server,
   createTestRouter,
@@ -41,16 +33,12 @@ const INDEX_HTML = `<!doctype html><html><head><title>Test</title></head><body>T
 
 describe("Pipelines should support clients and servers end to end", () => {
   let server: HttpServer
+  let pipeline: HttpPipeline
   let client: HttpClient
   let directory: string
   let promise: MaybeAwaitable<void>
 
   beforeAll(async () => {
-    const provider = new node.NodeTracerProvider()
-    provider.addSpanProcessor(
-      new SimpleSpanProcessor(new ConsoleSpanExporter()),
-    )
-    trace.setGlobalTracerProvider(provider)
     directory = mkdtempSync("granada-hosting-test", "utf8")
 
     // Create the index html file
@@ -67,12 +55,20 @@ describe("Pipelines should support clients and servers end to end", () => {
     // Add routing
     config.requestTransforms?.push(USE_ROUTER(createTestRouter()))
 
-    server = createHttp2Server(NOT_FOUND_HANDLER, createPipeline(config))
+    const certDir = join(
+      import.meta.dirname ?? dirname(fileURLToPath(import.meta.url)),
+      "../../resources/test",
+    )
+    server = createHttp2Server(certDir)
+
+    pipeline = createPipeline(config)
+    if (!pipeline.add(server as HttpOperationSource, NOT_FOUND_HANDLER, {})) {
+      TEST_LOGGER.error(`Failed to start pipeline`)
+    } else {
+      TEST_LOGGER.info(`Started pipeline`)
+    }
     promise = server.listen(port)
-
-    await delay(20)
-
-    client = createHttp2Client(port)
+    client = createHttp2Client(certDir, port)
   })
 
   afterAll(async () => {
@@ -90,6 +86,10 @@ describe("Pipelines should support clients and servers end to end", () => {
     if (server) {
       await server.close(false)
       await promise
+    }
+
+    if (pipeline) {
+      await pipeline.stop()
     }
 
     // Let any logs clear
@@ -137,8 +137,6 @@ describe("Pipelines should support clients and servers end to end", () => {
   })
 
   it("Should support routing requests", async () => {
-    setPipelineLogLevel(LogLevel.INFO)
-    setPipelineWriter(new ConsoleLogWriter())
     let response = await client.submit(createRequest({ path: "/route1" }))
     expect(response.status.code).toBe(HttpStatusCode.NO_CONTENT)
     expect(response.body).toBeUndefined()

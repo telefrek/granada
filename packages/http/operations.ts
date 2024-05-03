@@ -2,6 +2,7 @@
  * Managing operations and the backing state machine
  */
 
+import type { Span } from "@opentelemetry/api"
 import { EmitterFor, type Emitter } from "@telefrek/core/events.js"
 import type { LifecycleEvents } from "@telefrek/core/lifecycle.js"
 import type { Duration } from "@telefrek/core/time.js"
@@ -70,6 +71,8 @@ export interface HttpOperation extends Emitter<HttpOperationEvents> {
   readonly error?: HttpError
   /** The {@link HttpResponse} that was paired with the operation */
   readonly response?: Readonly<HttpResponse>
+  /** The optionl {@link Span} for this operation */
+  readonly span?: Span
 
   /**
    * Move the operation out of a queued {@link HttpOperationState}
@@ -110,6 +113,13 @@ export interface HttpOperationSource
   id: string
 }
 
+interface CreateHttpOperationOptions {
+  request: HttpRequest
+  timeout: Optional<Duration>
+  controller?: AbortController
+  span?: Span
+}
+
 /**
  * Create a new {@link HttpOperation} that moves through the expected state machine
  *
@@ -119,11 +129,9 @@ export interface HttpOperationSource
  * @returns A new {@link HttpOperation}
  */
 export function createHttpOperation(
-  request: HttpRequest,
-  timeout: Optional<Duration>,
-  controller?: AbortController,
+  options: CreateHttpOperationOptions,
 ): HttpOperation {
-  return new DefaultHttpOperation(request, timeout, controller)
+  return new DefaultHttpOperation(options)
 }
 
 /**
@@ -135,6 +143,7 @@ class DefaultHttpOperation
 {
   private readonly _request: HttpRequest
 
+  private _span: Optional<Span>
   private _state: HttpOperationState
   private _abortController: AbortController
   private _error: Optional<HttpError>
@@ -143,6 +152,10 @@ class DefaultHttpOperation
 
   get signal(): Optional<AbortSignal> {
     return this._abortController.signal
+  }
+
+  get span(): Optional<Span> {
+    return this._span
   }
 
   get state(): HttpOperationState {
@@ -186,22 +199,19 @@ class DefaultHttpOperation
     return false
   }
 
-  constructor(
-    request: HttpRequest,
-    timeout?: Duration,
-    controller?: AbortController,
-  ) {
+  constructor(options: CreateHttpOperationOptions) {
     super({ captureRejections: true })
 
-    this._request = request
+    this._request = options.request
     this._state = HttpOperationState.QUEUED
-    this._abortController = controller ?? new AbortController()
+    this._abortController = options.controller ?? new AbortController()
+    this._span = options.span
 
-    if (timeout) {
+    if (options.timeout) {
       this._timer = setTimeout(() => {
         // Try to abort the call
         this._timeout()
-      }, ~~timeout.milliseconds())
+      }, ~~options.timeout.milliseconds())
     }
   }
 

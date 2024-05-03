@@ -2,7 +2,7 @@
  * Contains the logic for parsing an {@link SQLQueryNode} AST into a set of in memory operations
  */
 
-import type { Optional } from "@telefrek/core/type/utils"
+import type { Optional } from "@telefrek/core/type/utils.js"
 import { QueryError } from "../../error.js"
 import type { QueryParameters } from "../../index.js"
 import {

@@ -4,6 +4,7 @@
  */
 
 import { Readable, Transform, type TransformCallback } from "stream"
+import { pipe } from "./streams.js"
 
 /**
  * Translates the contents into a {@link Readable} using an iterator if from an array
@@ -48,11 +49,21 @@ export async function consumeJsonStream<T = unknown>(
 export async function* fromJsonStream<T = unknown>(
   contents: Readable,
 ): AsyncGenerator<T, void, undefined> {
-  for await (const obj of contents.pipe(new JsonReadableStream())) {
+  for await (const obj of streamToJson(contents)) {
     yield obj as T
   }
 
   return
+}
+
+/**
+ * Transform the stream contents into JSON objects
+ *
+ * @param contents The {@link Readable} to consume as a JSON object stream
+ * @returns A new Object stream that is JSON contents
+ */
+export function streamToJson(contents: Readable): Readable {
+  return pipe(contents, new JsonReadableStream(), "suppress")
 }
 
 /**

@@ -3,7 +3,7 @@
  */
 
 import { Duration } from "@telefrek/core/time.js"
-import type { Optional } from "@telefrek/core/type/utils"
+import type { Optional } from "@telefrek/core/type/utils.js"
 
 export type BuildableQueryTypes = QueryType.SIMPLE | QueryType.PARAMETERIZED
 

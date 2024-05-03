@@ -2,7 +2,7 @@
  * This package defines the shape of postgres table and object schemas
  */
 
-import type { Optional } from "@telefrek/core/type/utils"
+import type { Optional } from "@telefrek/core/type/utils.js"
 
 /**
  * Defines the types of columns that are allowed

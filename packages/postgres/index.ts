@@ -17,7 +17,7 @@ import {
 import type { Pool } from "@telefrek/core/structures/pool.js"
 import { Duration, Timer } from "@telefrek/core/time.js"
 import { makeCaseInsensitive } from "@telefrek/core/type/proxies.js"
-import type { Optional } from "@telefrek/core/type/utils"
+import type { Optional } from "@telefrek/core/type/utils.js"
 import { QueryError } from "@telefrek/query/error.js"
 import {
   ExecutionMode,

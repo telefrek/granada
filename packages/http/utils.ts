@@ -19,9 +19,10 @@ import {
 import { randomUUID as v4 } from "crypto"
 
 import { streamJson } from "@telefrek/core/json.js"
-import { GRANADA_VERSION } from "@telefrek/core/version"
+import { GRANADA_VERSION } from "@telefrek/core/version.js"
 import { assert } from "console"
 import { type IncomingHttpHeaders, type OutgoingHttpHeaders } from "http"
+import { Readable } from "stream"
 import { CommonMediaTypes } from "./media.js"
 
 /**
@@ -115,6 +116,19 @@ export function jsonBody(body: unknown): HttpBody {
 }
 
 /**
+ * Utility to create a text {@link HttpBody}
+ *
+ * @param body The contents to write as text
+ * @returns A new {@link HttpBody}
+ */
+export function textBody(message: string): HttpBody {
+  return {
+    mediaType: CommonMediaTypes.PLAIN,
+    contents: Readable.from(message, { encoding: "utf-8" }),
+  }
+}
+
+/**
  * Create a JSON formatted {@link HttpResponse}
  *
  * @param body The body to return as JSON
@@ -138,6 +152,34 @@ export function jsonContents(
     body: {
       mediaType,
       contents: streamJson(body),
+    },
+  }
+}
+
+/**
+ * Create a text/plain formatted {@link HttpResponse}
+ *
+ * @param body The body to return as text/plain
+ * @param code The {@link HttpStatusCode} for the response (default is OK)
+ * @returns A {@link HttpResponse} with the body in text/plain format ready to process
+ */
+export function textContents(
+  body: string,
+  code: HttpStatusCode = HttpStatusCode.OK,
+): HttpResponse {
+  // Setup the headers and media type
+  const mediaType = CommonMediaTypes.PLAIN
+  const headers = emptyHeaders()
+  headers.set(CommonHttpHeaders.ContentType, mediaType.toString())
+
+  return {
+    status: {
+      code,
+    },
+    headers,
+    body: {
+      mediaType,
+      contents: Readable.from(body, { encoding: "utf-8" }),
     },
   }
 }

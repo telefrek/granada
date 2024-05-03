@@ -4,7 +4,7 @@
 
 import { Signal } from "@telefrek/core/concurrency.js"
 import { Emitter, EmitterFor } from "@telefrek/core/events.js"
-import { MaybeAwaitable } from "@telefrek/core/index.js"
+import { MaybeAwaitable, getDebugInfo } from "@telefrek/core/index.js"
 import { LifecycleEvents } from "@telefrek/core/lifecycle.js"
 import {
   DefaultLogger,
@@ -28,9 +28,8 @@ import {
   type TransformOptions,
 } from "stream"
 import {
-  clearOperationContext,
+  HTTP_OPERATION_CONTEXT_STORE,
   isTerminal,
-  setOperationContext,
   type HttpOperationContext,
 } from "./context.js"
 import { translateHttpError } from "./errors.js"
@@ -40,6 +39,7 @@ import {
   type HttpResponse,
 } from "./index.js"
 import { type HttpOperation, type HttpOperationSource } from "./operations.js"
+import { getRoutingParameters } from "./routing.js"
 import { notFound } from "./utils.js"
 
 /**
@@ -66,7 +66,7 @@ export function setPipelineLogLevel(level: LogLevel): void {
  * @param writer the {@link LogWriter} to use for {@link HttpPipeline}
  * {@link Logger} objects
  */
-export function setPipelineWriter(writer: LogWriter): void {
+export function setPipelineWriter<T extends LogWriter>(writer: T): void {
   PIPELINE_LOGGER = new DefaultLogger({
     name: PIPELINE_LOGGER.name,
     level: PIPELINE_LOGGER.level,
@@ -286,22 +286,33 @@ class DefaultHttpPipeline
         context.stage !== HttpPipelineStage.COMPLETED &&
         !(context.operation.response || context.response)
       ) {
-        // Set the context
-        setOperationContext(context)
         try {
           // Either use the context handler or the default
           const handler = context.handler ?? defaultHandler
 
           // Call the handler
-          context.response = await handler(
-            context.operation.request,
-            context.operation.signal,
+          context.response = await HTTP_OPERATION_CONTEXT_STORE.run(
+            context,
+            async () => {
+              logger.info(
+                `Parameters before ${context.operation.request.id}: ${getDebugInfo(getRoutingParameters())}`,
+              )
+              const response = await handler(
+                context.operation.request,
+                context.operation.signal,
+              )
+              logger.info(
+                `Parameters after ${context.operation.request.id}: ${getDebugInfo(getRoutingParameters())}`,
+              )
+
+              return response
+            },
           )
         } catch (err) {
           context.operation.fail(translateHttpError(err))
         } finally {
-          // Clear the context
-          clearOperationContext()
+          // Remove any references
+          context.handler = undefined
 
           if (
             context.operation.request.body &&
@@ -335,7 +346,7 @@ class DefaultHttpPipeline
     if (this._configuration.requestTransforms) {
       for (const transform of this._configuration.requestTransforms) {
         end = end
-          .on("error", (err) => {
+          .on("error", (err: unknown) => {
             logger.error(`Error in pipeline during requestTransform: ${err}`)
           })
           .pipe(new GenericTransform(transform, DEFAULT_TRANSFORM_OPTS))
@@ -344,7 +355,7 @@ class DefaultHttpPipeline
 
     // Add the handler stage
     end = end
-      .on("error", (err) => {
+      .on("error", (err: unknown) => {
         logger.error(`Error in pipeline during before handler: ${err}`)
       })
       .pipe(
@@ -358,7 +369,7 @@ class DefaultHttpPipeline
     if (this._configuration.responseTransforms) {
       for (const transform of this._configuration.responseTransforms) {
         end = end
-          .on("error", (err) => {
+          .on("error", (err: unknown) => {
             logger.error(`Error in pipeline during responseTransform: ${err}`)
           })
           .pipe(new GenericTransform(transform, DEFAULT_TRANSFORM_OPTS))
@@ -529,16 +540,16 @@ class DefaultHttpPipeline
     return this._sources.delete(source)
   }
 
-  stop(): MaybeAwaitable<void> {
+  async stop(): Promise<void> {
     // Allow anything that was waiting to finish
-    this.resume()
+    await this.resume()
 
     // Mark this as complete
     this._state = HttpPipelineState.COMPLETED
 
     // Clear the sources
     for (const source of this._sources.keys()) {
-      this.remove(source)
+      await this.remove(source)
     }
   }
 

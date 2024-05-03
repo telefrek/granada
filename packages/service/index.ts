@@ -9,10 +9,8 @@ import {
   type HttpBody,
   type HttpStatusCode,
 } from "@telefrek/http/index.js"
-import { CommonMediaTypes } from "@telefrek/http/media.js"
-import { Readable } from "stream"
 import type { MaybeAwaitable } from "../core/index.js"
-import type { RoutingParameters } from "../http/routing.js"
+import type { Router, RoutingParameters } from "../http/routing.js"
 
 /**
  * The target platform the service will be running on for optimizing some operations
@@ -41,6 +39,28 @@ export interface Endpoint {
 }
 
 /**
+ * Indicates a {@link Router} that has a prefix for service hosting
+ */
+export interface RoutableApi {
+  router: Router
+}
+
+/**
+ * Type guard for finding {@link RoutableApi}
+ *
+ * @param routable The object to inspect
+ * @returns True if this is a {@link RoutableApi}
+ */
+export function isRoutableApi(routable: unknown): routable is RoutableApi {
+  return (
+    typeof routable === "object" &&
+    routable !== null &&
+    "router" in routable &&
+    typeof routable.router === "object"
+  )
+}
+
+/**
  * A service is a set of endpoints with an optional top level prefix
  */
 export interface Service {
@@ -52,20 +72,6 @@ export interface ServiceError {
   code: HttpStatusCode
   message?: string
   body?: HttpBody
-}
-
-export function createTextBody(message: string): HttpBody {
-  return {
-    mediaType: CommonMediaTypes.HTML,
-    contents: Readable.from(message),
-  }
-}
-
-export function createJsonBody(body: ServiceResponseType): HttpBody {
-  return {
-    mediaType: CommonMediaTypes.JSON,
-    contents: Readable.from(JSON.stringify(body)),
-  }
 }
 
 /**
@@ -120,10 +126,6 @@ export interface ServiceRouteInfo<T> {
   /** The {@link RoutableMethod} */
   method: RoutableMethod<T>
 }
-
-// ------------------------------------------
-// Custom Routing decorators
-// ------------------------------------------
 
 export type RouteParameter = string
 

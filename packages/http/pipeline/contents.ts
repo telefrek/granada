@@ -2,7 +2,7 @@
  * Common content pipeline operations
  */
 
-import { pipe } from "@telefrek/core/streams"
+import { pipe } from "@telefrek/core/streams.js"
 import {
   createBrotliCompress,
   createBrotliDecompress,
@@ -158,19 +158,11 @@ function compressBody(response: HttpResponse, encoders: string[]): void {
     }
 
     // Check for supported encoders
-    for (const encoding of encoders) {
+    // TODO: Make this something that can more intelligently target types, for
+    // now just sort so we get br if it's there...
+    for (const encoding of encoders.sort()) {
       const e = encoding.split(";")[0]
       switch (e) {
-        case "deflate":
-          response.headers.delete(CommonHttpHeaders.ContentLength)
-          response.headers.set(CommonHttpHeaders.ContentEncoding, e)
-          response.body.contents = pipe(response.body.contents, createDeflate())
-          return
-        case "gzip":
-          response.headers.delete(CommonHttpHeaders.ContentLength)
-          response.headers.set(CommonHttpHeaders.ContentEncoding, e)
-          response.body.contents = pipe(response.body.contents, createGzip())
-          return
         case "br":
           response.headers.delete(CommonHttpHeaders.ContentLength)
           response.headers.set(CommonHttpHeaders.ContentEncoding, e)
@@ -178,6 +170,16 @@ function compressBody(response: HttpResponse, encoders: string[]): void {
             response.body.contents,
             createBrotliCompress(),
           )
+          return
+        case "gzip":
+          response.headers.delete(CommonHttpHeaders.ContentLength)
+          response.headers.set(CommonHttpHeaders.ContentEncoding, e)
+          response.body.contents = pipe(response.body.contents, createGzip())
+          return
+        case "deflate":
+          response.headers.delete(CommonHttpHeaders.ContentLength)
+          response.headers.set(CommonHttpHeaders.ContentEncoding, e)
+          response.body.contents = pipe(response.body.contents, createDeflate())
           return
       }
     }

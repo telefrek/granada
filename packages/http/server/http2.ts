@@ -6,7 +6,7 @@ import { DeferredPromise } from "@telefrek/core/index.js"
 import { registerShutdown } from "@telefrek/core/lifecycle.js"
 import { Timer, delay } from "@telefrek/core/time.js"
 import { randomUUID as v4 } from "crypto"
-import { Stream, type Readable } from "stream"
+import { Stream, finished, type Readable } from "stream"
 import {
   HttpStatusCode,
   HttpVersion,
@@ -16,10 +16,10 @@ import {
 import { HttpServerBase, type HttpServerConfig } from "../server.js"
 import { extractHeaders, injectHeaders, parsePath } from "../utils.js"
 
-import { SpanKind } from "@opentelemetry/api"
-import type { Logger } from "@telefrek/core/logging"
-import { activateSpan, getTracer } from "@telefrek/core/observability/tracing"
-import { drain, pipe } from "@telefrek/core/streams"
+import { ROOT_CONTEXT, SpanKind } from "@opentelemetry/api"
+import type { Logger } from "@telefrek/core/logging.js"
+import { getTracer } from "@telefrek/core/observability/tracing.js"
+import { drain, pipe } from "@telefrek/core/streams.js"
 import {
   Http2Server,
   Http2ServerRequest,
@@ -128,29 +128,6 @@ export class NodeHttp2Server extends HttpServerBase {
     })
 
     this._server.on("request", async (req, resp) => {
-      const timer = Timer.startNew()
-      const socket = req.stream.session?.socket
-
-      // TODO: Get tracing from headers to set the parent...
-      const span = getTracer().startSpan("http.request", {
-        root: true,
-        kind: SpanKind.SERVER,
-        attributes: {
-          SEMATTRS_NET_HOST_IP: socket?.localAddress,
-          SEMATTRS_NET_HOST_PORT: socket?.localPort,
-          SEMATTRS_NET_PEER_IP: socket?.remoteAddress,
-          SEMATTRS_NET_PEER_PORT: socket?.remotePort,
-          SEMATTRS_HTTP_CLIENT_IP: socket?.remoteAddress,
-          SEMATTRS_HTTP_HOST: req.headers["host"],
-          SEMATTRS_HTTP_METHOD: req.headers[":method"],
-          SEMATTRS_HTTP_SCHEME: req.headers[":scheme"],
-          SEMATTRS_HTTP_FLAVOR: req.httpVersion,
-          SEMATTRS_HTTP_ROUTE: req.url,
-        },
-      })
-
-      const scope = activateSpan(span)
-
       // Handle health
       if (req.method === "GET") {
         if (req.url === "/health") {
@@ -171,6 +148,40 @@ export class NodeHttp2Server extends HttpServerBase {
         }
       }
 
+      const timer = Timer.startNew()
+      const socket = req.stream.session?.socket
+
+      // TODO: Get tracing from headers to set the parent...
+      const span = getTracer().startSpan(
+        "http.request",
+        {
+          root: true,
+          kind: SpanKind.SERVER,
+          attributes: {
+            SEMATTRS_NET_HOST_IP: socket?.localAddress,
+            SEMATTRS_NET_HOST_PORT: socket?.localPort,
+            SEMATTRS_NET_PEER_IP: socket?.remoteAddress,
+            SEMATTRS_NET_PEER_PORT: socket?.remotePort,
+            SEMATTRS_HTTP_CLIENT_IP: socket?.remoteAddress,
+            SEMATTRS_HTTP_HOST: req.headers["host"],
+            SEMATTRS_HTTP_METHOD: req.headers[":method"],
+            SEMATTRS_HTTP_SCHEME: req.headers[":scheme"],
+            SEMATTRS_HTTP_FLAVOR: req.httpVersion,
+            SEMATTRS_HTTP_ROUTE: req.url,
+          },
+        },
+        ROOT_CONTEXT, // Ignore anything else above this, http call is entry point
+      )
+
+      finished(resp, () => {
+        span.end()
+
+        HttpServerMetrics.ResponseStatus.add(1, {
+          status: resp.statusCode.toString(),
+        })
+        HttpServerMetrics.IncomingRequestDuration.record(timer.stop().seconds())
+      })
+
       // Get the response
       const controller = new AbortController()
       req.on("aborted", () => {
@@ -181,6 +192,7 @@ export class NodeHttp2Server extends HttpServerBase {
         const response = await this.handleRequest(
           createHttp2Request(req),
           controller,
+          span,
         )
 
         // Deal with HTTP2 specific stuff
@@ -211,14 +223,6 @@ export class NodeHttp2Server extends HttpServerBase {
         } else {
           resp.end()
         }
-      } finally {
-        HttpServerMetrics.ResponseStatus.add(1, {
-          status: resp.statusCode.toString(),
-        })
-
-        HttpServerMetrics.IncomingRequestDuration.record(timer.stop().seconds())
-        scope.finish()
-        span.end()
       }
     })
   }

@@ -62,29 +62,6 @@ export class RoutingError extends Error {
 }
 
 /**
- * Indicates a {@link Router} that has a prefix for service hosting
- */
-export interface RoutableApi {
-  router: Router
-  prefix?: string
-}
-
-/**
- * Type guard for finding {@link RoutableApi}
- *
- * @param routable The object to inspect
- * @returns True if this is a {@link RoutableApi}
- */
-export function isRoutableApi(routable: unknown): routable is RoutableApi {
-  return (
-    typeof routable === "object" &&
-    routable !== null &&
-    "router" in routable &&
-    typeof routable.router === "object"
-  )
-}
-
-/**
  * Represents the information about the route found
  */
 export interface RouteInfo {
@@ -178,6 +155,7 @@ const parseParameter = (s: string): SegmentValue => {
 class RouterImpl implements Router {
   readonly _root: RootNode = {
     info: RouteSegmentInfo.None,
+    template: "/",
   }
 
   lookup(request: LookupRequest): Optional<RouteInfo> {
@@ -362,7 +340,7 @@ class RouterImpl implements Router {
         // Add the first node
         this._addFast(this._root, segments, handlerNode)
       } else {
-        let current = this._root
+        let current: RouteTrieNode = this._root
 
         // Merge all the segments
         for (const segment of segments) {
@@ -403,9 +381,9 @@ class RouterImpl implements Router {
             }
           }
 
-          // Inject this in
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          ;(current as any).handlers = handlers
+          const root = current as RootNode
+          root.handlers = handlers
+          root.template = template
         }
       }
     }
@@ -440,7 +418,7 @@ class RouterImpl implements Router {
         // Add this to the root, no need for collision checks
         this._addFast(this._root, segments, routerNode)
       } else {
-        let current = this._root
+        let current: RouteTrieNode = this._root
 
         // Merge all the segments
         for (const segment of segments) {
@@ -460,8 +438,9 @@ class RouterImpl implements Router {
           )
         } else {
           // Inject the router
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          ;(current as any).router = router
+          const root = current as RootNode
+          root.router = router
+          root.template = template
         }
       }
     }
@@ -841,6 +820,7 @@ interface HandlerNode extends RouteTrieNode {
 interface RootNode extends RouteTrieNode {
   handlers?: RouteHandler
   router?: Router
+  template: string
 }
 
 /**

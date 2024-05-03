@@ -2,7 +2,7 @@
  * Set of classes that are used for testing only
  */
 
-import { consumeJsonStream } from "@telefrek/core/json"
+import { consumeJsonStream } from "@telefrek/core/json.js"
 import {
   ConsoleLogWriter,
   DefaultLogger,
@@ -10,8 +10,7 @@ import {
   type Logger,
 } from "@telefrek/core/logging.js"
 import { readFileSync } from "fs"
-import { dirname, join } from "path"
-import { fileURLToPath } from "url"
+import { join } from "path"
 import { HttpClientBuilder, type HttpClient } from "./client.js"
 import {
   HttpMethod,
@@ -20,7 +19,11 @@ import {
   type HttpResponse,
 } from "./index.js"
 import type { HttpOperationSource } from "./operations.js"
-import { createPipeline, type HttpPipeline } from "./pipeline.js"
+import {
+  createPipeline,
+  type HttpPipeline,
+  type HttpPipelineOptions,
+} from "./pipeline.js"
 import { createRouter, getRoutingParameters, type Router } from "./routing.js"
 import type { HttpServer, HttpServerConfig } from "./server.js"
 import { NodeHttp2Server } from "./server/http2.js"
@@ -120,51 +123,38 @@ export function createTestRouter(): Router {
   return router
 }
 
-export function createHttp2Server(
-  handler: HttpHandler = NOT_FOUND_HANDLER,
-  pipeline: HttpPipeline = createPipeline(
-    DEFAULT_SERVER_PIPELINE_CONFIGURATION,
-  ),
-): HttpServer {
+export function createHttp2Server(certDir: string): HttpServer {
+  TEST_LOGGER.info(`Getting certs from ${certDir}`)
   const config: HttpServerConfig = {
     name: "TestServer",
     tls: {
       mutualAuthentication: false,
-      publicCertificate: readFileSync(
-        join(
-          import.meta.dirname ?? dirname(fileURLToPath(import.meta.url)),
-          "../../resources/test/cert.pem",
-        ),
-      ),
-      privateKey: readFileSync(
-        join(
-          import.meta.dirname ?? dirname(fileURLToPath(import.meta.url)),
-          "../../resources/test/key.pem",
-        ),
-      ),
+      publicCertificate: readFileSync(join(certDir, "cert.pem")),
+      privateKey: readFileSync(join(certDir, "key.pem")),
     },
   }
 
-  const server: HttpServer = new NodeHttp2Server(config, TEST_LOGGER)
-  if (!pipeline.add(server as HttpOperationSource, handler, {})) {
-    TEST_LOGGER.error(`Failed to add server to pipeline!`)
-  }
-
-  return server
+  return new NodeHttp2Server(config, TEST_LOGGER)
 }
 
-export function createHttp2Client(port: number): HttpClient {
+export function runServerPipeline(
+  source: HttpOperationSource,
+  handler: HttpHandler = NOT_FOUND_HANDLER,
+  options?: HttpPipelineOptions,
+): HttpPipeline {
+  const pipeline = createPipeline(DEFAULT_SERVER_PIPELINE_CONFIGURATION)
+
+  pipeline.add(source, handler, options)
+  return pipeline
+}
+
+export function createHttp2Client(certDir: string, port: number): HttpClient {
   return new HttpClientBuilder({
     name: "TestClient",
     host: "localhost",
     port,
     tls: {
-      certificateAuthority: readFileSync(
-        join(
-          import.meta.dirname ?? dirname(fileURLToPath(import.meta.url)),
-          "../../resources/test/cert.pem",
-        ),
-      ),
+      certificateAuthority: readFileSync(join(certDir, "cert.pem")),
     },
   })
     .withLogger(TEST_LOGGER)

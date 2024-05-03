@@ -1,11 +1,6 @@
-import {
-  ConsoleLogWriter,
-  DefaultLogger,
-  LogLevel,
-  setGlobalLogger,
-} from "@telefrek/core/logging.js"
+import type { Optional } from "@telefrek/core/type/utils.js"
 import { HttpHandler, HttpMethod } from "./index.js"
-import { LookupRequest, createRouter } from "./routing.js"
+import { LookupRequest, createRouter, type RouteInfo } from "./routing.js"
 
 function request(
   path: string,
@@ -16,10 +11,6 @@ function request(
     method,
   }
 }
-
-setGlobalLogger(
-  new DefaultLogger({ writer: new ConsoleLogWriter(), level: LogLevel.INFO }),
-)
 
 describe("verify router", () => {
   test("A router should not accept invalid templates", () => {
@@ -39,6 +30,14 @@ describe("verify router", () => {
     expect(() => router.addHandler("/one/*/three", handler)).toThrow()
   })
 
+  function verifyInfo(info: Optional<RouteInfo>): void {
+    expect(info).not.toBeUndefined()
+    if (info) {
+      expect(info.handler).not.toBeUndefined()
+      expect(info.template).not.toBeUndefined()
+    }
+  }
+
   test("A router should accept valid templates", () => {
     const router = createRouter()
     const handler: HttpHandler = (_request) => Promise.reject("invalid")
@@ -51,10 +50,11 @@ describe("verify router", () => {
     router.addHandler("/wildcards/*/should/be/:accepted/**", handler)
     router.addHandler("/path/ends/with/:variable", handler)
 
-    expect(router.lookup(request("/valid"))).not.toBeUndefined()
-    expect(router.lookup(request("/"))).not.toBeUndefined()
+    verifyInfo(router.lookup(request("/valid")))
+
+    verifyInfo(router.lookup(request("/")))
     const info = router.lookup(request("/path/ends/with/v123"))
-    expect(info).not.toBeUndefined()
+    verifyInfo(info)
     expect(info?.parameters?.size).toBe(1)
     expect(info?.parameters?.get("variable")).toBe("v123")
   })

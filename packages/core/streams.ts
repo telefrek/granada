@@ -36,12 +36,34 @@ export async function consumeString(readable: Readable): Promise<string> {
 }
 
 /**
+ * Reads the contents from the stream
+ *
+ * @param readable The readable to consume
+ * @returns The contents in the stream as either an individual element or array
+ */
+export async function consumeStream(
+  readable: Readable,
+): Promise<unknown[] | unknown> {
+  if (readable.readableObjectMode) {
+    const obj: unknown[] = []
+    for await (const o of readable) {
+      obj.push(o)
+    }
+
+    return obj.length === 1 ? obj[0] : obj
+  }
+
+  return consumeString(readable)
+}
+
+/**
  * Drains the readable
  *
  * @param readable The {@link Readable} to ensure we drain
  */
 export async function drain(readable: Readable): Promise<void> {
   for await (const _ of readable) {
+    /* Just drain, don't consume anything */
   }
 }
 
@@ -72,15 +94,24 @@ export function pipe<T extends Writable | Duplex>(
 }
 
 /**
+ * Creates a {@link GenericTransform} from a given {@link TransformFunc}
+ *
+ * @param transform The {@link TransformFunc} to use
+ * @param spanExtractor The optional function to extract the {@link Span} for tracing
+ * @returns A {@link GenericTransform}
+ */
+export const createTransform = <T, U>(
+  transform: TransformFunc<T, U>,
+): GenericTransform<T, U> =>
+  new GenericTransform(transform, { objectMode: true, autoDestroy: true })
+
+/**
  * Create a generic {@link Stream.Transform} using a {@link TransformFunc}
  */
 export class GenericTransform<T, U> extends Stream.Transform {
   private transform: TransformFunc<T, U>
 
-  constructor(
-    transform: TransformFunc<T, U>,
-    options: TransformOptions = { objectMode: true, autoDestroy: true },
-  ) {
+  constructor(transform: TransformFunc<T, U>, options: TransformOptions) {
     super(options)
     this.transform = transform
   }
@@ -124,32 +155,5 @@ export class GenericTransform<T, U> extends Stream.Transform {
       deferred.resolve()
     }).once("error", deferred.reject)
     return deferred
-  }
-}
-
-/**
- * Creates a {@link GenericTransform} from a given {@link TransformFunc}
- *
- * @param transform The {@link TransformFunc} to use
- * @returns A {@link GenericTransform}
- */
-export const createTransform = <T, U>(
-  transform: TransformFunc<T, U>,
-): GenericTransform<T, U> => new GenericTransform(transform)
-
-/**
- * Combines two {@link TransformFunc} into a single {@link TransformFunc}
- *
- * @param left The left {@link TransformFunc} to use
- * @param right The right {@link TransformFunc} to use
- * @returns a new {@link TransformFunc} that combines the left and right sides
- */
-export const combineTransforms = <T, U, V>(
-  left: TransformFunc<T, U>,
-  right: TransformFunc<U, V>,
-): TransformFunc<T, V> => {
-  return async (data: T) => {
-    const intermediate = await left(data)
-    return intermediate ? await right(intermediate) : undefined
   }
 }

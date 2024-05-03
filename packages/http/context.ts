@@ -7,24 +7,8 @@ import { AsyncLocalStorage } from "async_hooks"
 import type { HttpHandler, HttpResponse } from "./index.js"
 import { HttpOperationState, type HttpOperation } from "./operations.js"
 
-const HTTP_OPERATION_CONTEXT_STORE: AsyncLocalStorage<HttpOperationContext> =
+export const HTTP_OPERATION_CONTEXT_STORE: AsyncLocalStorage<HttpOperationContext> =
   new AsyncLocalStorage()
-
-/**
- * Sets the {@link HttpOperationContext} on the async storage
- *
- * @param context The {@link HttpOperationContext} to set
- */
-export function setOperationContext(context: HttpOperationContext): void {
-  HTTP_OPERATION_CONTEXT_STORE.enterWith(context)
-}
-
-/**
- * Clear any {@link HttpOperationContext} from the async storage
- */
-export function clearOperationContext(): void {
-  HTTP_OPERATION_CONTEXT_STORE.disable()
-}
 
 /**
  * Retrieves the current opation context

@@ -3,7 +3,7 @@
  */
 
 import { Timer } from "@telefrek/core/time.js"
-import type { Optional } from "@telefrek/core/type/utils"
+import type { Optional } from "@telefrek/core/type/utils.js"
 import { QueryError } from "../../error.js"
 import {
   ExecutionMode,

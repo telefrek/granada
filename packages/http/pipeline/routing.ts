@@ -2,16 +2,19 @@
  * Pipeline operations to support routing
  */
 
-import type { MaybeAwaitable } from "@telefrek/core"
-import { activateSpan, getTracer } from "@telefrek/core/observability/tracing"
+import { trace } from "@opentelemetry/api"
+import { TracingContext, getTracer } from "@telefrek/core/observability/tracing"
 import { Timer } from "@telefrek/core/time.js"
 import { isPromise } from "util/types"
 import { isInRequestPhase, type HttpOperationContext } from "../context.js"
-import type { HttpResponse } from "../index.js"
+import type { HttpHandler, HttpResponse } from "../index.js"
 import { ApiRouteMetrics } from "../metrics.js"
-import { pipelineError, type HttpTransform } from "../pipeline.js"
-import { setRoutingParameters, type Router } from "../routing.js"
-import { serverError } from "../utils.js"
+import { type HttpTransform } from "../pipeline.js"
+import {
+  setRoutingParameters,
+  type RouteInfo,
+  type Router,
+} from "../routing.js"
 
 /**
  * Adds the router into the request pipeline processing
@@ -29,73 +32,84 @@ export function USE_ROUTER(router: Router): HttpTransform {
 
       // Check if we identified the information
       if (info) {
-        // Set the template that was used
-
-        // Check if we need to set routing parameters
         if (info.parameters) {
           setRoutingParameters(info.parameters, context)
         }
 
-        // Setup the tracking around the routing request
-        context.handler = (req, abort): MaybeAwaitable<HttpResponse> => {
-          const timer = Timer.startNew()
-          const span = getTracer().startSpan(info.template)
-          const scope = activateSpan(span)
-          const ret = info.handler(req, abort)
-          if (isPromise(ret)) {
-            return (ret as Promise<HttpResponse>)
-              .then(
-                (res: HttpResponse) => {
-                  ApiRouteMetrics.RouteRequestDuration.record(
-                    timer.stop().seconds(),
-                    {
-                      template: info.template,
-                    },
-                  )
-                  ApiRouteMetrics.RouteResponseStatus.add(1, {
-                    status: (res as HttpResponse).status.code.toString(),
-                    template: info.template,
-                  })
+        // Ensure we wrap the tracing information
+        let routeHandler = traceRoute(info)
 
-                  return res
-                },
-                (err) => {
-                  pipelineError(
-                    `Unhandled error in ${info.template} handler: ${err}`,
-                    err,
-                  )
+        // Ensure we have the parent context set
+        const contextSpan = context.operation.span
+        if (contextSpan) {
+          const ctx = trace.setSpan(TracingContext.active(), contextSpan)
+          trace.getSpan(ctx)
+          routeHandler = TracingContext.bind(ctx, routeHandler)
+        }
 
-                  ApiRouteMetrics.RouteErrors.add(1, {
-                    template: info.template,
-                  })
+        context.handler = routeHandler
+      }
+    }
 
-                  return serverError()
-                },
-              )
-              .finally(() => {
-                scope.finish()
-                span.end()
-              })
-          } else {
+    return context
+  }
+}
+
+// Wrap the
+function traceRoute(info: RouteInfo): HttpHandler {
+  return (request, abort) => {
+    const span = getTracer().startSpan(info.template)
+    const timer = Timer.startNew()
+    let isAsync = false
+
+    try {
+      const response = TracingContext.with(
+        trace.setSpan(TracingContext.active(), span),
+        info.handler,
+        null,
+        request,
+        abort,
+      )
+
+      if (isPromise(response)) {
+        isAsync = true
+        return (response as Promise<HttpResponse>)
+          .then((httpResponse) => {
+            // Log the status if one was provided
+            ApiRouteMetrics.RouteResponseStatus.add(1, {
+              status: httpResponse.status.code.toString(),
+              template: info.template,
+            })
+
+            return httpResponse
+          })
+          .finally(() => {
+            // Log the duration and end the span
             ApiRouteMetrics.RouteRequestDuration.record(
               timer.stop().seconds(),
               {
                 template: info.template,
               },
             )
-            ApiRouteMetrics.RouteResponseStatus.add(1, {
-              status: (ret as HttpResponse).status.code.toString(),
-              template: info.template,
-            })
-
-            scope.finish()
             span.end()
-            return ret
-          }
-        }
+          })
+      } else {
+        // Log the status if one was provided
+        ApiRouteMetrics.RouteResponseStatus.add(1, {
+          status: (response as HttpResponse).status.code.toString(),
+          template: info.template,
+        })
+
+        return response
+      }
+    } finally {
+      if (!isAsync) {
+        // Log the duration and end the span
+        ApiRouteMetrics.RouteRequestDuration.record(timer.stop().seconds(), {
+          template: info.template,
+        })
+        span.end()
       }
     }
-
-    return context
   }
 }

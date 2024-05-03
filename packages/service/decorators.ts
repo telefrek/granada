@@ -1,10 +1,7 @@
-import type { Optional } from "@telefrek/core/type/utils"
+import type { Optional } from "@telefrek/core/type/utils.js"
+import { createRouter, type Router } from "@telefrek/http/routing.js"
 import {
-  createRouter,
   type RoutableApi,
-  type Router,
-} from "@telefrek/http/routing.js"
-import {
   type RoutableApiOptions,
   type RoutableMethod,
   type RouteOptions,
@@ -49,7 +46,6 @@ export function routableApi(options: RoutableApiOptions) {
 
         // Hide our extra properties
         Object.defineProperty(this, "router", { enumerable: false })
-        Object.defineProperty(this, "prefix", { enumerable: false })
 
         // Get the routing data
         const routingData = getRoutingData(target.prototype)
@@ -68,14 +64,19 @@ export function routableApi(options: RoutableApiOptions) {
             })
           }
 
-          this.router = serviceToRouter(service)
-          this.prefix = options.pathPrefix
+          this.router = serviceToRouter(service, options.pathPrefix)
         } else this.router = createRouter()
       }
     }
   }
 }
 
+/**
+ * Mark a method as able to receive requests
+ *
+ * @param options The {@link RouteOptions} for this method
+ * @returns A decorated method that hooks the api routes to this method
+ */
 export function route(options: RouteOptions) {
   return (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

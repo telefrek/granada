@@ -2,6 +2,7 @@
  * HTTP Server implementation
  */
 
+import type { Span } from "@opentelemetry/api"
 import { Emitter, EmitterFor } from "@telefrek/core/events.js"
 import { DeferredPromise, type MaybeAwaitable } from "@telefrek/core/index.js"
 import { LifecycleEvents } from "@telefrek/core/lifecycle.js"
@@ -149,12 +150,14 @@ export abstract class HttpServerBase
   protected handleRequest(
     request: HttpRequest,
     controller?: AbortController,
+    span?: Span,
   ): Promise<HttpResponse> {
-    const operation = createHttpOperation(
+    const operation = createHttpOperation({
       request,
-      this._config.requestTimeout,
+      timeout: this._config.requestTimeout,
       controller,
-    )
+      span,
+    })
 
     this._logger.debug(
       `(${request.id}): Received [${request.method}] ${request.path.original}${request.query ? request.query.original : ""}`,

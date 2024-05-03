@@ -45,6 +45,12 @@ export class Http2ClientTransport<T extends HttpTransportOptions>
     )
   }
 
+  close(): MaybeAwaitable<void> {
+    if (!this._client.closed) {
+      this._client.destroy()
+    }
+  }
+
   marshal(
     request: HttpRequest,
     abort?: AbortSignal,

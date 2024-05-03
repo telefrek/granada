@@ -94,6 +94,11 @@ export interface HttpClientTransport {
     request: HttpRequest,
     abort?: AbortSignal,
   ): MaybeAwaitable<HttpResponse>
+
+  /**
+   * Close the transport and allow no further interactions
+   */
+  close(): MaybeAwaitable<void>
 }
 
 /**
@@ -170,6 +175,9 @@ export class HttpClientBuilder<
     }
 
     const client = new DefaultHttpClient(this._options.name, this._logger)
+    client.once("finished", () => {
+      transport.close()
+    })
     if (
       this._pipeline.add(client as HttpOperationSource, handler, {
         highWaterMark: 2,
@@ -202,7 +210,10 @@ class DefaultHttpClient
     this.id = id
   }
 
-  close(): MaybeAwaitable<void> {}
+  close(): MaybeAwaitable<void> {
+    this._closed = true
+    this.emit("finished")
+  }
 
   public submit(
     request: HttpRequest,
@@ -219,7 +230,8 @@ class DefaultHttpClient
     )
 
     // Create the operation
-    const operation = createHttpOperation(request, timeout)
+    // TODO: Create the spans...
+    const operation = createHttpOperation({ request, timeout })
 
     // Create our promise
     const deferred = new DeferredPromise<HttpResponse>()

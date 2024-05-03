@@ -9,5 +9,8 @@
     "source.fixAll.eslint": "explicit"
   },
   "eslint.workingDirectories": ["./packages"],
-  "eslint.options": {}
+  "eslint.options": {},
+  "circleci.persistedProjectSelection": [
+    "circleci/6kA2hiyjMtAV1oA7sfoGhu/7xamZKJ5SS4MtVFVHP4Dfc"
+  ]
 }

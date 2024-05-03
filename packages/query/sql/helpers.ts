@@ -3,7 +3,7 @@
  */
 
 import { getDebugInfo } from "@telefrek/core/index.js"
-import type { Optional } from "@telefrek/core/type/utils"
+import type { Optional } from "@telefrek/core/type/utils.js"
 import {
   SQLNodeType,
   type CteClause,

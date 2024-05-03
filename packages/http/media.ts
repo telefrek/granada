@@ -26,6 +26,7 @@ export const MEDIA_TYPE_REGEX =
  */
 export const CommonMediaTypes = {
   HTML: parseMediaType("text/html")!,
+  PLAIN: parseMediaType("text/plain;charset=utf-8")!,
   JSON: parseMediaType("application/json")!,
   OCTET: parseMediaType("application/octet-stream")!,
 } as const
@@ -90,6 +91,10 @@ export function mediaTypeToString(media: MediaType): string {
         : ""
     }`
   }
+}
+
+export function mediaTypeToShortString(media: MediaType): string {
+  return `${media.type}/${media.subType ?? "_"}`
 }
 
 let EXTENSION_MAP: Optional<Record<string, MediaType>>

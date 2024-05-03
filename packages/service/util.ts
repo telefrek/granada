@@ -1,66 +1,101 @@
-import { DeferredPromise } from "@telefrek/core/index.js"
-import type { Optional } from "@telefrek/core/type/utils"
+import { type MaybeAwaitable } from "@telefrek/core"
+import { consumeStream } from "@telefrek/core/streams.js"
+import type { Optional } from "@telefrek/core/type/utils.js"
 import {
   HttpStatusCode,
   type HttpHandler,
   type HttpRequest,
   type HttpResponse,
 } from "@telefrek/http/index.js"
+import type { HttpOperationSource } from "@telefrek/http/operations"
+import {
+  createPipeline,
+  type HttpPipelineConfiguration,
+} from "@telefrek/http/pipeline"
+import { USE_ROUTER } from "@telefrek/http/pipeline/routing"
 import {
   createRouter,
   getRoutingParameters,
   type Router,
 } from "@telefrek/http/routing.js"
-import { DefaultHttpMethodStatus, emptyHeaders } from "@telefrek/http/utils"
-import type { Readable } from "stream"
+import type { HttpServer } from "@telefrek/http/server"
+import {
+  DEFAULT_SERVER_PIPELINE_CONFIGURATION,
+  NOT_FOUND_HANDLER,
+} from "@telefrek/http/server/pipeline"
+import {
+  DefaultHttpMethodStatus,
+  emptyHeaders,
+  jsonContents,
+  noContents,
+  textContents,
+} from "@telefrek/http/utils.js"
 import {
   SerializationFormat,
-  createJsonBody,
-  createTextBody,
+  isRoutableApi,
   isServiceError,
   type Service,
   type ServiceResponse,
   type ServiceRouteInfo,
 } from "./index.js"
 
+export class ServicePipelineBuilder {
+  private _config: HttpPipelineConfiguration
+  private _server: HttpServer
+
+  constructor(
+    server: HttpServer,
+    baseConfig: HttpPipelineConfiguration = DEFAULT_SERVER_PIPELINE_CONFIGURATION,
+  ) {
+    this._config = { ...baseConfig }
+    this._server = server
+  }
+
+  withApi(api: unknown): ServicePipelineBuilder {
+    if (isRoutableApi(api)) {
+      if (!this._config.requestTransforms) {
+        this._config.requestTransforms = []
+      }
+
+      this._config.requestTransforms.push(USE_ROUTER(api.router))
+    }
+
+    return this
+  }
+
+  run(port: number): MaybeAwaitable<void> {
+    createPipeline(this._config).add(
+      this._server as HttpOperationSource,
+      NOT_FOUND_HANDLER,
+    )
+    return this._server.listen(port)
+  }
+}
+
 /**
  * Helper method that translates between a {@link Service} and {@link Router} for HTTP hosting
  *
  * @param service The {@link Service} to translate into a {@link Router}
+ * @param pathPrefix The optional prefix to add to path endpoints
  * @returns The {@link Router} for the {@link Service}
  */
-export const serviceToRouter = (service: Service): Router => {
+export const serviceToRouter = (
+  service: Service,
+  pathPrefix?: string,
+): Router => {
   const router = createRouter()
 
   // Add all the endpoints
   for (const endpoint of service.endpoints) {
-    router.addHandler(endpoint.pathTemplate, endpoint.handler, endpoint.method)
+    router.addHandler(
+      `${pathPrefix ?? ""}${endpoint.pathTemplate}`,
+      endpoint.handler,
+      endpoint.method,
+    )
   }
 
   // Return the router
   return router
-}
-
-async function readBody(reader: Readable): Promise<unknown[]> {
-  const objects: unknown[] = []
-
-  const deferred = new DeferredPromise()
-
-  reader.on("data", (chunk: unknown) => {
-    objects.push(chunk)
-  })
-
-  reader.on("end", () => {
-    deferred.resolve()
-  })
-
-  reader.on("error", (err) => {
-    deferred.reject(err)
-  })
-
-  await deferred
-
-  return objects
 }
 
 export function buildHandler<T>(
@@ -69,11 +104,11 @@ export function buildHandler<T>(
 ): HttpHandler {
   return async (request: HttpRequest): Promise<HttpResponse> => {
     let args: Optional<unknown[]>
+    let body: Optional<unknown>
 
-    // Read the body
-    const body = request.body
-      ? (await readBody(request.body.contents!)).at(0)
-      : undefined
+    if (request.body) {
+      body = await consumeStream(request.body.contents)
+    }
 
     if (serviceRoute.options.mapping) {
       args = serviceRoute.options.mapping(getRoutingParameters(), body)
@@ -112,23 +147,14 @@ export function buildHandler<T>(
 
       // If no contents, return NO_CONTENT
       if (response === undefined || response === null) {
-        return {
-          status: {
-            code: HttpStatusCode.NO_CONTENT,
-          },
-          headers: emptyHeaders(),
-        }
+        return noContents()
       } else {
-        return {
-          status: {
-            code,
-          },
-          headers: emptyHeaders(),
-          body:
-            (serviceRoute.options.format ?? SerializationFormat.JSON) ===
-            SerializationFormat.JSON
-              ? createJsonBody(response)
-              : createTextBody(response as string),
+        // TODO: Add other content types...
+        switch (serviceRoute.options.format ?? SerializationFormat.JSON) {
+          case SerializationFormat.JSON:
+            return jsonContents(response, code)
+          default:
+            return textContents(String(response), code)
         }
       }
     }
