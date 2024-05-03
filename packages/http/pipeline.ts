@@ -4,7 +4,7 @@
 
 import { Signal } from "@telefrek/core/concurrency.js"
 import { Emitter, EmitterFor } from "@telefrek/core/events.js"
-import { MaybeAwaitable, getDebugInfo } from "@telefrek/core/index.js"
+import { MaybeAwaitable } from "@telefrek/core/index.js"
 import { LifecycleEvents } from "@telefrek/core/lifecycle.js"
 import {
   DefaultLogger,
@@ -39,7 +39,6 @@ import {
   type HttpResponse,
 } from "./index.js"
 import { type HttpOperation, type HttpOperationSource } from "./operations.js"
-import { getRoutingParameters } from "./routing.js"
 import { notFound } from "./utils.js"
 
 /**
@@ -294,15 +293,9 @@ class DefaultHttpPipeline
           context.response = await HTTP_OPERATION_CONTEXT_STORE.run(
             context,
             async () => {
-              logger.info(
-                `Parameters before ${context.operation.request.id}: ${getDebugInfo(getRoutingParameters())}`,
-              )
               const response = await handler(
                 context.operation.request,
                 context.operation.signal,
-              )
-              logger.info(
-                `Parameters after ${context.operation.request.id}: ${getDebugInfo(getRoutingParameters())}`,
               )
 
               return response

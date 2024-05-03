@@ -82,9 +82,9 @@ describe("Services should work for basic use cases", () => {
       }),
     )
 
-    // expect(response.status.code).toBe(HttpStatusCode.OK)
-    // expect(response.body).not.toBeUndefined()
-    // const item = await consumeJsonStream<TestItem>(response.body!.contents)
-    // expect(item).toStrictEqual(body)
+    expect(response.status.code).toBe(HttpStatusCode.OK)
+    expect(response.body).not.toBeUndefined()
+    const item = await consumeJsonStream<TestItem>(response.body!.contents)
+    expect(item).toStrictEqual(body)
   })
 })
