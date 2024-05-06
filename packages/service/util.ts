@@ -1,4 +1,6 @@
-import { type MaybeAwaitable } from "@telefrek/core/index.js"
+import { getDebugInfo, type MaybeAwaitable } from "@telefrek/core/index.js"
+import { consumeJsonStream } from "@telefrek/core/json.js"
+import { info } from "@telefrek/core/logging.js"
 import { consumeStream } from "@telefrek/core/streams.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
 import {
@@ -87,11 +89,13 @@ export const serviceToRouter = (
 
   // Add all the endpoints
   for (const endpoint of service.endpoints) {
+    info(`${service} adding ${pathPrefix ?? ""}${endpoint.pathTemplate}...`)
     router.addHandler(
       `${pathPrefix ?? ""}${endpoint.pathTemplate}`,
       endpoint.handler,
       endpoint.method,
     )
+    info(getDebugInfo(router))
   }
 
   // Return the router
@@ -102,12 +106,20 @@ export function buildHandler<T>(
   service: unknown,
   serviceRoute: ServiceRouteInfo<T>,
 ): HttpHandler {
+  const format = serviceRoute.options.format ?? SerializationFormat.JSON
   return async (request: HttpRequest): Promise<HttpResponse> => {
     let args: Optional<unknown[]>
     let body: Optional<unknown>
 
     if (request.body) {
-      body = await consumeStream(request.body.contents)
+      info(
+        `Consuming body type: ${request.body.mediaType?.toString() ?? "unknown"} as ${format}`,
+      )
+
+      body =
+        format === SerializationFormat.JSON
+          ? await consumeJsonStream(request.body.contents)
+          : await consumeStream(request.body.contents)
     }
 
     if (serviceRoute.options.mapping) {

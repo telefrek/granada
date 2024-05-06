@@ -40,7 +40,6 @@ export const TEST_LOGGER: Logger = new DefaultLogger({
   name: "test.logger",
   level: LogLevel.INFO,
   writer: new ConsoleLogWriter(),
-  includeTimestamps: true,
 })
 
 export const ABORTED_RESPONSE: HttpResponse = {

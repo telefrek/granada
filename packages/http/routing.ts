@@ -575,6 +575,12 @@ class RouterImpl implements Router {
           // Full overlap, return the covering
           if (segment.segment === covering.segment) {
             return covering
+          } else if (lcp === (covering.segment?.length ?? 0)) {
+            // It's possible we overlap with a child
+            return this._mergeSegment(covering, {
+              segment: segment.segment!.substring(lcp),
+              info: RouteSegmentInfo.None,
+            })
           }
 
           return this._split(covering, segment, lcp)
@@ -615,17 +621,36 @@ class RouterImpl implements Router {
     // Update the current to be the prefix
     current.segment = current.segment!.substring(0, prefixLegnth)
 
-    // It's possible we are splitting out a router node, need to send that through
+    // It's possible we are splitting out a routable node, need to send that through
     if (isRouterNode(current)) {
-      left = {
+      left = <RouterNode>{
         segment: left.segment,
         info: left.info,
         router: current.router,
-      } as RouterNode
+        template: current.template,
+      }
 
       // Remove the router from this object
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      delete (current as RouteTrieNode as any).router
+      delete (current as RootNode).router
+    } else if (isHandlerNode(current)) {
+      left = <HandlerNode>{
+        segment: left.segment,
+        info: left.info,
+        handlers: current.handlers,
+        template: current.template,
+      }
+
+      delete (current as RootNode).handlers
+    }
+
+    // Clear the existing template
+    if ("template" in current) {
+      delete current.template
+    }
+
+    // Copy over any children
+    if (current.children) {
+      left.children = current.children
     }
 
     // Change the children to be the two new nodes

@@ -47,7 +47,6 @@ import { notFound } from "./utils.js"
 let PIPELINE_LOGGER: Logger = new DefaultLogger({
   name: "http.pipeline",
   level: LogLevel.WARN,
-  includeTimestamps: true,
 })
 
 /**
@@ -70,7 +69,6 @@ export function setPipelineWriter<T extends LogWriter>(writer: T): void {
     name: PIPELINE_LOGGER.name,
     level: PIPELINE_LOGGER.level,
     writer: writer,
-    includeTimestamps: true,
   })
 }
 

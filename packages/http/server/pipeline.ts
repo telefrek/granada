@@ -2,7 +2,6 @@
  * Http Server Pipeline defaults
  */
 
-import type { MaybeAwaitable } from "@telefrek/core/index.js"
 import {
   HttpStatusCode,
   type HttpHandler,
@@ -23,12 +22,13 @@ export const DEFAULT_SERVER_PIPELINE_CONFIGURATION: HttpPipelineConfiguration =
     responseTransforms: [VERIFY_RESPONSE_BODY_FOR_SEND, COMPRESS_RESPONSE_BODY],
   }
 
-export const NOT_FOUND_HANDLER: HttpHandler = (
+export const NOT_FOUND_HANDLER: HttpHandler = async (
   _: HttpRequest,
-): MaybeAwaitable<HttpResponse> =>
-  <HttpResponse>{
+): Promise<HttpResponse> => {
+  return <HttpResponse>{
     status: {
       code: HttpStatusCode.NOT_FOUND,
     },
     headers: emptyHeaders(),
   }
+}

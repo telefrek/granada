@@ -34,7 +34,7 @@ import { createPipeline, type HttpPipeline } from "./pipeline.js"
 /** The logger used for HTTP Clients */
 let HTTP_CLIENT_LOGGER: Logger = new DefaultLogger({
   name: "http.client",
-  includeTimestamps: true,
+
   level: LogLevel.WARN,
 })
 
@@ -55,7 +55,7 @@ export function setHttpClientLogLevel(level: LogLevel): void {
 export function setHttpClientLogWriter(writer: LogWriter): void {
   HTTP_CLIENT_LOGGER = new DefaultLogger({
     name: "http.client",
-    includeTimestamps: true,
+
     level: HTTP_CLIENT_LOGGER.level,
     writer,
   })

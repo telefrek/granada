@@ -28,19 +28,19 @@ import {
 export function USE_ROUTER(router: Router): HttpTransform {
   return (context: HttpOperationContext) => {
     if (isInRequestPhase(context) && !context.handler) {
-      const info = router.lookup({
+      const routeInfo = router.lookup({
         method: context.operation.request.method,
         path: context.operation.request.path.original,
       })
 
       // Check if we identified the information
-      if (info) {
-        if (info.parameters) {
-          setRoutingParameters(info.parameters, context)
+      if (routeInfo) {
+        if (routeInfo.parameters) {
+          setRoutingParameters(routeInfo.parameters, context)
         }
 
         // Ensure we wrap the tracing information
-        let routeHandler = traceRoute(info)
+        let routeHandler = traceRoute(routeInfo)
 
         // Ensure we have the parent context set
         const contextSpan = context.operation.span
@@ -82,6 +82,7 @@ function traceRoute(info: RouteInfo): HttpHandler {
             ApiRouteMetrics.RouteResponseStatus.add(1, {
               status: httpResponse.status.code.toString(),
               template: info.template,
+              method: request.method,
             })
 
             return httpResponse
@@ -92,6 +93,7 @@ function traceRoute(info: RouteInfo): HttpHandler {
               timer.stop().seconds(),
               {
                 template: info.template,
+                method: request.method,
               },
             )
             span.end()
@@ -101,6 +103,7 @@ function traceRoute(info: RouteInfo): HttpHandler {
         ApiRouteMetrics.RouteResponseStatus.add(1, {
           status: (response as HttpResponse).status.code.toString(),
           template: info.template,
+          method: request.method,
         })
 
         return response
@@ -110,6 +113,7 @@ function traceRoute(info: RouteInfo): HttpHandler {
         // Log the duration and end the span
         ApiRouteMetrics.RouteRequestDuration.record(timer.stop().seconds(), {
           template: info.template,
+          method: request.method,
         })
         span.end()
       }

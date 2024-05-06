@@ -2,12 +2,14 @@
  * Basic abstractions for Postgres
  */
 
+import { ValueType } from "@opentelemetry/api"
 import { vegasBuilder } from "@telefrek/core/backpressure/algorithms.js"
 import {
   createSimpleLimiter,
   type Limiter,
 } from "@telefrek/core/backpressure/limits.js"
 import type { FrameworkPriority, MaybeAwaitable } from "@telefrek/core/index.js"
+import { debug } from "@telefrek/core/logging"
 import { getGranadaMeter } from "@telefrek/core/observability/metrics.js"
 import {
   DefaultMultiLevelPriorityQueue,
@@ -46,13 +48,22 @@ const PostgresQueryMetrics = {
     "query_execution_time",
     {
       description: "The amount of time the query took to execute",
+      unit: "seconds",
+      valueType: ValueType.DOUBLE,
+      advice: {
+        explicitBucketBoundaries: [
+          0.0005, 0.001, 0.0025, 0.005, 0.01, 0.015, 0.02, 0.05, 0.1, 0.5,
+        ],
+      },
     },
   ),
   QueryErrors: getGranadaMeter().createCounter("query_error", {
     description:
       "The number of errors that have been encountered for the query",
+    valueType: ValueType.INT,
   }),
 } as const
+
 /**
  * Represents a database that can have queries submitted against it
  */
@@ -94,7 +105,7 @@ export class DefaultPostgresDatabase implements PostgresDatabase {
       options.defaultTimeoutMilliseconds ?? 1_000,
     )
 
-    // TODO: make these potional
+    // TODO: make these optional
     this._limit = createSimpleLimiter(vegasBuilder(2).withMax(48).build())
 
     // TODO: Change queue working size based on rate limiting
@@ -126,8 +137,9 @@ export class DefaultPostgresDatabase implements PostgresDatabase {
   ): Promise<QueryResult<T>>
   async submit<T extends RowType>(
     query: PostgresQuery,
-    _timeout?: Duration,
+    timeout?: Duration,
   ): Promise<QueryResult<T>> {
+    debug(`Submitting ${query.name}`)
     // TODO: Hook in the monitoring of pool errors
     const result = await this._queue.queue(
       {
@@ -136,7 +148,7 @@ export class DefaultPostgresDatabase implements PostgresDatabase {
       executeQuery<T>,
       query,
       this._pool,
-      this._defaultTimeout,
+      timeout ?? this._defaultTimeout,
     )
 
     return result
@@ -149,6 +161,7 @@ async function executeQuery<T extends RowType>(
   timeout: Duration,
 ): Promise<QueryResult<T>> {
   const timer = Timer.startNew()
+  debug(`Executing ${query.name}, getting connection...`)
   const connection = await pool.get(timeout)
 
   let error: Optional<unknown>
@@ -156,6 +169,7 @@ async function executeQuery<T extends RowType>(
     // TODO: Update for cursors...
     // TODO: How do we want to deal with "named queries..." as well as
     // tracking duplicates
+    debug(`Sending query to downstream`)
     const results = await connection.item.query({
       ...query,
       name: undefined,

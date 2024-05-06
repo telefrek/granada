@@ -15,6 +15,12 @@ export enum LogLevel {
   DEBUG = 40,
 }
 
+let DEFAULT_LOG_LEVEL: LogLevel = LogLevel.INFO
+
+export function setDefaultLogLevel(level: LogLevel): void {
+  DEFAULT_LOG_LEVEL = level
+}
+
 /**
  * Defines some simple structure for log information
  */
@@ -57,6 +63,24 @@ export interface LogWriter {
  */
 export const NoopLogWriter: LogWriter = {
   log(_data: LogData): void {},
+}
+
+let DEFAULT_WRITER: LogWriter = NoopLogWriter
+
+/**
+ * Sets the default log writer for preparing the infra
+ *
+ * @param writer The {@link LogWriter} to use for new log creation
+ */
+export function setDefaultWriter(writer: LogWriter): void {
+  DEFAULT_WRITER = writer
+
+  // Update the global writer to use the default
+  GLOBAL_LOGGER = new DefaultLogger({
+    name: GLOBAL_LOGGER.name,
+    writer,
+    level: GLOBAL_LOGGER.level,
+  })
 }
 
 /**
@@ -115,6 +139,7 @@ export interface Logger {
    */
   fatal(message: string, context?: unknown): void
 }
+
 /**
  * Options for configuring loggers
  */
@@ -125,8 +150,6 @@ export interface LoggerOptions {
   name?: string
   /** Optional {@link LogWriter} with default of {@link NoopLogWriter} */
   writer?: LogWriter
-  /** Flat to indicate if timestamps should be collected (default is true) */
-  includeTimestamps?: boolean
 }
 
 /**
@@ -146,19 +169,41 @@ export class ConsoleLogWriter implements LogWriter {
 }
 
 /**
+ * Helpers for optimizing log levels
+ */
+type MessageLogger = (message: string, context?: unknown) => void
+const NO_OP_LOGGER: MessageLogger = (
+  _message: string,
+  _context?: unknown,
+): void => {}
+
+/**
  * Simple logger that translates between levels and registers for global hooks
  */
 export class DefaultLogger implements Logger {
   private _level: LogLevel
   private _writer: LogWriter
-  private _injectTimestamp: boolean
   readonly name?: string
 
+  debug: MessageLogger
+  info: MessageLogger
+  warn: MessageLogger
+  error: MessageLogger
+  fatal: MessageLogger
+
   constructor(options?: LoggerOptions) {
-    this._level = options?.level ?? LogLevel.ERROR
-    this._writer = options?.writer ?? NoopLogWriter
-    this._injectTimestamp = options?.includeTimestamps ?? true
+    this._level = options?.level ?? DEFAULT_LOG_LEVEL
+    this._writer = options?.writer ?? DEFAULT_WRITER
     this.name = options?.name
+
+    // Set the loggers to no-op mode
+    this.debug = NO_OP_LOGGER
+    this.info = NO_OP_LOGGER
+    this.warn = NO_OP_LOGGER
+    this.error = NO_OP_LOGGER
+    this.fatal = this._fatal.bind(this)
+
+    this.setLevel(this._level)
   }
 
   get level(): LogLevel {
@@ -166,67 +211,84 @@ export class DefaultLogger implements Logger {
   }
 
   setLevel(level: LogLevel): void {
+    this._reset()
     this._level = level
-  }
 
-  debug(message: string, context?: unknown): void {
-    if (this._level >= LogLevel.DEBUG) {
-      this._writer.log({
-        source: this.name,
-        timestamp: this._injectTimestamp ? HiResClock.timestamp() : undefined,
-        message,
-        level: LogLevel.DEBUG,
-        context,
-      })
+    // Rebind the statements from the no-op
+    switch (level) {
+      case LogLevel.DEBUG:
+        this.debug = this._debug.bind(this)
+      // eslint-disable-next-line no-fallthrough
+      case LogLevel.INFO:
+        this.info = this._info.bind(this)
+      // eslint-disable-next-line no-fallthrough
+      case LogLevel.WARN:
+        this.warn = this._warn.bind(this)
+      // eslint-disable-next-line no-fallthrough
+      case LogLevel.ERROR:
+        this.error = this._error.bind(this)
+        break
     }
   }
 
-  info(message: string, context?: unknown): void {
-    if (this._level >= LogLevel.INFO) {
-      this._writer.log({
-        source: this.name,
-        timestamp: this._injectTimestamp ? HiResClock.timestamp() : undefined,
-        message,
-        level: LogLevel.INFO,
-        context,
-      })
-    }
+  /**
+   * Set all statements besides fatal to the NO_OP_LOGGER
+   */
+  private _reset(): void {
+    this.debug = NO_OP_LOGGER
+    this.info = NO_OP_LOGGER
+    this.warn = NO_OP_LOGGER
+    this.error = NO_OP_LOGGER
   }
 
-  warn(message: string, context?: unknown): void {
-    if (this._level >= LogLevel.WARN) {
-      this._writer.log({
-        source: this.name,
-        timestamp: this._injectTimestamp ? HiResClock.timestamp() : undefined,
-        message,
-        level: LogLevel.WARN,
-        context,
-      })
-    }
+  private _debug(message: string, context?: unknown): void {
+    this._writer.log({
+      source: this.name,
+      timestamp: HiResClock.timestamp(),
+      message,
+      level: LogLevel.DEBUG,
+      context,
+    })
   }
 
-  error(message: string, context?: unknown): void {
-    if (this._level >= LogLevel.ERROR) {
-      this._writer.log({
-        source: this.name,
-        timestamp: this._injectTimestamp ? HiResClock.timestamp() : undefined,
-        message,
-        level: LogLevel.ERROR,
-        context,
-      })
-    }
+  private _info(message: string, context?: unknown): void {
+    this._writer.log({
+      source: this.name,
+      timestamp: HiResClock.timestamp(),
+      message,
+      level: LogLevel.INFO,
+      context,
+    })
   }
 
-  fatal(message: string, context?: unknown): void {
-    if (this._level >= LogLevel.FATAL) {
-      this._writer.log({
-        source: this.name,
-        timestamp: this._injectTimestamp ? HiResClock.timestamp() : undefined,
-        message,
-        level: LogLevel.FATAL,
-        context,
-      })
-    }
+  private _warn(message: string, context?: unknown): void {
+    this._writer.log({
+      source: this.name,
+      timestamp: HiResClock.timestamp(),
+      message,
+      level: LogLevel.WARN,
+      context,
+    })
+  }
+
+  private _error(message: string, context?: unknown): void {
+    this._writer.log({
+      source: this.name,
+      timestamp: HiResClock.timestamp(),
+      message,
+      level: LogLevel.ERROR,
+      context,
+    })
+  }
+
+  private _fatal(message: string, context?: unknown): void {
+    this._writer.log({
+      source: this.name,
+      timestamp: HiResClock.timestamp(),
+      message,
+      level: LogLevel.FATAL,
+      context,
+    })
   }
 }
 
@@ -255,7 +317,6 @@ export function setGlobalWriter(writer: LogWriter): void {
     name: "global",
     level: GLOBAL_LOGGER.level,
     writer,
-    includeTimestamps: true,
   })
 }
 

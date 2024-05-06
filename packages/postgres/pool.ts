@@ -2,6 +2,8 @@
  * Postgres pooling
  */
 
+import { DeferredPromise } from "@telefrek/core"
+import { debug, error } from "@telefrek/core/logging"
 import { PoolBase, type PoolOptions } from "@telefrek/core/structures/pool.js"
 import pg from "pg"
 
@@ -61,15 +63,28 @@ export class PostgresConnectionPool extends PoolBase<pg.Client> {
   }
 
   override recycleItem(item: pg.Client): void {
-    item.end((_) => {
-      // TODO: Add error tracking
+    debug(`Recycling pg.Client`)
+    item.end((err) => {
+      if (err) {
+        error(`Failure during client.end ${err}`, err)
+      }
     })
   }
 
-  override async createItem(): Promise<pg.Client> {
+  override createItem(): Promise<pg.Client> {
+    debug(`Creating new pg.Client ${this._clientConfig.host ?? "unknown host"}`)
+    const deferred = new DeferredPromise<pg.Client>()
     const client = new pg.Client(this._clientConfig)
-    await client.connect()
+    client.connect((err) => {
+      if (!err) {
+        debug(`Created client successfully`)
+        deferred.resolve(client)
+      } else {
+        error(`Failed to create pg.Client: ${err}`, err)
+        deferred.reject(err)
+      }
+    })
 
-    return client
+    return deferred
   }
 }

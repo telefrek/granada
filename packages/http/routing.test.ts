@@ -79,4 +79,52 @@ describe("verify router", () => {
     expect(router.lookup(request("/bar/baz"))).toBeUndefined()
     expect(router.lookup(request("/bar"))).not.toBeUndefined()
   })
+
+  test("A router should work regardless of order of insertion or location in the tree", () => {
+    let router = createRouter()
+    const handler: HttpHandler = (_) => Promise.reject("invalid")
+
+    router.addHandler("/root/path1", handler, HttpMethod.POST)
+    router.addHandler("/root/path1/:item", handler, HttpMethod.GET)
+    router.addHandler("/root/path2", handler, HttpMethod.GET)
+
+    expect(
+      router.lookup(request("/root/path1", HttpMethod.POST)),
+    ).not.toBeUndefined()
+    expect(
+      router.lookup(request("/root/path1", HttpMethod.GET)),
+    ).toBeUndefined()
+    expect(router.lookup(request("/root/path1/123"))).not.toBeUndefined()
+    expect(router.lookup(request("/root/path2"))).not.toBeUndefined()
+
+    router = createRouter()
+
+    router.addHandler("/root/path2", handler, HttpMethod.GET)
+    router.addHandler("/root/path1/:item", handler, HttpMethod.GET)
+    router.addHandler("/root/path1", handler, HttpMethod.POST)
+
+    expect(
+      router.lookup(request("/root/path1", HttpMethod.POST)),
+    ).not.toBeUndefined()
+    expect(
+      router.lookup(request("/root/path1", HttpMethod.GET)),
+    ).toBeUndefined()
+    expect(router.lookup(request("/root/path1/123"))).not.toBeUndefined()
+    expect(router.lookup(request("/root/path2"))).not.toBeUndefined()
+
+    router = createRouter()
+
+    router.addHandler("/root/path1/:item", handler, HttpMethod.GET)
+    router.addHandler("/root/path2", handler, HttpMethod.GET)
+    router.addHandler("/root/path1", handler, HttpMethod.POST)
+
+    expect(
+      router.lookup(request("/root/path1", HttpMethod.POST)),
+    ).not.toBeUndefined()
+    expect(
+      router.lookup(request("/root/path1", HttpMethod.GET)),
+    ).toBeUndefined()
+    expect(router.lookup(request("/root/path1/123"))).not.toBeUndefined()
+    expect(router.lookup(request("/root/path2"))).not.toBeUndefined()
+  })
 })

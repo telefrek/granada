@@ -9,7 +9,7 @@ import {
   type HttpBody,
   type HttpStatusCode,
 } from "@telefrek/http/index.js"
-import type { MaybeAwaitable } from "../core/index.js"
+import type { MaybeAwaitable } from "@telefrek/core/index.js"
 import type { Router, RoutingParameters } from "../http/routing.js"
 
 /**

@@ -27,7 +27,6 @@ import {
 let HTTP_SERVER_LOGGER: Logger = new DefaultLogger({
   name: "HttpServer",
   level: LogLevel.INFO,
-  includeTimestamps: true,
 })
 
 /**
@@ -50,7 +49,6 @@ export function setHttpServerLogWriter(writer: LogWriter): void {
     name: "HttpServer",
     level: HTTP_SERVER_LOGGER.level,
     writer: writer,
-    includeTimestamps: true,
   })
 }
 
