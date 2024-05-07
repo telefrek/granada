@@ -1,3 +1,4 @@
+# Don't store any build specific assets
 **/node_modules
 **/dist
 **/coverage
@@ -7,3 +8,6 @@
 
 # Don't store local build cache results
 **/*.tsbuildinfo
+
+# Remove any local scripts
+scripts/publish-local.sh

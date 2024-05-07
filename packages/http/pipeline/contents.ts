@@ -2,6 +2,8 @@
  * Common content pipeline operations
  */
 
+import { getDebugInfo } from "@telefrek/core"
+import { info } from "@telefrek/core/logging"
 import { pipe } from "@telefrek/core/streams.js"
 import {
   createBrotliCompress,
@@ -49,6 +51,10 @@ export const COMPRESS_RESPONSE_BODY: HttpTransform = (
   if (context.response) {
     const accept = context.operation.request.headers.get(
       HttpRequestHeaders.AcceptEncoding,
+    )
+
+    info(
+      `compression check headers: ${getDebugInfo(context.operation.request.headers)}`,
     )
 
     compressBody(
