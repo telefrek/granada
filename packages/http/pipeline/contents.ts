@@ -2,8 +2,6 @@
  * Common content pipeline operations
  */
 
-import { getDebugInfo } from "@telefrek/core"
-import { info } from "@telefrek/core/logging"
 import { pipe } from "@telefrek/core/streams.js"
 import {
   createBrotliCompress,
@@ -13,134 +11,57 @@ import {
   createGzip,
   createInflate,
 } from "zlib"
-import type { HttpOperationContext } from "../context.js"
 import { HttpErrorCode, type HttpError } from "../errors.js"
 import {
   CommonHttpHeaders,
   HttpRequestHeaders,
   type HttpResponse,
+  type MediaType,
 } from "../index.js"
-import { CommonMediaTypes, getMediaType } from "../media.js"
-import type { HttpTransform } from "../pipeline.js"
+import { getMediaType } from "../media.js"
+import type { HttpPipelineMiddleware } from "../pipeline.js"
 
-/**
- * Parse the response body
- *
- * @param context The current {@link HttpOperationContext}
- * @returns A transform for manipulating that context
- */
-export const PARSE_RESPONSE_BODY: HttpTransform = (
-  context: HttpOperationContext,
-) => {
-  if (context.response) {
-    parseResponseBody(context.response)
-  }
-
-  return context
+export const RESPONSE_PARSING_MIDDLEWARE: HttpPipelineMiddleware = {
+  name: "responseParsing",
+  modifyResponse(_request, response) {
+    parseResponseBody(response)
+  },
 }
 
-/**
- * Compress the response body based on the request information
- *
- * @param context The current {@link HttpOperationContext}
- * @returns A transform for manipulating that context
- */
-export const COMPRESS_RESPONSE_BODY: HttpTransform = (
-  context: HttpOperationContext,
+export const createServerConpressionMiddleware: (
+  classifier?: (mediaType?: MediaType) => string,
+) => HttpPipelineMiddleware = (
+  classifier = (_) => {
+    return "br"
+  },
 ) => {
-  if (context.response) {
-    const accept = context.operation.request.headers.get(
-      HttpRequestHeaders.AcceptEncoding,
-    )
+  return {
+    name: "serverCompression",
+    modifyResponse(request, response) {
+      if (response.body) {
+        if (request.headers.has(HttpRequestHeaders.AcceptEncoding)) {
+          const target = classifier(response.body?.mediaType) ?? "gzip"
 
-    info(
-      `compression check headers: ${getDebugInfo(context.operation.request.headers)}`,
-    )
+          const encoding = request.headers.get(
+            HttpRequestHeaders.AcceptEncoding,
+          )!
 
-    compressBody(
-      context.response,
-      accept ? (Array.isArray(accept) ? accept : [accept]) : [],
-    )
-  }
+          const values = (
+            Array.isArray(encoding)
+              ? encoding.flatMap((e) => e.split(",")).join(",")
+              : encoding
+          ).split(",")
 
-  return context
-}
-
-/**
- * Ensure the response body is ready for sending and has appropriate headers and information
- *
- * @param context The current {@link HttpOperationContext}
- * @returns A transform for manipulating that context
- */
-export const VERIFY_RESPONSE_BODY_FOR_SEND: HttpTransform = (
-  context: HttpOperationContext,
-) => {
-  if (context.response) {
-    const { body, headers } = context.response
-    if (body) {
-      const mediaType = body.mediaType ?? CommonMediaTypes.OCTET
-
-      // Make sure content type is set if we have media types
-      if (!headers.has(CommonHttpHeaders.ContentType)) {
-        headers.set(CommonHttpHeaders.ContentType, mediaType.toString())
+          // Try the ideal, fallback to gzip
+          if (values.indexOf(target) >= 0) {
+            compressBody(response, [target])
+          } else if (values.indexOf("gzip") >= 0) {
+            compressBody(response, ["gzip"])
+          }
+        }
       }
-    }
+    },
   }
-
-  return context
-}
-
-/**
- * Ensure the request body is ready for sending and has appropriate headers and information
- *
- * @param context The current {@link HttpOperationContext}
- * @returns A transform for manipulating that context
- */
-export const VERIFY_REQUEST_BODY_FOR_SEND: HttpTransform = (
-  context: HttpOperationContext,
-) => {
-  if (context.operation.request.body) {
-    const mediaType =
-      context.operation.request.body.mediaType ?? CommonMediaTypes.OCTET
-
-    // Make sure content type is set if we have media types
-    if (!context.operation.request.headers.has(CommonHttpHeaders.ContentType)) {
-      context.operation.request.headers.set(
-        CommonHttpHeaders.ContentType,
-        mediaType.toString(),
-      )
-    }
-  }
-
-  // Inject compression encoding support
-  if (
-    !context.operation.request.headers.has(HttpRequestHeaders.AcceptEncoding)
-  ) {
-    context.operation.request.headers.set(
-      HttpRequestHeaders.AcceptEncoding,
-      "deflate",
-    )
-  }
-
-  return context
-}
-
-/**
- * Parse the request body
- *
- * @param context The current {@link HttpOperationContext}
- * @returns A transform for manipulating that context
- */
-export const PARSE_REQUEST_BODY: HttpTransform = (
-  context: HttpOperationContext,
-) => {
-  const { headers, body } = context.operation.request
-
-  if (body) {
-    body.mediaType = body.mediaType ?? getMediaType(headers)
-  }
-
-  return context
 }
 
 /**

@@ -28,7 +28,7 @@ import {
   createSecureServer,
   type OutgoingHttpHeaders,
 } from "http2"
-import { HttpServerMetrics } from "../metrics.js"
+import { HttpRequestMetrics, HttpServerMetrics } from "../metrics.js"
 
 /**
  * Default implementation of the {@link HttpServer} using the node `http2` package
@@ -49,6 +49,10 @@ export class NodeHttp2Server extends HttpServerBase {
     }
 
     this._server = createSecureServer(options)
+
+    this._server.setTimeout(30_000, () => {
+      this._logger.warn(`Server timeout default reached`)
+    })
 
     this._server.on("session", (session) => {
       this._logger.debug("New session created", session)
@@ -148,6 +152,9 @@ export class NodeHttp2Server extends HttpServerBase {
         }
       }
 
+      // Add the incoming request start
+      HttpServerMetrics.RequestStartedCounter.add(1)
+
       const timer = Timer.startNew()
       const socket = req.stream.session?.socket
 
@@ -188,24 +195,53 @@ export class NodeHttp2Server extends HttpServerBase {
         controller.abort("Request was abandoned")
       })
 
+      let responseWritten = false
+
+      req.setTimeout(5_000, () => {
+        controller.abort("Request timed out")
+        HttpRequestMetrics.RequestTimeout.add(1)
+
+        if (!resp.headersSent) {
+          this._logger.warn("Request timeout, sending error response...")
+          try {
+            resp.writeHead(HttpStatusCode.INTERNAL_SERVER_ERROR).end()
+            responseWritten = true
+          } catch (err) {
+            this._logger.error(`Error during fail write`)
+          }
+        }
+      })
+
       try {
         const response = await this.handleRequest(
           createHttp2Request(req),
           controller,
           span,
+          () => {
+            // Record the delay duration
+            HttpRequestMetrics.RequestDelayDuration.record(
+              timer.elapsed().seconds(),
+            )
+          },
         )
 
-        // Deal with HTTP2 specific stuff
-        const outgoing = <OutgoingHttpHeaders>{}
-
-        // Inject remaining
-        injectHeaders(response.headers, outgoing)
-        resp.writeHead(response.status.code, outgoing)
-
-        if (response.body) {
-          pipe(response.body.contents, resp)
+        if (responseWritten) {
+          this._logger.warn(`Response ended already ${req.url}`)
         } else {
-          resp.end()
+          responseWritten = true
+
+          // Deal with HTTP2 specific stuff
+          const outgoing = <OutgoingHttpHeaders>{}
+
+          // Inject remaining
+          injectHeaders(response.headers, outgoing)
+          resp.writeHead(response.status.code, outgoing)
+
+          if (response.body) {
+            pipe(response.body.contents, resp)
+          } else {
+            resp.end()
+          }
         }
       } catch (err) {
         this._logger.error(`[${req.method} -> ${req.url}]: ${err}`)

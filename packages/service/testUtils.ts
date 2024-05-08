@@ -3,12 +3,7 @@
  */
 
 import { getDebugInfo } from "@telefrek/core/index.js"
-import {
-  ConsoleLogWriter,
-  DefaultLogger,
-  LogLevel,
-  type Logger,
-} from "@telefrek/core/logging.js"
+import { DefaultLogger, LogLevel, type Logger } from "@telefrek/core/logging.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
 import { HttpClientBuilder, type HttpClient } from "@telefrek/http/client.js"
 import {
@@ -38,8 +33,7 @@ import { SerializationFormat, type ServiceResponse } from "./index.js"
 
 export const TEST_LOGGER: Logger = new DefaultLogger({
   name: "test.logger",
-  level: LogLevel.INFO,
-  writer: new ConsoleLogWriter(),
+  level: LogLevel.DEBUG,
 })
 
 export const ABORTED_RESPONSE: HttpResponse = {

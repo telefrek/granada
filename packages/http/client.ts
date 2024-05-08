@@ -6,12 +6,7 @@ import { isAbortError } from "@telefrek/core/errors.js"
 import { EmitterFor, type Emitter } from "@telefrek/core/events.js"
 import { DeferredPromise, type MaybeAwaitable } from "@telefrek/core/index.js"
 import type { LifecycleEvents } from "@telefrek/core/lifecycle.js"
-import {
-  DefaultLogger,
-  LogLevel,
-  Logger,
-  type LogWriter,
-} from "@telefrek/core/logging.js"
+import { DefaultLogger, LogLevel, Logger } from "@telefrek/core/logging.js"
 import { Duration } from "@telefrek/core/time.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
 import { Http2ClientTransport } from "./client/http2.js"
@@ -32,10 +27,8 @@ import {
 import { createPipeline, type HttpPipeline } from "./pipeline.js"
 
 /** The logger used for HTTP Clients */
-let HTTP_CLIENT_LOGGER: Logger = new DefaultLogger({
+const HTTP_CLIENT_LOGGER: Logger = new DefaultLogger({
   name: "http.client",
-
-  level: LogLevel.WARN,
 })
 
 /**
@@ -45,20 +38,6 @@ let HTTP_CLIENT_LOGGER: Logger = new DefaultLogger({
  */
 export function setHttpClientLogLevel(level: LogLevel): void {
   HTTP_CLIENT_LOGGER.setLevel(level)
-}
-
-/**
- * Update the writer for the HTTPClient logs
- *
- * @param writer The {@link LogWriter} to use for HTTPClient logs
- */
-export function setHttpClientLogWriter(writer: LogWriter): void {
-  HTTP_CLIENT_LOGGER = new DefaultLogger({
-    name: "http.client",
-
-    level: HTTP_CLIENT_LOGGER.level,
-    writer,
-  })
 }
 
 /**
@@ -161,6 +140,7 @@ export class HttpClientBuilder<
       abort?: AbortSignal,
     ): Promise<HttpResponse> => {
       try {
+        this._logger?.debug(`Sending: ${request.path.original}`)
         // Set the response and move to reading
         return await transport.marshal(request, abort)
       } catch (err) {

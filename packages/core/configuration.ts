@@ -7,12 +7,7 @@ import { DeferredPromise, type MaybeAwaitable } from "./index.js"
 import fs, { existsSync, statSync } from "fs"
 import path, { join } from "path"
 import { EmitterFor, type Emitter } from "./events.js"
-import {
-  DefaultLogger,
-  type LogLevel,
-  type LogWriter,
-  type Logger,
-} from "./logging.js"
+import { DefaultLogger, type Logger } from "./logging.js"
 import type { Optional } from "./type/utils.js"
 
 export interface ConfigurationEvents {
@@ -83,12 +78,8 @@ export type ConfigurationItem<T extends object> = {
 export interface FileSystemConfigurationManagerOptions {
   /** The directory to monitor (default is /etc/config) */
   configDirectory?: string
-  /** The optional log writer to use */
-  logWriter?: LogWriter
   /** Flag to load configurations on demand to reduce memory (default is false) */
   lazyLoad?: boolean
-  /** The default logging level for this component */
-  logLevel?: LogLevel
 }
 
 /**
@@ -128,8 +119,6 @@ export class FileSystemConfigurationManager
     this._abortController = new AbortController()
     this._logger = new DefaultLogger({
       name: "FileSystemConfigurationManager",
-      writer: options.logWriter,
-      level: options.logLevel,
     })
 
     this._lazyLoading = options.lazyLoad ?? false

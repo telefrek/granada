@@ -83,20 +83,28 @@ export type AliasedType<
   Alias extends string,
 > = Omit<Original, Property> & Record<Alias, Original[Property]>
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type AnyArgs = any[]
+
 /**
  * Type the represents a typed function that takes specific parameters during invocation
  */
-export type Func<Args extends unknown[], Result> = (...args: Args) => Result
+export type Func<Args extends AnyArgs, Result> = (...args: Args) => Result
 
 /**
  * Type to represent a method that takes some arguments and returns nothing
  */
-export type Callback<Args extends unknown[]> = (...args: Args) => void
+export type Callback<Args extends AnyArgs> = (...args: Args) => void
 
 /**
  * A {@link Callback} that takes no arguments
  */
 export type EmptyCallback = () => void
+
+/**
+ * Empty callback that does nothing
+ */
+export const NO_OP_CALLBACK = (): void => {}
 
 /**
  * A value of type {@link T} or undefined

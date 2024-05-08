@@ -1,9 +1,11 @@
-import { Readable } from "stream"
-import { createTransform } from "./streams.js"
+import { Readable, Writable } from "stream"
+import { finished } from "stream/promises"
+import { createNamedTransform } from "./streams.js"
+import { delay } from "./time.js"
 
-describe("Generic streams should work normally", () => {
-  const generator = function* () {
-    for (let n = 0; n < 10; ++n) {
+describe("Named Transform streams should work normally", () => {
+  const generator = function* (lim: number = 10) {
+    for (let n = 0; n < lim; ++n) {
       yield n
     }
 
@@ -12,7 +14,7 @@ describe("Generic streams should work normally", () => {
 
   it("Should be able to transform between two types", async () => {
     const results = await Readable.from(generator())
-      .pipe(createTransform<number, string>((d) => d.toString()))
+      .pipe(createNamedTransform<number, string>((d) => d.toString()))
       .toArray()
     expect(results.length).toEqual(10)
     expect(typeof results[0]).toEqual("string")
@@ -21,11 +23,47 @@ describe("Generic streams should work normally", () => {
   it("Should be able to filter values", async () => {
     const results = await Readable.from(generator())
       .pipe(
-        createTransform<number, number>((d) => (d % 2 == 0 ? d : undefined)),
+        createNamedTransform<number, number>((d) =>
+          d % 2 == 0 ? d : undefined,
+        ),
       )
       .toArray()
 
     expect(results.length).toEqual(5) // 0, 2, 4, 6, 8
     expect(results.reduce((l, r) => l + r, 0)).toEqual(20)
+  })
+
+  it("Should be able to handle backpressure", async () => {
+    const readable = await Readable.from(generator(25), { highWaterMark: 2 })
+    const writer = new Writable({
+      objectMode: true,
+      highWaterMark: 1, // Create a high watermark,
+      write(_chunk, _encoding, callback) {
+        delay(10).then(() => callback())
+      },
+    })
+
+    const abort = new AbortController()
+    setTimeout(() => {
+      abort.abort("Timed out before finishing...")
+    }, 4_000)
+
+    await finished(
+      readable
+        .pipe(
+          createNamedTransform<number, number>(
+            (l) => {
+              return l + 10
+            },
+            {
+              name: "Backpressure Transform",
+              highWaterMark: 2,
+              signal: abort.signal,
+            },
+          ),
+        )
+        .pipe(writer),
+    )
+    expect(abort.signal.aborted).toBeFalsy()
   })
 })

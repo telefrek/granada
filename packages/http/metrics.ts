@@ -9,6 +9,20 @@ import { getGranadaMeter } from "@telefrek/core/observability/metrics.js"
  * Metrics related to http request handling (server)
  */
 export const HttpServerMetrics = {
+  RequestStartedCounter: getGranadaMeter().createCounter(
+    "http_incoming_request_received",
+    {
+      description: "The number of requests that have been received",
+      valueType: ValueType.INT,
+    },
+  ),
+  RequestFinishedCounter: getGranadaMeter().createCounter(
+    "http_incoming_request_finished",
+    {
+      description: "The number of requests that have been finished",
+      valueType: ValueType.INT,
+    },
+  ),
   /** Record the incoming request duration in seconds */
   IncomingRequestDuration: getGranadaMeter().createHistogram(
     "http_incoming_request_duration",
@@ -75,24 +89,21 @@ export const ApiRouteMetrics = {
  * Metrics related to pipeline processing
  */
 export const HttpRequestPipelineMetrics = {
-  PipelineExecutions: getGranadaMeter().createCounter(
-    "pipeline_stage_counter",
+  /** Event that fires at each stage to track throughput */
+  PipelineStageCounter: getGranadaMeter().createCounter(
+    "http_pipeline_stage_invocations",
     {
-      description: "The number of times a given pipeline stage has executed",
+      description: "The total number of invocations per stage in the pipeline",
       valueType: ValueType.INT,
     },
   ),
-  PipelineStageDuration: getGranadaMeter().createHistogram(
-    "pipeline_stage_duration",
+  /** Event that fires when the pipeline has backpressure */
+  PipelineStageBackpressure: getGranadaMeter().createCounter(
+    "http_pipeline_backpressure_events",
     {
-      description: "The amount of time spent in each stage",
-      valueType: ValueType.DOUBLE,
-      unit: "seconds",
-      advice: {
-        explicitBucketBoundaries: [
-          0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5,
-        ],
-      },
+      description:
+        "The number of backpressure events fired at each stage in the pipeline",
+      valueType: ValueType.INT,
     },
   ),
 } as const
@@ -101,13 +112,6 @@ export const HttpRequestPipelineMetrics = {
  * Metrics related to request handling
  */
 export const HttpRequestMetrics = {
-  RequestCompleted: getGranadaMeter().createCounter(
-    "request_completed_counter",
-    {
-      description: "The number of requests that were completed",
-      valueType: ValueType.INT,
-    },
-  ),
   RequestTimeout: getGranadaMeter().createCounter("request_timeout_counter", {
     description: "The number of requests that were cancelled due to timeout",
     valueType: ValueType.INT,

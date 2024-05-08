@@ -1,3 +1,4 @@
+import { randomUUID as v4 } from "crypto"
 import {
   Stream,
   TransformCallback,
@@ -6,8 +7,13 @@ import {
   type TransformOptions,
   type Writable,
 } from "stream"
-import { DeferredPromise, MaybeAwaitable } from "./index.js"
-import type { Optional } from "./type/utils.js"
+import { MaybeAwaitable } from "./index.js"
+import { error } from "./logging.js"
+import {
+  NO_OP_CALLBACK,
+  type EmptyCallback,
+  type Optional,
+} from "./type/utils.js"
 
 /**
  * Custom type allowing mapping a type through a {@link MaybeAwaitable} to a new value
@@ -85,35 +91,56 @@ export function pipe<T extends Writable | Duplex>(
     case "propogate":
       return source
         .on("error", (err) => {
+          error(`Stream error: ${err}, propogating...`)
           destination.emit("error", err)
         })
         .pipe(destination) as T
     case "suppress":
-      return source.on("error", (_) => {}).pipe(destination) as T
+      return source
+        .on("error", (err) => {
+          error(`Stream error: ${err}, suppressing`)
+        })
+        .pipe(destination) as T
   }
 }
 
+export interface NamedTransformOptions extends TransformOptions {
+  name: string
+  onBackpressure?: EmptyCallback
+}
+
 /**
- * Creates a {@link GenericTransform} from a given {@link TransformFunc}
+ * Creates a {@link NamedTransformStream} from a given {@link TransformFunc}
  *
  * @param transform The {@link TransformFunc} to use
  * @param spanExtractor The optional function to extract the {@link Span} for tracing
- * @returns A {@link GenericTransform}
+ * @returns A {@link NamedTransformStream}
  */
-export const createTransform = <T, U>(
+export const createNamedTransform = <T, U>(
   transform: TransformFunc<T, U>,
-): GenericTransform<T, U> =>
-  new GenericTransform(transform, { objectMode: true, autoDestroy: true })
+  options?: NamedTransformOptions,
+): NamedTransformStream<T, U> => new NamedTransformStream(transform, options)
 
 /**
  * Create a generic {@link Stream.Transform} using a {@link TransformFunc}
  */
-export class GenericTransform<T, U> extends Stream.Transform {
+export class NamedTransformStream<T, U> extends Stream.Transform {
   private transform: TransformFunc<T, U>
+  private onBackpressure: EmptyCallback
 
-  constructor(transform: TransformFunc<T, U>, options: TransformOptions) {
-    super(options)
+  readonly name: string
+
+  constructor(transform: TransformFunc<T, U>, options?: NamedTransformOptions) {
+    // Set some defaults that can be over-written by the options if passed
+    super({
+      emitClose: true,
+      autoDestroy: true,
+      objectMode: true,
+      ...options,
+    })
     this.transform = transform
+    this.name = options?.name ?? v4()
+    this.onBackpressure = options?.onBackpressure ?? NO_OP_CALLBACK
   }
 
   /**
@@ -129,31 +156,15 @@ export class GenericTransform<T, U> extends Stream.Transform {
     callback: TransformCallback,
   ): Promise<void> {
     try {
-      // Invoke the transform
       const val = await this.transform(chunk)
       if (val !== undefined) {
-        // Ensure we push or wait for backpressure to clear
-        while (!this.push(val)) {
-          await this._waitForBackpressure()
+        if (!this.push(val)) {
+          this.onBackpressure()
         }
       }
       callback()
     } catch (err) {
-      callback(err as Error, chunk)
+      callback(err as Error)
     }
-  }
-
-  /**
-   * Wait for backpressure to clear
-   *
-   * @returns A {@link Promise} that will resolve when backpressure has cleared
-   */
-  private async _waitForBackpressure(): Promise<void> {
-    const deferred = new DeferredPromise()
-    this.once("drain", () => {
-      this.removeListener("error", deferred.reject)
-      deferred.resolve()
-    }).once("error", deferred.reject)
-    return deferred
   }
 }

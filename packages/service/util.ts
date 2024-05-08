@@ -55,11 +55,11 @@ export class ServicePipelineBuilder {
 
   withApi(api: unknown): ServicePipelineBuilder {
     if (isRoutableApi(api)) {
-      if (!this._config.requestTransforms) {
-        this._config.requestTransforms = []
+      if (!this._config.transforms) {
+        this._config.transforms = []
       }
 
-      this._config.requestTransforms.push(USE_ROUTER(api.router))
+      this._config.transforms.push(USE_ROUTER(api.router))
     }
 
     return this

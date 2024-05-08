@@ -6,13 +6,9 @@ import type { Span } from "@opentelemetry/api"
 import { Emitter, EmitterFor } from "@telefrek/core/events.js"
 import { DeferredPromise, type MaybeAwaitable } from "@telefrek/core/index.js"
 import { LifecycleEvents } from "@telefrek/core/lifecycle.js"
-import {
-  DefaultLogger,
-  LogLevel,
-  Logger,
-  type LogWriter,
-} from "@telefrek/core/logging.js"
+import { DefaultLogger, LogLevel, Logger } from "@telefrek/core/logging.js"
 import { type Duration } from "@telefrek/core/time.js"
+import type { EmptyCallback } from "@telefrek/core/type/utils"
 import { HttpErrorCode, type HttpError } from "./errors.js"
 import { HttpRequest, HttpResponse, type TLSConfig } from "./index.js"
 import {
@@ -24,9 +20,8 @@ import {
 /**
  * The default {@link Logger} for {@link HttpPipeline} operations
  */
-let HTTP_SERVER_LOGGER: Logger = new DefaultLogger({
+const HTTP_SERVER_LOGGER: Logger = new DefaultLogger({
   name: "HttpServer",
-  level: LogLevel.INFO,
 })
 
 /**
@@ -36,20 +31,6 @@ let HTTP_SERVER_LOGGER: Logger = new DefaultLogger({
  */
 export function setHttpServerLogLevel(level: LogLevel): void {
   HTTP_SERVER_LOGGER.setLevel(level)
-}
-
-/**
- * Update the pipeline log writer
- *
- * @param writer the {@link LogWriter} to use for {@link HttpPipeline}
- * {@link Logger} objects
- */
-export function setHttpServerLogWriter(writer: LogWriter): void {
-  HTTP_SERVER_LOGGER = new DefaultLogger({
-    name: "HttpServer",
-    level: HTTP_SERVER_LOGGER.level,
-    writer: writer,
-  })
 }
 
 /**
@@ -149,6 +130,7 @@ export abstract class HttpServerBase
     request: HttpRequest,
     controller?: AbortController,
     span?: Span,
+    onDequeue?: EmptyCallback,
   ): Promise<HttpResponse> {
     const operation = createHttpOperation({
       request,
@@ -190,6 +172,11 @@ export abstract class HttpServerBase
                 errorCode: HttpErrorCode.UNKNOWN,
               },
             )
+          }
+          break
+        case HttpOperationState.READING:
+          if (onDequeue) {
+            onDequeue()
           }
           break
       }

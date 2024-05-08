@@ -12,7 +12,10 @@ import { join, resolve } from "path"
 import { isInRequestPhase, type HttpOperationContext } from "../context.js"
 import { HttpMethod, HttpStatusCode } from "../index.js"
 import { createFileContentResponse } from "../media.js"
-import { type HttpTransform } from "../pipeline.js"
+import {
+  HttpPipelineStage,
+  type HttpPipelineStageTransform,
+} from "../pipeline.js"
 import { emptyHeaders } from "../utils.js"
 
 /**
@@ -34,7 +37,9 @@ export interface HostingOptions extends LoggerOptions {
  *
  * @returns A new {@link HttpPipelineTransform}
  */
-export function hostFolder(options: HostingOptions): HttpTransform {
+export function hostFolder(
+  options: HostingOptions,
+): HttpPipelineStageTransform {
   // Verify the flie exists
   if (!existsSync(options.baseDir)) {
     throw new Error(`${options.baseDir} does not exist`)
@@ -46,51 +51,57 @@ export function hostFolder(options: HostingOptions): HttpTransform {
   // Set the default file
   const defaultFile = options.defaultFile ?? "index.html"
 
-  return async (
-    context: HttpOperationContext,
-  ): Promise<HttpOperationContext> => {
-    if (isInRequestPhase(context)) {
-      const request = context.operation.request
-      if (
-        request.method === HttpMethod.GET ||
-        request.method === HttpMethod.HEAD
-      ) {
-        const target =
-          request.path.original === "/" || request.path.original === ""
-            ? defaultFile
-            : request.path.original
+  return {
+    transform: async (
+      context: HttpOperationContext,
+    ): Promise<HttpOperationContext> => {
+      if (isInRequestPhase(context)) {
+        if (
+          context.operation.request.method === HttpMethod.GET ||
+          context.operation.request.method === HttpMethod.HEAD
+        ) {
+          const target =
+            context.operation.request.path.original === "/" ||
+            context.operation.request.path.original === ""
+              ? defaultFile
+              : context.operation.request.path.original
 
-        const check = join(sanitizedBaseDir, target)
+          const check = join(sanitizedBaseDir, target)
 
-        // See if we can find the file
-        const filePath = resolve(check)
+          // See if we can find the file
+          const filePath = resolve(check)
 
-        if (filePath.startsWith(sanitizedBaseDir)) {
-          if (existsSync(filePath)) {
-            context.response =
-              request.method === HttpMethod.HEAD
-                ? {
-                    status: { code: HttpStatusCode.NO_CONTENT },
-                    headers: emptyHeaders(),
-                  }
-                : await createFileContentResponse(filePath)
-          }
-        } else if (filePath !== check) {
-          fatal(
-            `Attempt to traverse file system detected: ${request.path.original}`,
-          )
+          if (filePath.startsWith(sanitizedBaseDir)) {
+            if (existsSync(filePath)) {
+              // Set the handler
+              context.handler = async (request) => {
+                return request.method === HttpMethod.HEAD
+                  ? {
+                      status: { code: HttpStatusCode.NO_CONTENT },
+                      headers: emptyHeaders(),
+                    }
+                  : await createFileContentResponse(filePath)
+              }
+            }
+          } else if (filePath !== check) {
+            fatal(
+              `Attempt to traverse file system detected: ${context.operation.request.path.original}`,
+            )
 
-          // Someone is doing something shady, stop it here
-          context.response = {
-            status: {
-              code: HttpStatusCode.FORBIDDEN,
-            },
-            headers: emptyHeaders(),
+            // Someone is doing something shady, stop it here
+            context.response = {
+              status: {
+                code: HttpStatusCode.FORBIDDEN,
+              },
+              headers: emptyHeaders(),
+            }
           }
         }
       }
-    }
 
-    return context
+      return context
+    },
+    name: "WebHosting",
+    stage: HttpPipelineStage.ROUTING,
   }
 }

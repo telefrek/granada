@@ -6,27 +6,20 @@ import { Signal } from "@telefrek/core/concurrency.js"
 import { Emitter, EmitterFor } from "@telefrek/core/events.js"
 import { MaybeAwaitable } from "@telefrek/core/index.js"
 import { LifecycleEvents } from "@telefrek/core/lifecycle.js"
+import { DefaultLogger, LogLevel, type Logger } from "@telefrek/core/logging.js"
+import { Tracing, TracingContext } from "@telefrek/core/observability/tracing"
 import {
-  DefaultLogger,
-  LogLevel,
-  type LogWriter,
-  type Logger,
-} from "@telefrek/core/logging.js"
-import {
-  GenericTransform,
+  NamedTransformStream,
+  createNamedTransform,
   drain,
+  pipe,
   type StreamCallback,
   type TransformFunc,
 } from "@telefrek/core/streams.js"
 import { Timestamp } from "@telefrek/core/time.js"
+import type { Optional } from "@telefrek/core/type/utils.js"
 import { on } from "events"
-import {
-  Readable,
-  promises as StreamPromise,
-  Transform,
-  Writable,
-  type TransformOptions,
-} from "stream"
+import { Readable, promises as StreamPromise, Writable } from "stream"
 import {
   HTTP_OPERATION_CONTEXT_STORE,
   isTerminal,
@@ -38,15 +31,15 @@ import {
   type HttpRequest,
   type HttpResponse,
 } from "./index.js"
-import { type HttpOperation, type HttpOperationSource } from "./operations.js"
+import { HttpRequestPipelineMetrics } from "./metrics.js"
+import { HttpOperationState, type HttpOperationSource } from "./operations.js"
 import { notFound } from "./utils.js"
 
 /**
  * The default {@link Logger} for {@link HttpPipeline} operations
  */
-let PIPELINE_LOGGER: Logger = new DefaultLogger({
+const PIPELINE_LOGGER: Logger = new DefaultLogger({
   name: "http.pipeline",
-  level: LogLevel.WARN,
 })
 
 /**
@@ -56,20 +49,6 @@ let PIPELINE_LOGGER: Logger = new DefaultLogger({
  */
 export function setPipelineLogLevel(level: LogLevel): void {
   PIPELINE_LOGGER.setLevel(level)
-}
-
-/**
- * Update the pipeline log writer
- *
- * @param writer the {@link LogWriter} to use for {@link HttpPipeline}
- * {@link Logger} objects
- */
-export function setPipelineWriter<T extends LogWriter>(writer: T): void {
-  PIPELINE_LOGGER = new DefaultLogger({
-    name: PIPELINE_LOGGER.name,
-    level: PIPELINE_LOGGER.level,
-    writer: writer,
-  })
 }
 
 /**
@@ -188,15 +167,21 @@ export type HttpOperationHandler = (
 
 /**
  * Explicitly define the stages of a pipeline
+ *
+ * Audit (happens as received)
+ *
+ * Routing, LoadShedding, Authentication, RateLimiting, Authorization, Caching, ContentParsing, Middleware.before,
+ * Handler, Middleware.after, Compression
  */
 export enum HttpPipelineStage {
-  AUDITING = "auditing",
+  // AUDITING = "auditing", // TODO: Make this it's own consumption point for
+  // the operation
   AUTHENTICATION = "authentication",
   AUTHORIZATION = "authorization",
-  COMPLETED = "completed",
+  CACHING = "caching",
   CONTENT_PARSING = "contentParsing",
+  COMPRESSION = "compression",
   LOAD_SHEDDING = "loadShedding",
-  MIDDLEWARE = "middleware",
   RATE_LIMITING = "rateLimiting",
   ROUTING = "routing",
 }
@@ -204,18 +189,52 @@ export enum HttpPipelineStage {
 /**
  * A simple type representing a stream transform on a {@link HttpOperation}
  */
-export type HttpTransform = TransformFunc<
-  HttpOperationContext,
-  HttpOperationContext
->
+type HttpTransform = TransformFunc<HttpOperationContext, HttpOperationContext>
+
+/**
+ * Represents a transform bound to a specific stage
+ */
+export interface HttpPipelineStageTransform {
+  transform: HttpTransform
+  name: string
+  stage: HttpPipelineStage
+}
+
+/**
+ * Represents a middleware action in the pipeline
+ */
+export interface HttpPipelineMiddleware {
+  /** The name of the middleware */
+  name: string
+
+  /**
+   * Allows a hook point for modifying a request
+   *
+   * @param request The {@link HttpRequest} to modify
+   * @returns An optional {@link HttpResponse} if it should be provided
+   */
+  modifyRequest?: (
+    request: HttpRequest,
+  ) => MaybeAwaitable<Optional<HttpResponse>>
+
+  /**
+   * Allows a hook point after a response has been generated to allow augmenting
+   * before sending to the receiver
+   *
+   * @param request The original readonly {@link HttpRequest}
+   * @param response The current {@link HttpResponse} which can be modified
+   * before sending
+   */
+  modifyResponse?: (
+    request: Readonly<HttpRequest>,
+    response: HttpResponse,
+  ) => MaybeAwaitable<void>
+}
 
 export interface HttpPipelineConfiguration {
-  /** Transforms for the request handling portion */
-  requestTransforms?: HttpTransform[]
-  /** Transforms for the response handling portion */
-  responseTransforms?: HttpTransform[]
-  /** Logger to use (default to the core pipeline logger) */
-  logger?: Logger
+  /** The set of {@link HttpPipelineStageTransform} to apply in the pipeline */
+  transforms?: HttpPipelineStageTransform[]
+  middleware?: HttpPipelineMiddleware[]
   /** Flag to automatically cleanup the pipeline when all sources are removed */
   autoDestroy?: boolean
 }
@@ -237,16 +256,9 @@ interface PipelineDetails {
   options: HttpPipelineOptions
 }
 
-const DEFAULT_TRANSFORM_OPTS = <TransformOptions>{
-  objectMode: true,
-  allowHalfOpen: false,
-  autoDestroy: true,
-  emitClose: true,
-}
-
 type Middleware = {
-  start: GenericTransform<HttpOperationContext, HttpOperationContext>
-  end: GenericTransform<HttpOperationContext, HttpOperationContext>
+  start: NamedTransformStream<HttpOperationContext, HttpOperationContext>
+  end: NamedTransformStream<HttpOperationContext, HttpOperationContext>
 }
 
 class DefaultHttpPipeline
@@ -255,7 +267,6 @@ class DefaultHttpPipeline
 {
   private _state: HttpPipelineState
   private readonly _signal: Signal
-  private readonly _logger: Logger
   private readonly _configuration: HttpPipelineConfiguration
 
   private _sources: Map<HttpOperationSource, PipelineDetails> = new Map()
@@ -269,20 +280,21 @@ class DefaultHttpPipeline
 
     this._state = HttpPipelineState.PROCESSING
     this._signal = new Signal()
-    this._logger = configuration.logger ?? PIPELINE_LOGGER
     this._configuration = configuration
   }
 
   private _createHandlerTransform(defaultHandler: HttpHandler): HttpTransform {
-    const logger = this._logger
     return async (
       context: HttpOperationContext,
     ): Promise<HttpOperationContext> => {
       // Only process if we're not completed and there are no other responses already
       if (
-        context.stage !== HttpPipelineStage.COMPLETED &&
+        context.operation.state !== HttpOperationState.COMPLETED &&
         !(context.operation.response || context.response)
       ) {
+        HttpRequestPipelineMetrics.PipelineStageCounter.add(1, {
+          stage: "handler",
+        })
         try {
           // Either use the context handler or the default
           const handler = context.handler ?? defaultHandler
@@ -291,12 +303,25 @@ class DefaultHttpPipeline
           context.response = await HTTP_OPERATION_CONTEXT_STORE.run(
             context,
             async () => {
-              const response = await handler(
+              if (context.operation.span) {
+                return TracingContext.with(
+                  Tracing.setSpan(
+                    TracingContext.active(),
+                    context.operation.span,
+                  ),
+                  async () => {
+                    return await handler(
+                      context.operation.request,
+                      context.operation.signal,
+                    )
+                  },
+                )
+              }
+
+              return await handler(
                 context.operation.request,
                 context.operation.signal,
               )
-
-              return response
             },
           )
         } catch (err) {
@@ -309,7 +334,7 @@ class DefaultHttpPipeline
             context.operation.request.body &&
             !context.operation.request.body.contents.readableEnded
           ) {
-            logger.error(
+            PIPELINE_LOGGER.warn(
               `[${context.operation.request.method}] ${context.operation.request.path.original} didn't read, draining body`,
             )
             await drain(context.operation.request.body.contents)
@@ -321,49 +346,167 @@ class DefaultHttpPipeline
     }
   }
 
+  private _wrapTransform(transform: HttpPipelineStageTransform): HttpTransform {
+    return (operationContext) => {
+      if (!isTerminal(operationContext)) {
+        return HTTP_OPERATION_CONTEXT_STORE.run(operationContext, async () => {
+          HttpRequestPipelineMetrics.PipelineStageCounter.add(1, {
+            stage: transform.stage,
+            name: transform.name,
+          })
+
+          if (operationContext.operation.span) {
+            return TracingContext.with(
+              Tracing.setSpan(
+                TracingContext.active(),
+                operationContext.operation.span,
+              ),
+              async () => {
+                return await transform.transform(operationContext)
+              },
+            )
+          }
+
+          return await transform.transform(operationContext)
+        })
+      }
+
+      return operationContext
+    }
+  }
+
   private _buildMiddleware(handler: HttpHandler): Middleware {
-    const logger = this._logger
-    const start = new GenericTransform((context: HttpOperationContext) => {
-      logger.debug(
-        `dequeueing: ${context.operation.request.method} ${context.operation.request.path.original}`,
-      )
-      context.operation.dequeue()
-      return context
-    }, DEFAULT_TRANSFORM_OPTS)
+    const start = new NamedTransformStream(
+      (context: HttpOperationContext) => {
+        PIPELINE_LOGGER.debug(
+          `dequeueing: ${context.operation.request.method} ${context.operation.request.path.original}`,
+        )
+
+        context.operation.dequeue()
+        return context
+      },
+      {
+        name: "pipeline.dequeue",
+        onBackpressure: () => {
+          HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
+            stage: "dequeue",
+          })
+        },
+      },
+    )
 
     let end = start
 
-    // Check for any request transforms
-    if (this._configuration.requestTransforms) {
-      for (const transform of this._configuration.requestTransforms) {
-        end = end
-          .on("error", (err: unknown) => {
-            logger.error(`Error in pipeline during requestTransform: ${err}`)
-          })
-          .pipe(new GenericTransform(transform, DEFAULT_TRANSFORM_OPTS))
+    // Add all the stages in order
+    for (const stage of [
+      HttpPipelineStage.ROUTING,
+      HttpPipelineStage.LOAD_SHEDDING,
+      HttpPipelineStage.AUTHENTICATION,
+      HttpPipelineStage.RATE_LIMITING,
+      HttpPipelineStage.AUTHORIZATION,
+      HttpPipelineStage.CACHING,
+      HttpPipelineStage.CONTENT_PARSING,
+    ]) {
+      // Manipulate the transforms at this stage
+      for (const transform of this._configuration.transforms?.filter(
+        (t) => t.stage === stage,
+      ) ?? []) {
+        PIPELINE_LOGGER.info(
+          `Adding ${transform.name} [${transform.stage}] to pipeline`,
+        )
+        end = pipe(
+          end,
+          createNamedTransform(this._wrapTransform(transform), {
+            name: transform.name,
+            onBackpressure: () => {
+              HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
+                stage: transform.stage,
+                name: transform.name,
+              })
+            },
+          }),
+        )
+      }
+    }
+
+    for (const middleware of this._configuration.middleware ?? []) {
+      if (middleware.modifyRequest) {
+        end = pipe(
+          end,
+          createNamedTransform(
+            (ctx) => {
+              return HTTP_OPERATION_CONTEXT_STORE.run(ctx, async () => {
+                try {
+                  ctx.response = await middleware.modifyRequest!(
+                    ctx.operation.request,
+                  )
+                } catch (err) {
+                  ctx.operation.fail(translateHttpError(err))
+                }
+
+                return ctx
+              })
+            },
+            {
+              name: middleware.name,
+              onBackpressure: () => {
+                HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
+                  stage: "middleware.before",
+                  name: middleware.name,
+                })
+              },
+            },
+          ),
+        )
       }
     }
 
     // Add the handler stage
-    end = end
-      .on("error", (err: unknown) => {
-        logger.error(`Error in pipeline during before handler: ${err}`)
-      })
-      .pipe(
-        new GenericTransform(
-          this._createHandlerTransform(handler),
-          DEFAULT_TRANSFORM_OPTS,
-        ),
-      )
-
-    // Check for any response transforms
-    if (this._configuration.responseTransforms) {
-      for (const transform of this._configuration.responseTransforms) {
-        end = end
-          .on("error", (err: unknown) => {
-            logger.error(`Error in pipeline during responseTransform: ${err}`)
+    end = pipe(
+      end,
+      createNamedTransform(this._createHandlerTransform(handler), {
+        name: "handler",
+        onBackpressure: () => {
+          HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
+            stage: "handler",
+            name: "handler",
           })
-          .pipe(new GenericTransform(transform, DEFAULT_TRANSFORM_OPTS))
+        },
+      }),
+    )
+
+    for (const middleware of this._configuration.middleware ?? []) {
+      if (middleware.modifyResponse) {
+        end = pipe(
+          end,
+          createNamedTransform(
+            (ctx) => {
+              return HTTP_OPERATION_CONTEXT_STORE.run(ctx, async () => {
+                try {
+                  if (ctx.response) {
+                    await middleware.modifyResponse!(
+                      ctx.operation.request,
+                      ctx.response,
+                    )
+                  }
+                } catch (err) {
+                  ctx.operation.fail(translateHttpError(err))
+                }
+
+                return ctx
+              })
+            },
+            {
+              name: middleware.name,
+              onBackpressure: () => {
+                HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
+                  stage: "middleware.before",
+                  name: middleware.name,
+                })
+              },
+            },
+          ),
+        )
       }
     }
 
@@ -374,8 +517,6 @@ class DefaultHttpPipeline
     source: HttpOperationSource,
     options: HttpPipelineOptions,
   ): Readable {
-    const logger = this._logger
-
     const readable = Readable.from(on(source, "received"), {
       highWaterMark: options.highWaterMark,
       objectMode: true,
@@ -390,37 +531,23 @@ class DefaultHttpPipeline
 
     return readable
       .on("error", (err) => {
-        logger.error(`Error in pipeline ${err}`)
+        PIPELINE_LOGGER.error(`Error in pipeline ${err}`)
       })
       .pipe(
-        new Transform({
-          objectMode: true,
-          highWaterMark: options.highWaterMark,
-          write(
-            chunk: unknown,
-            encoding: BufferEncoding,
-            callback: StreamCallback,
-          ) {
-            // Stupid iterator pushes the tuple...
-            const operation: HttpOperation = Array.isArray(chunk)
-              ? (chunk[0] as HttpOperation)
-              : (chunk as HttpOperation)
-            this.push(
-              <HttpOperationContext>{
-                operation,
-                stage: HttpPipelineStage.AUDITING,
-              },
-              encoding,
-            )
-
-            callback()
+        createNamedTransform<unknown, HttpOperationContext>(
+          (chunk) => {
+            return {
+              operation: Array.isArray(chunk) ? chunk[0] : chunk,
+            }
           },
-        }),
+          {
+            name: "OperationContextBuilder",
+          },
+        ),
       )
   }
 
   private _buildConsumer(options: HttpPipelineOptions): Writable {
-    const logger = this._logger
     const check = this._checkState.bind(this)
 
     return new Writable({
@@ -429,9 +556,9 @@ class DefaultHttpPipeline
       highWaterMark: options?.highWaterMark,
       destroy: (err, callback) => {
         if (err) {
-          logger.error(`Error during pipeline causing destroy: ${err}`)
+          PIPELINE_LOGGER.error(`Error during pipeline causing destroy: ${err}`)
         }
-        logger.debug(`Closing pipeline`)
+        PIPELINE_LOGGER.info(`Closing pipeline`)
         callback()
       },
       write(
@@ -449,6 +576,8 @@ class DefaultHttpPipeline
             callback()
           })
       },
+    }).on("error", (err) => {
+      PIPELINE_LOGGER.error(`Error during pipeline write: ${err}`, err)
     })
   }
 
@@ -457,8 +586,6 @@ class DefaultHttpPipeline
     handler: HttpHandler,
     options: HttpPipelineOptions,
   ): PipelineDetails {
-    const logger = this._logger
-
     const details: PipelineDetails = {
       started: Timestamp.now(),
       source: this._buildReadable(source, options),
@@ -470,12 +597,12 @@ class DefaultHttpPipeline
     // Link the pipelines
     details.source
       .on("error", (err) => {
-        logger.error(`Error in pipeline source: ${err}`)
+        PIPELINE_LOGGER.error(`Error in pipeline source: ${err}`)
       })
       .pipe(details.middleware.start)
     details.middleware.end
       .on("error", (err) => {
-        logger.error(`Error in pipeline middleware: ${err}`)
+        PIPELINE_LOGGER.error(`Error in pipeline middleware: ${err}`)
       })
       .pipe(details.destination)
 
@@ -518,7 +645,7 @@ class DefaultHttpPipeline
   async remove(source: HttpOperationSource): Promise<boolean> {
     const details = this._sources.get(source)
     if (details) {
-      this._logger.debug(`Removing source: ${source.id}`)
+      PIPELINE_LOGGER.debug(`Removing source: ${source.id}`)
 
       const finished = StreamPromise.finished(details.destination, {
         error: true,

@@ -16,7 +16,7 @@ import type { HttpOperationSource } from "./operations.js"
 import { createPipeline, type HttpPipeline } from "./pipeline.js"
 import { hostFolder } from "./pipeline/hosting.js"
 import { USE_ROUTER } from "./pipeline/routing.js"
-import type { HttpServer } from "./server.js"
+import { type HttpServer } from "./server.js"
 import {
   DEFAULT_SERVER_PIPELINE_CONFIGURATION,
   NOT_FOUND_HANDLER,
@@ -47,13 +47,13 @@ describe("Pipelines should support clients and servers end to end", () => {
     })
 
     const port = 20000 + ~~(Math.random() * 10000)
-    const config = { ...DEFAULT_SERVER_PIPELINE_CONFIGURATION }
+    const config = { transforms: [], ...DEFAULT_SERVER_PIPELINE_CONFIGURATION }
 
     // Host before api to ensure no routing issues since we are storing at '/'
-    config.requestTransforms?.push(hostFolder({ baseDir: directory }))
+    config.transforms?.push(hostFolder({ baseDir: directory }))
 
     // Add routing
-    config.requestTransforms?.push(USE_ROUTER(createTestRouter()))
+    config.transforms?.push(USE_ROUTER(createTestRouter()))
 
     const certDir = join(
       import.meta.dirname ?? dirname(fileURLToPath(import.meta.url)),

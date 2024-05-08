@@ -6,14 +6,8 @@ import {
   type ConfigurationManager,
 } from "./configuration.js"
 import { DeferredPromise } from "./index.js"
-import { ConsoleLogWriter, DefaultLogger, LogLevel } from "./logging.js"
+import { info } from "./logging.js"
 import type { Optional } from "./type/utils.js"
-
-const logger = new DefaultLogger({
-  writer: new ConsoleLogWriter(),
-  name: "configTest",
-  level: LogLevel.INFO,
-})
 
 describe("configuration should work for basic file system integrations", () => {
   let directory: string = "/this/dir/should/not/exist"
@@ -55,8 +49,6 @@ describe("configuration should work for basic file system integrations", () => {
   it("Should fire events when files are added or removed", async () => {
     manager = new FileSystemConfigurationManager({
       configDirectory: directory,
-      logWriter: new ConsoleLogWriter(),
-      logLevel: LogLevel.INFO,
     })
 
     await verifyEmpty()
@@ -102,7 +94,7 @@ describe("configuration should work for basic file system integrations", () => {
     })
 
     rmSync(file, { force: true })
-    logger.info(`Deleted ${file}`)
+    info(`Deleted ${file}`)
 
     await deferred
 

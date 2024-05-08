@@ -146,7 +146,7 @@ export class DefaultMultiLevelPriorityQueue implements MultiLevelPriorityQueue {
   ): Promise<T> {
     const taskOptions: TaskRuntimeOptions = {
       priority: TaskPriority.MEDIUM,
-      timeout: Date.now() + 15_000, // TODO: make this configurable
+      timeout: Date.now() + 500, // TODO: make this configurable
     }
 
     let f: Func<Args, MaybeAwaitable<T>> = options as Func<
@@ -225,8 +225,9 @@ class MultiLevelWorkerThread implements MultiLevelWorker {
   }
 
   async run(): Promise<void> {
+    let task: Optional<MultiLevelQueueTask_T>
     while (!this._abort.aborted) {
-      const task = this._next()
+      task = this._next()
       if (task) {
         try {
           if (task.args) {
@@ -239,6 +240,19 @@ class MultiLevelWorkerThread implements MultiLevelWorker {
         }
       } else {
         await this._signal.wait(Duration.ofMilli(500))
+      }
+    }
+
+    // Process remaining tasks then we are done
+    while ((task = this._next())) {
+      try {
+        if (task.args) {
+          task.promise.resolve(await task.work(...task.args))
+        } else {
+          task.promise.resolve(await task.work())
+        }
+      } catch (err) {
+        task.promise.reject(err)
       }
     }
   }
