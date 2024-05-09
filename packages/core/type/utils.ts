@@ -2,6 +2,8 @@
  * This package contains some useful type manipulations used throughout the framework
  */
 
+import type { MaybeAwaitable } from "../index.js"
+
 /**
  * All of the literal required keys from a type
  */
@@ -85,6 +87,9 @@ export type AliasedType<
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyArgs = any[]
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type MaybeAwaitableAny = MaybeAwaitable<any>
 
 /**
  * Type the represents a typed function that takes specific parameters during invocation

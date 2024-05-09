@@ -40,6 +40,20 @@ export function noContents(): HttpResponse {
 }
 
 /**
+ * Creates a new forbidden {@link HttpResponse}
+ *
+ * @returns A new {@link HttpResponse}
+ */
+export function forbidden(): HttpResponse {
+  return {
+    status: {
+      code: HttpStatusCode.FORBIDDEN,
+    },
+    headers: emptyHeaders(),
+  }
+}
+
+/**
  * Creates a new internal server error {@link HttpResponse}
  *
  * @returns A new {@link HttpResponse}

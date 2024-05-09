@@ -3,6 +3,7 @@
  */
 
 import { Signal } from "../concurrency.js"
+import { track } from "../context.js"
 import { TimeoutError } from "../errors.js"
 import {
   DeferredPromise,
@@ -10,7 +11,7 @@ import {
   type FrameworkPriority,
 } from "../index.js"
 import { Duration } from "../time.js"
-import type { Func, Optional } from "../type/utils.js"
+import type { AnyArgs, Func, Optional } from "../type/utils.js"
 
 /**
  * The priority for a given task
@@ -51,14 +52,11 @@ export type MultiLevelTaskOptions = {
 }
 
 export interface MultiLevelPriorityQueue {
-  queue<T, Args extends unknown[]>(
-    work: Func<Args, MaybeAwaitable<T>>,
-    ...args: Args
-  ): Promise<T>
-  queue<T, Args extends unknown[]>(
+  queue<T>(work: Func<AnyArgs, MaybeAwaitable<T>>, ...args: AnyArgs): Promise<T>
+  queue<T>(
     options: MultiLevelTaskOptions,
-    work: Func<Args, MaybeAwaitable<T>>,
-    ...args: Args
+    work: Func<AnyArgs, MaybeAwaitable<T>>,
+    ...args: AnyArgs
   ): Promise<T>
 
   workers: number
@@ -130,14 +128,11 @@ export class DefaultMultiLevelPriorityQueue implements MultiLevelPriorityQueue {
     return
   }
 
-  queue<T, Args extends unknown[]>(
-    work: Func<Args, MaybeAwaitable<T>>,
-    ...args: Args
-  ): Promise<T>
-  queue<T, Args extends unknown[]>(
+  queue<T>(work: Func<AnyArgs, MaybeAwaitable<T>>, ...args: AnyArgs): Promise<T>
+  queue<T>(
     options: MultiLevelTaskOptions,
-    work: Func<Args, MaybeAwaitable<T>>,
-    ...args: Args
+    work: Func<AnyArgs, MaybeAwaitable<T>>,
+    ...args: AnyArgs
   ): Promise<T>
   queue<T, Args extends unknown[]>(
     options: Func<Args, MaybeAwaitable<T>> | MultiLevelTaskOptions,
@@ -153,11 +148,11 @@ export class DefaultMultiLevelPriorityQueue implements MultiLevelPriorityQueue {
       Args,
       MaybeAwaitable<T>
     >
-    let a: Optional<Args>
+    let a: AnyArgs = []
 
     if (typeof options === "object") {
       f = work! as Func<Args, MaybeAwaitable<T>>
-      a = args.length > 0 ? args : undefined
+      a = args
       const o = options as MultiLevelTaskOptions
       taskOptions.priority = o.priority ?? taskOptions.priority
       taskOptions.timeout = o.timeoutMilliseconds
@@ -168,15 +163,15 @@ export class DefaultMultiLevelPriorityQueue implements MultiLevelPriorityQueue {
         : taskOptions.escalate
     } else {
       if (args.length > 0) {
-        a = [work].concat(args) as Args
+        a = [work].concat(args) as AnyArgs
       } else if (work) {
-        a = [work] as Args
+        a = [work] as AnyArgs
       }
     }
 
     // Create and setup the task
-    const task: MutiLevelQueueTask<T, Args> = {
-      work: f,
+    const task: MutiLevelQueueTask<T> = {
+      work: track(f), // Ensure we add any known tracking
       args: a,
       promise: new DeferredPromise(),
       options: taskOptions,
@@ -197,15 +192,15 @@ type TaskRuntimeOptions = {
   escalate?: number
 }
 
-type MutiLevelQueueTask<T, Args extends unknown[]> = {
-  work: Func<Args, MaybeAwaitable<T>>
-  args?: Args
+type MutiLevelQueueTask<T> = {
+  work: Func<AnyArgs, MaybeAwaitable<T>>
+  args: AnyArgs
   options: TaskRuntimeOptions
   promise: DeferredPromise<T>
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type MultiLevelQueueTask_T = MutiLevelQueueTask<any, any[]>
+type MultiLevelQueueTask_T = MutiLevelQueueTask<any>
 
 type MultiLevelQueue = Record<TaskPriority, MultiLevelQueueTask_T[]>
 
@@ -230,11 +225,7 @@ class MultiLevelWorkerThread implements MultiLevelWorker {
       task = this._next()
       if (task) {
         try {
-          if (task.args) {
-            task.promise.resolve(await task.work(...task.args))
-          } else {
-            task.promise.resolve(await task.work())
-          }
+          task.promise.resolve(await task.work(...task.args))
         } catch (err) {
           task.promise.reject(err)
         }
@@ -246,11 +237,7 @@ class MultiLevelWorkerThread implements MultiLevelWorker {
     // Process remaining tasks then we are done
     while ((task = this._next())) {
       try {
-        if (task.args) {
-          task.promise.resolve(await task.work(...task.args))
-        } else {
-          task.promise.resolve(await task.work())
-        }
+        task.promise.resolve(await task.work(...task.args))
       } catch (err) {
         task.promise.reject(err)
       }

@@ -80,6 +80,30 @@ describe("verify router", () => {
     expect(router.lookup(request("/bar"))).not.toBeUndefined()
   })
 
+  test("A router in the middle should be consulted for matches before exploring more", () => {
+    const router1 = createRouter()
+    const router2 = createRouter()
+    const handler: HttpHandler = (_) => Promise.reject("invalid")
+
+    router2.addHandler("/some/path", handler, HttpMethod.GET)
+    router1.addRouter("/", router2)
+    router1.addHandler("/some/other/path", handler, HttpMethod.GET)
+    router1.addHandler("/some/path", handler, HttpMethod.DELETE)
+
+    expect(
+      router1.lookup(request("/some/path", HttpMethod.DELETE)),
+    ).not.toBeUndefined()
+    expect(
+      router1.lookup(request("/some/path", HttpMethod.GET)),
+    ).not.toBeUndefined()
+    expect(
+      router1.lookup(request("/some/other/path", HttpMethod.GET)),
+    ).not.toBeUndefined()
+    expect(
+      router1.lookup(request("/some/path", HttpMethod.PUT)),
+    ).toBeUndefined()
+  })
+
   test("A router should work regardless of order of insertion or location in the tree", () => {
     let router = createRouter()
     const handler: HttpHandler = (_) => Promise.reject("invalid")

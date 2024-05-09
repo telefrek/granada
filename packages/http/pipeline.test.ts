@@ -50,10 +50,10 @@ describe("Pipelines should support clients and servers end to end", () => {
     const config = { transforms: [], ...DEFAULT_SERVER_PIPELINE_CONFIGURATION }
 
     // Host before api to ensure no routing issues since we are storing at '/'
-    config.transforms?.push(hostFolder({ baseDir: directory }))
+    config.transforms?.push(hostFolder({ baseDir: directory, urlPath: "/" }))
 
     // Add routing
-    config.transforms?.push(USE_ROUTER(createTestRouter()))
+    config.transforms?.push(USE_ROUTER(createTestRouter(), "/api"))
 
     const certDir = join(
       import.meta.dirname ?? dirname(fileURLToPath(import.meta.url)),
@@ -137,12 +137,12 @@ describe("Pipelines should support clients and servers end to end", () => {
   })
 
   it("Should support routing requests", async () => {
-    let response = await client.submit(createRequest({ path: "/route1" }))
+    let response = await client.submit(createRequest({ path: "/api/route1" }))
     expect(response.status.code).toBe(HttpStatusCode.NO_CONTENT)
     expect(response.body).toBeUndefined()
 
     response = await client.submit(
-      createRequest({ path: "/route2/123", method: HttpMethod.GET }),
+      createRequest({ path: "/api/route2/123", method: HttpMethod.GET }),
     )
     expect(response.status.code).toBe(HttpStatusCode.OK)
     expect(response.body).not.toBeUndefined()
@@ -151,7 +151,7 @@ describe("Pipelines should support clients and servers end to end", () => {
     expect(body).toStrictEqual({ itemId: 123 })
 
     response = await client.submit(
-      createRequest({ path: "/route2/foo", method: HttpMethod.GET }),
+      createRequest({ path: "/api/route2/foo", method: HttpMethod.GET }),
     )
     expect(response.status.code).toBe(HttpStatusCode.OK)
     expect(response.body).not.toBeUndefined()
@@ -161,7 +161,7 @@ describe("Pipelines should support clients and servers end to end", () => {
 
     response = await client.submit(
       createRequest({
-        path: "/route2/1",
+        path: "/api/route2/1",
         method: HttpMethod.PUT,
         body: jsonBody({ itemId: 1, updated: true }),
       }),
@@ -174,7 +174,7 @@ describe("Pipelines should support clients and servers end to end", () => {
 
     response = await client.submit(
       createRequest({
-        path: "/route3",
+        path: "/api/route3",
         body: jsonBody({ some: "body" }),
       }),
     )

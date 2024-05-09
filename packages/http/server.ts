@@ -21,7 +21,7 @@ import {
  * The default {@link Logger} for {@link HttpPipeline} operations
  */
 const HTTP_SERVER_LOGGER: Logger = new DefaultLogger({
-  name: "HttpServer",
+  name: "http.server",
 })
 
 /**

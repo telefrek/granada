@@ -2,6 +2,12 @@
  * Package containing all of the routing information for associating a given path/method combination with a handler
  */
 
+import {
+  Tracing,
+  TracingContext,
+  getTracer,
+} from "@telefrek/core/observability/tracing.js"
+import { Timer } from "@telefrek/core/time.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
 import {
   getOperationContextKey,
@@ -9,6 +15,7 @@ import {
   type HttpOperationContext,
 } from "./context.js"
 import { HttpHandler, HttpMethod, SegmentValue } from "./index.js"
+import { ApiRouteMetrics } from "./metrics.js"
 
 /**
  * Valid {@link HttpMethod} values as an array
@@ -34,6 +41,43 @@ const ROUTING_PARAMETERS: unique symbol = Symbol()
  */
 export function getRoutingParameters(): Optional<RoutingParameters> {
   return getOperationContextKey(ROUTING_PARAMETERS)
+}
+
+/**
+ * Trace the {@link Handler} given the {@link RouteInfo}
+ *
+ * @param info The route info to trace
+ * @returns The tracer enabled {@link HttpHandler}
+ */
+export function traceRoute(info: RouteInfo): HttpHandler {
+  return async (request, abort) => {
+    const span = getTracer().startSpan(info.template)
+    const timer = Timer.startNew()
+
+    try {
+      const response = await TracingContext.with(
+        Tracing.setSpan(TracingContext.active(), span),
+        async () => {
+          return await info.handler(request, abort)
+        },
+      )
+
+      // Log the status if one was provided
+      ApiRouteMetrics.RouteResponseStatus.add(1, {
+        status: response.status.code.toString(),
+        template: info.template,
+        method: request.method,
+      })
+
+      return response
+    } finally {
+      ApiRouteMetrics.RouteRequestDuration.record(timer.stop().seconds(), {
+        template: info.template,
+        method: request.method,
+      })
+      span.end()
+    }
+  }
 }
 
 /**
@@ -169,6 +213,17 @@ class RouterImpl implements Router {
 
     // Still more to search
     while (remainder.length > 0 && remainder !== "/") {
+      // Scan the routers along the way to see if they have the match
+      if (isRouterNode(current)) {
+        const check = current.router.lookup({
+          path: remainder,
+          method: request.method,
+        })
+        if (check) {
+          return check
+        }
+      }
+
       switch (true) {
         case info === RouteSegmentInfo.Wildcard:
           // Advance to the next slash

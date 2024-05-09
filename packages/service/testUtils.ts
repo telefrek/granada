@@ -2,7 +2,7 @@
  * Service definition and tooling for tests
  */
 
-import { getDebugInfo } from "@telefrek/core/index.js"
+import { getDebugInfo } from "@telefrek/core"
 import { DefaultLogger, LogLevel, type Logger } from "@telefrek/core/logging.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
 import { HttpClientBuilder, type HttpClient } from "@telefrek/http/client.js"
@@ -131,13 +131,13 @@ export class TestService {
     template: "/items/:itemId",
     method: HttpMethod.GET,
     mapping: (parameters: Optional<RoutingParameters>, _?: unknown) => {
-      TEST_LOGGER.info(`mapping parameters: ${getDebugInfo(parameters)}`)
       return [parameters?.get("itemId")]
     },
   })
   getItem(itemId: number): Optional<TestItem> {
-    TEST_LOGGER.info(`Received itemId: ${itemId}`)
-    return this.items.get(itemId)
+    const item = this.items.get(itemId)
+    TEST_LOGGER.info(`Got item: ${getDebugInfo(item)} for ${itemId}`)
+    return item
   }
 
   @route({

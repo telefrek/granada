@@ -387,5 +387,6 @@ export function fatal(message: string, context?: unknown) {
 
 let GLOBAL_LOGGER: Logger = new DefaultLogger({
   name: "global",
-  writer: NoopLogWriter,
+  writer: DEFAULT_WRITER,
+  level: DEFAULT_LOG_LEVEL,
 })

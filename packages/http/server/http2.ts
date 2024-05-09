@@ -51,7 +51,7 @@ export class NodeHttp2Server extends HttpServerBase {
     this._server = createSecureServer(options)
 
     this._server.setTimeout(30_000, () => {
-      this._logger.warn(`Server timeout default reached`)
+      this._logger.warn(`Socket closed due to inactivity`)
     })
 
     this._server.on("session", (session) => {

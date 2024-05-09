@@ -1,8 +1,8 @@
-import { getDebugInfo, type MaybeAwaitable } from "@telefrek/core/index.js"
+import { type MaybeAwaitable } from "@telefrek/core/index.js"
 import { consumeJsonStream } from "@telefrek/core/json.js"
 import { info } from "@telefrek/core/logging.js"
 import { consumeStream } from "@telefrek/core/streams.js"
-import type { Optional } from "@telefrek/core/type/utils.js"
+import type { AnyArgs, Optional } from "@telefrek/core/type/utils.js"
 import {
   HttpStatusCode,
   type HttpHandler,
@@ -59,7 +59,7 @@ export class ServicePipelineBuilder {
         this._config.transforms = []
       }
 
-      this._config.transforms.push(USE_ROUTER(api.router))
+      this._config.transforms.push(USE_ROUTER(api.router, api.pathPrefix))
     }
 
     return this
@@ -81,21 +81,13 @@ export class ServicePipelineBuilder {
  * @param pathPrefix The optional prefix to add to path endpoints
  * @returns The {@link Router} for the {@link Service}
  */
-export const serviceToRouter = (
-  service: Service,
-  pathPrefix?: string,
-): Router => {
+export const serviceToRouter = (service: Service): Router => {
   const router = createRouter()
 
   // Add all the endpoints
   for (const endpoint of service.endpoints) {
-    info(`${service} adding ${pathPrefix ?? ""}${endpoint.pathTemplate}...`)
-    router.addHandler(
-      `${pathPrefix ?? ""}${endpoint.pathTemplate}`,
-      endpoint.handler,
-      endpoint.method,
-    )
-    info(getDebugInfo(router))
+    info(`${service} adding ${endpoint.pathTemplate}...`)
+    router.addHandler(endpoint.pathTemplate, endpoint.handler, endpoint.method)
   }
 
   // Return the router
@@ -107,8 +99,9 @@ export function buildHandler<T>(
   serviceRoute: ServiceRouteInfo<T>,
 ): HttpHandler {
   const format = serviceRoute.options.format ?? SerializationFormat.JSON
+  info("Building handler...")
   return async (request: HttpRequest): Promise<HttpResponse> => {
-    let args: Optional<unknown[]>
+    let args: AnyArgs = []
     let body: Optional<unknown>
 
     if (request.body) {
@@ -131,9 +124,7 @@ export function buildHandler<T>(
     let response: Optional<ServiceResponse<T>>
 
     try {
-      response = await (args
-        ? serviceRoute.method.call(service, ...args!)
-        : serviceRoute.method.call(service))
+      response = await serviceRoute.method.call(service, ...args)
     } catch (err) {
       response = serviceRoute.options.errorHandler
         ? serviceRoute.options.errorHandler(err)

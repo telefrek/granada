@@ -10,6 +10,7 @@ import { DefaultLogger, LogLevel, type Logger } from "@telefrek/core/logging.js"
 import { Tracing, TracingContext } from "@telefrek/core/observability/tracing"
 import {
   NamedTransformStream,
+  StreamConcurrencyMode,
   createNamedTransform,
   drain,
   pipe,
@@ -33,6 +34,12 @@ import {
 } from "./index.js"
 import { HttpRequestPipelineMetrics } from "./metrics.js"
 import { HttpOperationState, type HttpOperationSource } from "./operations.js"
+import {
+  createRouter,
+  setRoutingParameters,
+  traceRoute,
+  type Router,
+} from "./routing.js"
 import { notFound } from "./utils.js"
 
 /**
@@ -179,8 +186,6 @@ export enum HttpPipelineStage {
   AUTHENTICATION = "authentication",
   AUTHORIZATION = "authorization",
   CACHING = "caching",
-  CONTENT_PARSING = "contentParsing",
-  COMPRESSION = "compression",
   LOAD_SHEDDING = "loadShedding",
   RATE_LIMITING = "rateLimiting",
   ROUTING = "routing",
@@ -194,11 +199,21 @@ type HttpTransform = TransformFunc<HttpOperationContext, HttpOperationContext>
 /**
  * Represents a transform bound to a specific stage
  */
-export interface HttpPipelineStageTransform {
-  transform: HttpTransform
+export type HttpPipelineStageTransform<Stage extends HttpPipelineStage> = {
   name: string
-  stage: HttpPipelineStage
+  stage: Stage
 }
+
+/**
+ * Represents a pipeline router
+ */
+export type HttpPipelineRouter =
+  HttpPipelineStageTransform<HttpPipelineStage.ROUTING> & {
+    router: Router
+    rootPath: string
+  }
+
+export type HttpPipelineTransform = HttpPipelineRouter
 
 /**
  * Represents a middleware action in the pipeline
@@ -232,8 +247,9 @@ export interface HttpPipelineMiddleware {
 }
 
 export interface HttpPipelineConfiguration {
-  /** The set of {@link HttpPipelineStageTransform} to apply in the pipeline */
-  transforms?: HttpPipelineStageTransform[]
+  /** The set of {@link HttpPipelineTransform} to apply in the pipeline */
+  transforms?: HttpPipelineTransform[]
+  /** The middleware to execute as part of the pipeline */
   middleware?: HttpPipelineMiddleware[]
   /** Flag to automatically cleanup the pipeline when all sources are removed */
   autoDestroy?: boolean
@@ -245,18 +261,67 @@ export function createPipeline(
   return new DefaultHttpPipeline(configuration)
 }
 
+function createTransform<Stage extends HttpPipelineStage>(
+  stage: Stage,
+  sources: HttpPipelineTransform[],
+): NamedTransformStream<HttpOperationContext, HttpOperationContext> {
+  switch (stage) {
+    case HttpPipelineStage.ROUTING: {
+      const router = createRouter()
+      for (const source of sources) {
+        const pipelineRouter = source as HttpPipelineRouter
+        router.addRouter(pipelineRouter.rootPath, pipelineRouter.router)
+      }
+
+      return createNamedTransform<HttpOperationContext, HttpOperationContext>(
+        (context) => {
+          if (!isTerminal(context)) {
+            HttpRequestPipelineMetrics.PipelineStageCounter.add(1, {
+              stage: stage,
+            })
+            const routeInfo = router.lookup({
+              path: context.operation.request.path.original,
+              method: context.operation.request.method,
+            })
+
+            if (routeInfo) {
+              context.handler = traceRoute(routeInfo)
+              if (routeInfo.parameters) {
+                setRoutingParameters(routeInfo.parameters, context)
+              }
+            }
+          }
+
+          return context
+        },
+        {
+          name: "http.pipeline.router",
+          onBackpressure: () => {
+            HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
+              stage: stage,
+              name: "http.pipeline.router",
+            })
+          },
+        },
+      )
+    }
+  }
+
+  throw new Error(`Stage ${stage} is not yet supported`)
+}
+
 /**
  * Contains details about the pipelines that are running
  */
 interface PipelineDetails {
   destination: Writable
-  middleware: Middleware
+  transformations: Transformations
   source: Readable
   started: Timestamp
   options: HttpPipelineOptions
 }
 
-type Middleware = {
+type Transformations = {
   start: NamedTransformStream<HttpOperationContext, HttpOperationContext>
   end: NamedTransformStream<HttpOperationContext, HttpOperationContext>
 }
@@ -346,36 +411,36 @@ class DefaultHttpPipeline
     }
   }
 
-  private _wrapTransform(transform: HttpPipelineStageTransform): HttpTransform {
-    return (operationContext) => {
-      if (!isTerminal(operationContext)) {
-        return HTTP_OPERATION_CONTEXT_STORE.run(operationContext, async () => {
-          HttpRequestPipelineMetrics.PipelineStageCounter.add(1, {
-            stage: transform.stage,
-            name: transform.name,
-          })
+  // private _wrapTransform(transform: HttpPipelineStageTransform): HttpTransform {
+  //   return (operationContext) => {
+  //     if (!isTerminal(operationContext)) {
+  //       return HTTP_OPERATION_CONTEXT_STORE.run(operationContext, async () => {
+  //         HttpRequestPipelineMetrics.PipelineStageCounter.add(1, {
+  //           stage: transform.stage,
+  //           name: transform.name,
+  //         })
 
-          if (operationContext.operation.span) {
-            return TracingContext.with(
-              Tracing.setSpan(
-                TracingContext.active(),
-                operationContext.operation.span,
-              ),
-              async () => {
-                return await transform.transform(operationContext)
-              },
-            )
-          }
+  //         if (operationContext.operation.span) {
+  //           return TracingContext.with(
+  //             Tracing.setSpan(
+  //               TracingContext.active(),
+  //               operationContext.operation.span,
+  //             ),
+  //             async () => {
+  //               return await transform.transform(operationContext)
+  //             },
+  //           )
+  //         }
 
-          return await transform.transform(operationContext)
-        })
-      }
+  //         return await transform.transform(operationContext)
+  //       })
+  //     }
 
-      return operationContext
-    }
-  }
+  //     return operationContext
+  //   }
+  // }
 
-  private _buildMiddleware(handler: HttpHandler): Middleware {
+  private _buildMiddleware(handler: HttpHandler): Transformations {
     const start = new NamedTransformStream(
       (context: HttpOperationContext) => {
         PIPELINE_LOGGER.debug(
@@ -405,27 +470,12 @@ class DefaultHttpPipeline
       HttpPipelineStage.RATE_LIMITING,
       HttpPipelineStage.AUTHORIZATION,
       HttpPipelineStage.CACHING,
-      HttpPipelineStage.CONTENT_PARSING,
     ]) {
-      // Manipulate the transforms at this stage
-      for (const transform of this._configuration.transforms?.filter(
+      const transforms = this._configuration.transforms?.filter(
         (t) => t.stage === stage,
-      ) ?? []) {
-        PIPELINE_LOGGER.info(
-          `Adding ${transform.name} [${transform.stage}] to pipeline`,
-        )
-        end = pipe(
-          end,
-          createNamedTransform(this._wrapTransform(transform), {
-            name: transform.name,
-            onBackpressure: () => {
-              HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
-                stage: transform.stage,
-                name: transform.name,
-              })
-            },
-          }),
-        )
+      )
+      if (transforms && transforms.length > 0) {
+        end = pipe(end, createTransform(stage, transforms))
       }
     }
 
@@ -466,6 +516,7 @@ class DefaultHttpPipeline
       end,
       createNamedTransform(this._createHandlerTransform(handler), {
         name: "handler",
+        mode: StreamConcurrencyMode.Parallel,
         onBackpressure: () => {
           HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
             stage: "handler",
@@ -589,7 +640,7 @@ class DefaultHttpPipeline
     const details: PipelineDetails = {
       started: Timestamp.now(),
       source: this._buildReadable(source, options),
-      middleware: this._buildMiddleware(handler),
+      transformations: this._buildMiddleware(handler),
       destination: this._buildConsumer(options),
       options,
     }
@@ -599,8 +650,8 @@ class DefaultHttpPipeline
       .on("error", (err) => {
         PIPELINE_LOGGER.error(`Error in pipeline source: ${err}`)
       })
-      .pipe(details.middleware.start)
-    details.middleware.end
+      .pipe(details.transformations.start)
+    details.transformations.end
       .on("error", (err) => {
         PIPELINE_LOGGER.error(`Error in pipeline middleware: ${err}`)
       })

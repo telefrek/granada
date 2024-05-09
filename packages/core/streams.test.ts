@@ -1,6 +1,6 @@
 import { Readable, Writable } from "stream"
 import { finished } from "stream/promises"
-import { createNamedTransform } from "./streams.js"
+import { StreamConcurrencyMode, createNamedTransform } from "./streams.js"
 import { delay } from "./time.js"
 
 describe("Named Transform streams should work normally", () => {
@@ -20,11 +20,12 @@ describe("Named Transform streams should work normally", () => {
     expect(typeof results[0]).toEqual("string")
   })
 
-  it("Should be able to filter values", async () => {
+  it("Should be able to filter values in parallel", async () => {
     const results = await Readable.from(generator())
       .pipe(
-        createNamedTransform<number, number>((d) =>
-          d % 2 == 0 ? d : undefined,
+        createNamedTransform<number, number>(
+          (d) => (d % 2 == 0 ? d : undefined),
+          { name: "ParallelTest", mode: StreamConcurrencyMode.Parallel },
         ),
       )
       .toArray()

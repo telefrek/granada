@@ -7,16 +7,14 @@
  */
 
 import { fatal, type LoggerOptions } from "@telefrek/core/logging.js"
+import type { Optional } from "@telefrek/core/type/utils"
 import { existsSync } from "fs"
 import { join, resolve } from "path"
-import { isInRequestPhase, type HttpOperationContext } from "../context.js"
-import { HttpMethod, HttpStatusCode } from "../index.js"
+import { HttpMethod, type HttpHandler } from "../index.js"
 import { createFileContentResponse } from "../media.js"
-import {
-  HttpPipelineStage,
-  type HttpPipelineStageTransform,
-} from "../pipeline.js"
-import { emptyHeaders } from "../utils.js"
+import { HttpPipelineStage, type HttpPipelineRouter } from "../pipeline.js"
+import type { LookupRequest, RouteInfo, Router } from "../routing.js"
+import { forbidden, noContents } from "../utils.js"
 
 /**
  * Options for configuring hosting
@@ -30,6 +28,66 @@ export interface HostingOptions extends LoggerOptions {
   urlPath?: string
 }
 
+class HostingRouter implements Router {
+  private _baseDir: string
+  private _defaultFile: string
+
+  constructor(baseDir: string, defaultFile: string) {
+    this._baseDir = baseDir
+    this._defaultFile = defaultFile
+  }
+
+  lookup(request: LookupRequest): Optional<RouteInfo> {
+    // Only GET and HEAD are supported
+    if (
+      request.method === HttpMethod.GET ||
+      request.method === HttpMethod.HEAD
+    ) {
+      const target =
+        request.path === "/" || request.path === ""
+          ? this._defaultFile
+          : request.path
+
+      const check = join(this._baseDir, target)
+      const filePath = resolve(check)
+
+      if (filePath.startsWith(this._baseDir)) {
+        if (existsSync(filePath)) {
+          return {
+            handler: async (httpRequest) => {
+              return httpRequest.method === HttpMethod.HEAD
+                ? noContents()
+                : await createFileContentResponse(filePath)
+            },
+            template: request.path,
+          }
+        } else if (filePath !== check) {
+          fatal(`Attempt to traverse file system detected: ${request.path}`)
+
+          return {
+            handler: (_) => forbidden(),
+            template: request.path,
+          }
+        }
+      }
+    }
+
+    return
+  }
+
+  addHandler(
+    _template: string,
+    _handler: HttpHandler,
+    _method?: HttpMethod | undefined,
+  ): void {
+    throw new Error("Method not supported.")
+  }
+
+  addRouter(_template: string, _router: Router): void {
+    throw new Error("Method not supported.")
+  }
+}
+
 /**
  * Create a {@link HttpPipelineTransform} for hosting a folder
  *
@@ -37,9 +95,7 @@ export interface HostingOptions extends LoggerOptions {
  *
  * @returns A new {@link HttpPipelineTransform}
  */
-export function hostFolder(
-  options: HostingOptions,
-): HttpPipelineStageTransform {
+export function hostFolder(options: HostingOptions): HttpPipelineRouter {
   // Verify the flie exists
   if (!existsSync(options.baseDir)) {
     throw new Error(`${options.baseDir} does not exist`)
@@ -52,56 +108,9 @@ export function hostFolder(
   const defaultFile = options.defaultFile ?? "index.html"
 
   return {
-    transform: async (
-      context: HttpOperationContext,
-    ): Promise<HttpOperationContext> => {
-      if (isInRequestPhase(context)) {
-        if (
-          context.operation.request.method === HttpMethod.GET ||
-          context.operation.request.method === HttpMethod.HEAD
-        ) {
-          const target =
-            context.operation.request.path.original === "/" ||
-            context.operation.request.path.original === ""
-              ? defaultFile
-              : context.operation.request.path.original
-
-          const check = join(sanitizedBaseDir, target)
-
-          // See if we can find the file
-          const filePath = resolve(check)
-
-          if (filePath.startsWith(sanitizedBaseDir)) {
-            if (existsSync(filePath)) {
-              // Set the handler
-              context.handler = async (request) => {
-                return request.method === HttpMethod.HEAD
-                  ? {
-                      status: { code: HttpStatusCode.NO_CONTENT },
-                      headers: emptyHeaders(),
-                    }
-                  : await createFileContentResponse(filePath)
-              }
-            }
-          } else if (filePath !== check) {
-            fatal(
-              `Attempt to traverse file system detected: ${context.operation.request.path.original}`,
-            )
-
-            // Someone is doing something shady, stop it here
-            context.response = {
-              status: {
-                code: HttpStatusCode.FORBIDDEN,
-              },
-              headers: emptyHeaders(),
-            }
-          }
-        }
-      }
-
-      return context
-    },
-    name: "WebHosting",
+    router: new HostingRouter(sanitizedBaseDir, defaultFile),
     stage: HttpPipelineStage.ROUTING,
+    name: "web.hosting",
+    rootPath: options.urlPath ?? "/",
   }
 }

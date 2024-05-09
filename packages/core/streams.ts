@@ -7,6 +7,7 @@ import {
   type TransformOptions,
   type Writable,
 } from "stream"
+import { Semaphore } from "./concurrency.js"
 import { MaybeAwaitable } from "./index.js"
 import { error } from "./logging.js"
 import {
@@ -104,9 +105,22 @@ export function pipe<T extends Writable | Duplex>(
   }
 }
 
-export interface NamedTransformOptions extends TransformOptions {
+export interface NamedTransformOptions
+  extends Omit<TransformOptions, "flush" | "final"> {
+  /** the name of the transform */
   name: string
+  /** The concurrency mode (default is Serial) */
+  mode?: StreamConcurrencyMode
+  /** The maximum concurrency (default is highWaterMark / 2) */
+  maxConcurrency?: number
+  /** A callback for when backpressure is detected */
   onBackpressure?: EmptyCallback
+}
+
+export enum StreamConcurrencyMode {
+  Serial,
+  Parallel,
+  // TODO: implement Dynamic,
 }
 
 /**
@@ -125,9 +139,15 @@ export const createNamedTransform = <T, U>(
  * Create a generic {@link Stream.Transform} using a {@link TransformFunc}
  */
 export class NamedTransformStream<T, U> extends Stream.Transform {
-  private transform: TransformFunc<T, U>
   private onBackpressure: EmptyCallback
 
+  private onFinal?: StreamCallback
+
+  private executeAsync: (chunk: T, callback: StreamCallback) => Promise<void>
+
+  private _pending: number
+
+  readonly mode: StreamConcurrencyMode
   readonly name: string
 
   constructor(transform: TransformFunc<T, U>, options?: NamedTransformOptions) {
@@ -136,11 +156,73 @@ export class NamedTransformStream<T, U> extends Stream.Transform {
       emitClose: true,
       autoDestroy: true,
       objectMode: true,
+      final: (callback) => {
+        this.onFinal = callback
+        this._checkFinal()
+      },
       ...options,
     })
-    this.transform = transform
     this.name = options?.name ?? v4()
+    this.mode = options?.mode ?? StreamConcurrencyMode.Serial
+
     this.onBackpressure = options?.onBackpressure ?? NO_OP_CALLBACK
+    this._pending = 0
+
+    switch (this.mode) {
+      case StreamConcurrencyMode.Serial:
+        this.executeAsync = async (chunk, callback) => {
+          try {
+            const val = await transform(chunk)
+            if (val !== undefined && !this.push(val)) {
+              this.onBackpressure()
+            }
+            callback()
+          } catch (err) {
+            callback(err as Error)
+          }
+        }
+        break
+      case StreamConcurrencyMode.Parallel:
+        {
+          const semaphore = new Semaphore(
+            Math.max(
+              1,
+              options?.maxConcurrency ?? this.readableHighWaterMark >> 1,
+            ),
+          )
+
+          this.executeAsync = async (chunk, callback) => {
+            await semaphore.acquire()
+            callback()
+
+            try {
+              const val = await transform(chunk)
+              if (val !== undefined && !this.push(val)) {
+                this.onBackpressure()
+              }
+            } catch (err) {
+              this.emit("error", err)
+            } finally {
+              semaphore.release()
+            }
+          }
+        }
+        break
+    }
+  }
+
+  /**
+   * Check if the stream has ended
+   */
+  private _checkFinal(): void {
+    // If there is no pending work and a callback is registerred, fire it
+    if (this._pending === 0 && this.onFinal) {
+      // Fire final and clear it
+      if (this.onFinal) {
+        this.onFinal()
+        this.onFinal = undefined
+      }
+    }
   }
 
   /**
@@ -155,16 +237,11 @@ export class NamedTransformStream<T, U> extends Stream.Transform {
     _encoding: BufferEncoding,
     callback: TransformCallback,
   ): Promise<void> {
-    try {
-      const val = await this.transform(chunk)
-      if (val !== undefined) {
-        if (!this.push(val)) {
-          this.onBackpressure()
-        }
-      }
-      callback()
-    } catch (err) {
-      callback(err as Error)
-    }
+    this._pending++
+    await this.executeAsync(chunk, callback).finally(() => {
+      this._pending--
+    })
+
+    this._checkFinal()
   }
 }
