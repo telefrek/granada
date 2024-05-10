@@ -316,7 +316,7 @@ function createTransform<Stage extends HttpPipelineStage>(
           return
         },
         {
-          name: "http.pipeline.router", // TODO: Consider routing parallelism for high concurrency services =\
+          name: "http.pipeline.router",
           mode: StreamConcurrencyMode.Parallel,
           onBackpressure: () => {
             HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
@@ -492,6 +492,7 @@ class DefaultHttpPipeline
       },
       {
         name: "pipeline.dequeue",
+        mode: StreamConcurrencyMode.Parallel,
         onBackpressure: () => {
           HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
             stage: "dequeue",
@@ -634,6 +635,7 @@ class DefaultHttpPipeline
             }
           },
           {
+            mode: StreamConcurrencyMode.Parallel,
             name: "OperationContextBuilder",
           },
         ),
