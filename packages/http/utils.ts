@@ -16,8 +16,6 @@ import {
   type HttpResponse,
 } from "./index.js"
 
-import { randomUUID as v4 } from "crypto"
-
 import { streamJson } from "@telefrek/core/json.js"
 import { GRANADA_VERSION } from "@telefrek/core/version.js"
 import { assert } from "console"
@@ -219,15 +217,15 @@ export const GRANADA_USER_AGENT = `Granada_v${GRANADA_VERSION}`
  * @param options The {@link CreateRequestOptions} to use
  * @returns A new {@link HttpRequest}
  */
-export function createRequest(options: CreateRequestOptions): HttpRequest {
+export function createRequest(options?: CreateRequestOptions): HttpRequest {
   // Create a URL and ensure valid
-  const url = new URL(decodeURI(options.path ?? "/"), "http://localhost")
+  const url = new URL(decodeURI(options?.path ?? "/"), "http://localhost")
   assert(url !== undefined, "URL should be valid")
 
   const headers = emptyHeaders()
 
   // Add default values if not explicitly specified
-  if (!options.disableDefaultHeaders) {
+  if (!options?.disableDefaultHeaders) {
     // Set our accepted encodings
     headers.set(HttpRequestHeaders.AcceptEncoding, ["br", "deflate", "gzip"])
     headers.set(HttpRequestHeaders.AcceptCharset, "utf-8")
@@ -237,7 +235,7 @@ export function createRequest(options: CreateRequestOptions): HttpRequest {
   }
 
   // Set any custom headers that were provided
-  if (options.customHeaders) {
+  if (options?.customHeaders) {
     for (const entry of options.customHeaders.entries()) {
       headers.set(entry[0], entry[1])
     }
@@ -245,10 +243,9 @@ export function createRequest(options: CreateRequestOptions): HttpRequest {
 
   return {
     ...parsePath(urlToHttpOptions(url).path ?? "/"),
-    id: v4(),
-    method: options.method ?? HttpMethod.GET,
+    method: options?.method ?? HttpMethod.GET,
     headers,
-    body: options.body,
+    body: options?.body,
   }
 }
 

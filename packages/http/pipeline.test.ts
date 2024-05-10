@@ -6,7 +6,6 @@ import { type MaybeAwaitable } from "@telefrek/core/index.js"
 import { consumeJsonStream } from "@telefrek/core/json.js"
 import { consumeString, drain } from "@telefrek/core/streams.js"
 import { Duration, delay } from "@telefrek/core/time.js"
-import { randomUUID as v4 } from "crypto"
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "fs"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
@@ -27,7 +26,7 @@ import {
   createHttp2Server,
   createTestRouter,
 } from "./testUtils.js"
-import { createRequest, emptyHeaders, jsonBody } from "./utils.js"
+import { createRequest, jsonBody } from "./utils.js"
 
 const INDEX_HTML = `<!doctype html><html><head><title>Test</title></head><body>Test Page</body></html>`
 
@@ -67,7 +66,7 @@ describe("Pipelines should support clients and servers end to end", () => {
     } else {
       TEST_LOGGER.info(`Started pipeline`)
     }
-    promise = server.listen(port)
+    promise = server._listen(port)
     client = createHttp2Client(certDir, port)
   })
 
@@ -84,7 +83,7 @@ describe("Pipelines should support clients and servers end to end", () => {
     }
 
     if (server) {
-      await server.close(false)
+      await server._close(false)
       await promise
     }
 
@@ -123,7 +122,8 @@ describe("Pipelines should support clients and servers end to end", () => {
     let response = await client.submit(createRequest({ path: "/" }))
     expect(response.status.code).toBe(HttpStatusCode.OK)
     expect(response.body).not.toBeUndefined()
-    expect(response.body!.mediaType?.toString()).toBe("text/html;charset=utf-8")
+    expect(response.body!.mediaType?.type).toBe("text")
+    expect(response.body!.mediaType?.subType).toBe("html")
 
     const results = await consumeString(response.body!.contents)
     expect(results).toBeTruthy()
@@ -199,28 +199,14 @@ describe("Pipelines should support clients and servers end to end", () => {
     expect(response.body).toBeUndefined()
 
     expect(server.setReady(false)).toBeTruthy()
-    response = await client.submit({
-      id: v4(),
-      headers: emptyHeaders(),
-      path: {
-        original: "/ready",
-      },
-      method: HttpMethod.GET,
-    })
+    response = await client.submit(createRequest({ path: "/ready" }))
 
     // Expect a failed response with no body
     expect(response.status.code).toBe(HttpStatusCode.BAD_GATEWAY)
     expect(response.body).toBeUndefined()
 
     expect(server.setReady(true)).toBeTruthy()
-    response = await client.submit({
-      id: v4(),
-      headers: emptyHeaders(),
-      path: {
-        original: "/ready",
-      },
-      method: HttpMethod.GET,
-    })
+    response = await client.submit(createRequest({ path: "/ready" }))
 
     // Expect a response with no content
     expect(response.status.code).toBe(HttpStatusCode.NO_CONTENT)

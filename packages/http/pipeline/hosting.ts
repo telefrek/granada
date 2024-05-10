@@ -110,7 +110,7 @@ export function hostFolder(options: HostingOptions): HttpPipelineRouter {
   return {
     router: new HostingRouter(sanitizedBaseDir, defaultFile),
     stage: HttpPipelineStage.ROUTING,
-    name: "web.hosting",
-    rootPath: options.urlPath ?? "/",
+    transformName: "web.hosting",
+    basePath: options.urlPath ?? "/",
   }
 }

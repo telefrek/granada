@@ -78,7 +78,6 @@ export function createHttp2Client(certDir: string, port: number): HttpClient {
       certificateAuthority: readFileSync(join(certDir, "cert.pem")),
     },
   })
-    .withLogger(TEST_LOGGER)
     .build()
     .on("error", (error) => TEST_LOGGER.fatal(`Client Error: ${error}`))
 }

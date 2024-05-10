@@ -240,7 +240,6 @@ export interface HttpBody {
  * An interface defining the behavior of an HTTP Request
  */
 export interface HttpRequest {
-  readonly id: string
   readonly path: HttpPath
   readonly method: HttpMethod
   readonly headers: HttpHeaders

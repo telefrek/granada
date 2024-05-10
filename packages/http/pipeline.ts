@@ -199,21 +199,40 @@ type HttpTransform = TransformFunc<HttpOperationContext, HttpOperationContext>
 /**
  * Represents a transform bound to a specific stage
  */
-export type HttpPipelineStageTransform<Stage extends HttpPipelineStage> = {
-  name: string
+type HttpPipelineStageTransform<Stage extends HttpPipelineStage> = {
+  /** The name of the transform */
+  transformName: string
+
+  /** The {@link HttpPipelineStage} for the transform */
   stage: Stage
 }
+
+/**
+ * Represents configuration for load shedding
+ */
+export type HttpPipelineLoadShedder =
+  HttpPipelineStageTransform<HttpPipelineStage.LOAD_SHEDDING> & {
+    /** The configured high water mark for the underlying stream */
+    highWatermark: number
+
+    /** The {@link HttpTransform} */
+    transform: HttpTransform
+  }
 
 /**
  * Represents a pipeline router
  */
 export type HttpPipelineRouter =
   HttpPipelineStageTransform<HttpPipelineStage.ROUTING> & {
+    /** The {@link Router} to use */
     router: Router
-    rootPath: string
+
+    /** The base path to host the route at */
+    basePath: string
   }
 
-export type HttpPipelineTransform = HttpPipelineRouter
+/** Supported transform types */
+export type HttpPipelineTransform = HttpPipelineRouter | HttpPipelineLoadShedder
 
 /**
  * Represents a middleware action in the pipeline
@@ -270,7 +289,7 @@ function createTransform<Stage extends HttpPipelineStage>(
       const router = createRouter()
       for (const source of sources) {
         const pipelineRouter = source as HttpPipelineRouter
-        router.addRouter(pipelineRouter.rootPath, pipelineRouter.router)
+        router.addRouter(pipelineRouter.basePath, pipelineRouter.router)
       }
 
       return createNamedTransform<HttpOperationContext, HttpOperationContext>(
@@ -290,12 +309,15 @@ function createTransform<Stage extends HttpPipelineStage>(
                 setRoutingParameters(routeInfo.parameters, context)
               }
             }
+
+            return context
           }
 
-          return context
+          return
         },
         {
-          name: "http.pipeline.router",
+          name: "http.pipeline.router", // TODO: Consider routing parallelism for high concurrency services =\
+          mode: StreamConcurrencyMode.Parallel,
           onBackpressure: () => {
             HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
               stage: stage,
@@ -304,6 +326,57 @@ function createTransform<Stage extends HttpPipelineStage>(
           },
         },
       )
+    }
+    case HttpPipelineStage.LOAD_SHEDDING: {
+      let current: Optional<
+        NamedTransformStream<HttpOperationContext, HttpOperationContext>
+      >
+      for (const source of sources) {
+        const shedder = source as HttpPipelineLoadShedder
+
+        const namedPipeline = createNamedTransform(
+          async (context: HttpOperationContext) => {
+            if (!isTerminal(context)) {
+              HttpRequestPipelineMetrics.PipelineStageCounter.add(1, {
+                stage: stage,
+              })
+
+              return HTTP_OPERATION_CONTEXT_STORE.run(context, async () => {
+                return TracingContext.with(
+                  Tracing.setSpan(
+                    TracingContext.active(),
+                    context.operation.span,
+                  ),
+                  async () => {
+                    return await shedder.transform(context)
+                  },
+                )
+              })
+            }
+
+            return
+          },
+          {
+            name: shedder.transformName,
+            highWaterMark: shedder.highWatermark,
+            mode: StreamConcurrencyMode.Parallel,
+            onBackpressure: () => {
+              HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
+                stage: stage,
+                name: shedder.transformName,
+              })
+            },
+          },
+        )
+
+        if (current !== undefined) {
+          current = pipe(current, namedPipeline)
+        } else {
+          current = namedPipeline
+        }
+      }
+
+      return current!
     }
   }
 
@@ -368,24 +441,17 @@ class DefaultHttpPipeline
           context.response = await HTTP_OPERATION_CONTEXT_STORE.run(
             context,
             async () => {
-              if (context.operation.span) {
-                return TracingContext.with(
-                  Tracing.setSpan(
-                    TracingContext.active(),
-                    context.operation.span,
-                  ),
-                  async () => {
-                    return await handler(
-                      context.operation.request,
-                      context.operation.signal,
-                    )
-                  },
-                )
-              }
-
-              return await handler(
-                context.operation.request,
-                context.operation.signal,
+              return TracingContext.with(
+                Tracing.setSpan(
+                  TracingContext.active(),
+                  context.operation.span,
+                ),
+                async () => {
+                  return await handler(
+                    context.operation.request,
+                    context.operation.signal,
+                  )
+                },
               )
             },
           )
@@ -411,36 +477,10 @@ class DefaultHttpPipeline
     }
   }
 
-  // private _wrapTransform(transform: HttpPipelineStageTransform): HttpTransform {
-  //   return (operationContext) => {
-  //     if (!isTerminal(operationContext)) {
-  //       return HTTP_OPERATION_CONTEXT_STORE.run(operationContext, async () => {
-  //         HttpRequestPipelineMetrics.PipelineStageCounter.add(1, {
-  //           stage: transform.stage,
-  //           name: transform.name,
-  //         })
-
-  //         if (operationContext.operation.span) {
-  //           return TracingContext.with(
-  //             Tracing.setSpan(
-  //               TracingContext.active(),
-  //               operationContext.operation.span,
-  //             ),
-  //             async () => {
-  //               return await transform.transform(operationContext)
-  //             },
-  //           )
-  //         }
-
-  //         return await transform.transform(operationContext)
-  //       })
-  //     }
-
-  //     return operationContext
-  //   }
-  // }
-
-  private _buildMiddleware(handler: HttpHandler): Transformations {
+  private _buildMiddleware(
+    handler: HttpHandler,
+    options: HttpPipelineOptions,
+  ): Transformations {
     const start = new NamedTransformStream(
       (context: HttpOperationContext) => {
         PIPELINE_LOGGER.debug(
@@ -517,6 +557,8 @@ class DefaultHttpPipeline
       createNamedTransform(this._createHandlerTransform(handler), {
         name: "handler",
         mode: StreamConcurrencyMode.Parallel,
+        maxConcurrency: options.maxConcurrency,
+        highWaterMark: options.highWaterMark,
         onBackpressure: () => {
           HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
             stage: "handler",
@@ -609,7 +651,7 @@ class DefaultHttpPipeline
         if (err) {
           PIPELINE_LOGGER.error(`Error during pipeline causing destroy: ${err}`)
         }
-        PIPELINE_LOGGER.info(`Closing pipeline`)
+        PIPELINE_LOGGER.info(`Pipeline destroyed`)
         callback()
       },
       write(
@@ -640,7 +682,7 @@ class DefaultHttpPipeline
     const details: PipelineDetails = {
       started: Timestamp.now(),
       source: this._buildReadable(source, options),
-      transformations: this._buildMiddleware(handler),
+      transformations: this._buildMiddleware(handler, options),
       destination: this._buildConsumer(options),
       options,
     }

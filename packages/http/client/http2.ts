@@ -3,6 +3,7 @@
  */
 
 import { DeferredPromise, type MaybeAwaitable } from "@telefrek/core/index.js"
+import { info } from "@telefrek/core/logging"
 import type { Optional } from "@telefrek/core/type/utils.js"
 import type { IncomingHttpHeaders, OutgoingHttpHeaders } from "http"
 import {
@@ -72,14 +73,9 @@ export class Http2ClientTransport<T extends HttpTransportOptions>
         .on("error", (err) => {
           deferred.reject(err)
         })
-        .on("end", () => {
-          if (!http2Stream.aborted && !http2Stream.closed) {
-            http2Stream.close()
-          }
-        })
         .on(
           "response",
-          (
+          async (
             incomingHeaders: IncomingHttpHeaders & IncomingHttpStatusHeader,
             _,
           ) => {
@@ -97,6 +93,9 @@ export class Http2ClientTransport<T extends HttpTransportOptions>
               case HttpStatusCode.NOT_MODIFIED:
                 break
               default:
+                if (http2Stream.readableEnded) {
+                  info(`hahaha, u r dumb`)
+                }
                 if (
                   incomingHeaders["content-type"] ||
                   incomingHeaders["content-length"]
@@ -104,6 +103,14 @@ export class Http2ClientTransport<T extends HttpTransportOptions>
                   body = { contents: http2Stream }
                 }
                 break
+            }
+
+            if (body) {
+              body.contents.on("end", () => {
+                http2Stream.close()
+              })
+            } else {
+              http2Stream.close()
             }
 
             deferred.resolve({
@@ -120,6 +127,8 @@ export class Http2ClientTransport<T extends HttpTransportOptions>
       // Check if we need to write the body
       if (request.body) {
         request.body.contents.pipe(http2Stream)
+      } else {
+        http2Stream.end()
       }
     } catch (err) {
       deferred.reject(err)

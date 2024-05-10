@@ -18,8 +18,8 @@ export function USE_ROUTER(
 ): HttpPipelineRouter {
   return {
     router,
-    name: "router",
+    transformName: "router",
     stage: HttpPipelineStage.ROUTING,
-    rootPath: pathPrefix ?? "/",
+    basePath: pathPrefix ?? "/",
   }
 }

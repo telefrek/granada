@@ -97,6 +97,20 @@ export const HttpRequestPipelineMetrics = {
       valueType: ValueType.INT,
     },
   ),
+  LoadSheddingStageDelay: getGranadaMeter().createHistogram(
+    "load_shedding_arrival_time",
+    {
+      description:
+        "The amount of time between a request being accepted to the load shedding stage",
+      valueType: ValueType.DOUBLE,
+      unit: "seconds",
+      advice: {
+        explicitBucketBoundaries: [
+          0.001, 0.002, 0.005, 0.01, 0.015, 0.025, 0.05, 0.075, 0.1, 0.5,
+        ],
+      },
+    },
+  ),
   /** Event that fires when the pipeline has backpressure */
   PipelineStageBackpressure: getGranadaMeter().createCounter(
     "http_pipeline_backpressure_events",

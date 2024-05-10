@@ -13,6 +13,7 @@ import type { HttpOperationSource } from "@telefrek/http/operations.js"
 import {
   createPipeline,
   type HttpPipelineConfiguration,
+  type HttpPipelineOptions,
 } from "@telefrek/http/pipeline.js"
 import { USE_ROUTER } from "@telefrek/http/pipeline/routing.js"
 import {
@@ -65,12 +66,13 @@ export class ServicePipelineBuilder {
     return this
   }
 
-  run(port: number): MaybeAwaitable<void> {
+  run(port: number, options?: HttpPipelineOptions): MaybeAwaitable<void> {
     createPipeline(this._config).add(
       this._server as HttpOperationSource,
       NOT_FOUND_HANDLER,
+      options,
     )
-    return this._server.listen(port)
+    return this._server._listen(port)
   }
 }
 

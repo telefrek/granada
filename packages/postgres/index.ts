@@ -9,7 +9,7 @@ import {
   type Limiter,
 } from "@telefrek/core/backpressure/limits.js"
 import type { FrameworkPriority, MaybeAwaitable } from "@telefrek/core/index.js"
-import { debug } from "@telefrek/core/logging"
+import { debug, info } from "@telefrek/core/logging"
 import { getGranadaMeter } from "@telefrek/core/observability/metrics.js"
 import { trace } from "@telefrek/core/observability/tracing.js"
 import {
@@ -119,11 +119,15 @@ export class DefaultPostgresDatabase implements PostgresDatabase {
   }
 
   async close(): Promise<void> {
+    info(`Postgres: Shutting down queue`)
     // Stop the queue
     await this._queue.shutdown()
 
+    info(`Postgres: Shutting down pool`)
     // Stop the pool
     await this._pool.shutdown()
+
+    info(`Postgres: Shutdown complete`)
   }
 
   run<T extends RowType, P extends QueryParameters>(
@@ -145,7 +149,6 @@ export class DefaultPostgresDatabase implements PostgresDatabase {
     query: PostgresQuery,
     timeout?: Duration,
   ): Promise<QueryResult<T>> {
-    debug(`Submitting ${query.name}`)
     // TODO: Hook in the monitoring of pool errors
     const result = await this._queue.queue(
       {
