@@ -5,13 +5,16 @@
 import { Signal } from "../concurrency.js"
 import { track } from "../context.js"
 import { TimeoutError } from "../errors.js"
-import {
-  DeferredPromise,
-  MaybeAwaitable,
-  type FrameworkPriority,
-} from "../index.js"
+import { type FrameworkPriority } from "../index.js"
+import { error } from "../logging.js"
 import { Duration } from "../time.js"
-import type { AnyArgs, Func, Optional } from "../type/utils.js"
+import {
+  type AnyArgs,
+  type EmptyCallback,
+  type Func,
+  type MaybeAwaitableAny,
+  type Optional,
+} from "../type/utils.js"
 
 /**
  * The priority for a given task
@@ -43,26 +46,48 @@ export function asTaskPriority(priority: FrameworkPriority) {
  * Options for task execution
  */
 export type MultiLevelTaskOptions = {
+  /** The amount of time to wait before timing out the task */
+  timeout: Duration
+  cancel: EmptyCallback
   /** The {@link TaskPriority} for this task */
   priority?: TaskPriority
-  /** The amount of time to wait before timing out the task */
-  timeoutMilliseconds?: number
   /** The acceptable delay before increasing priority */
   delayMilliseconds?: number
 }
 
 export interface MultiLevelPriorityQueue {
-  queue<T>(work: Func<AnyArgs, MaybeAwaitable<T>>, ...args: AnyArgs): Promise<T>
-  queue<T>(
+  queue(
     options: MultiLevelTaskOptions,
-    work: Func<AnyArgs, MaybeAwaitable<T>>,
+    work: Func<AnyArgs, MaybeAwaitableAny>,
     ...args: AnyArgs
-  ): Promise<T>
+  ): boolean
 
-  workers: number
   size: number
 
+  /**
+   * Get the next piece of work to execute
+   */
+  next(): Optional<MaybeAwaitableAny>
+
+  /**
+   * Shuts the queue down for further processing
+   */
   shutdown(): Promise<void>
+
+  /**
+   * Wait on the queue to have another value
+   */
+  wait(): Promise<void>
+}
+
+const TASK_TIMEOUT = new TimeoutError("TaskTimeout")
+TASK_TIMEOUT.stack
+
+export function createQueueWorker(
+  queue: MultiLevelPriorityQueue,
+  signal: AbortSignal,
+): Promise<void> {
+  return new QueueWorkerThread(queue, signal).run()
 }
 
 /**
@@ -75,27 +100,11 @@ export class DefaultMultiLevelPriorityQueue implements MultiLevelPriorityQueue {
     [TaskPriority.MEDIUM]: [],
     [TaskPriority.LOW]: [],
   }
-  private _signal: Signal = new Signal()
-  private _workers: QueueWorker[]
   private _curator: QueueWorker
+  private _signal: Signal = new Signal()
+  private _shutdown: boolean = false
 
-  constructor(size: number) {
-    this._workers = []
-    for (let n = 0; n < size; ++n) {
-      const controller = new AbortController()
-      const worker = new MultiLevelWorkerThread(
-        this._queue,
-        this._signal,
-        controller.signal,
-      )
-
-      this._workers.push({
-        worker,
-        controller,
-        promise: worker.run(),
-      })
-    }
-
+  constructor() {
     const curatorController = new AbortController()
     const curator = new QueueCurator(this._queue, curatorController.signal)
     this._curator = {
@@ -103,10 +112,6 @@ export class DefaultMultiLevelPriorityQueue implements MultiLevelPriorityQueue {
       controller: curatorController,
       promise: curator.run(),
     }
-  }
-
-  get workers(): number {
-    return this._workers.length
   }
 
   get size(): number {
@@ -118,71 +123,68 @@ export class DefaultMultiLevelPriorityQueue implements MultiLevelPriorityQueue {
     )
   }
 
-  async shutdown(): Promise<void> {
-    this._workers.forEach((w) => w.controller.abort())
-    await Promise.allSettled(this._workers.map((w) => w.promise))
+  async wait(): Promise<void> {
+    await this._signal.wait(Duration.ofMilli(500))
+  }
 
+  async shutdown(): Promise<void> {
+    this._shutdown = true
     this._curator.controller.abort()
     await this._curator.promise
+
+    this._signal.notifyAll()
 
     return
   }
 
-  queue<T>(work: Func<AnyArgs, MaybeAwaitable<T>>, ...args: AnyArgs): Promise<T>
-  queue<T>(
-    options: MultiLevelTaskOptions,
-    work: Func<AnyArgs, MaybeAwaitable<T>>,
-    ...args: AnyArgs
-  ): Promise<T>
-  queue<T, Args extends unknown[]>(
-    options: Func<Args, MaybeAwaitable<T>> | MultiLevelTaskOptions,
-    work?: Func<Args, MaybeAwaitable<T>> | unknown,
-    ...args: Args
-  ): Promise<T> {
-    const taskOptions: TaskRuntimeOptions = {
-      priority: TaskPriority.MEDIUM,
-      timeout: Date.now() + 500, // TODO: make this configurable
-    }
+  next() {
+    // Get the next most critical
+    for (let n = 0; n < 4; ++n) {
+      // Get the reference
+      const queue = this._queue[n as TaskPriority]
+      while (queue.length > 0) {
+        // Check the next task
+        const task = queue.shift()!
 
-    let f: Func<Args, MaybeAwaitable<T>> = options as Func<
-      Args,
-      MaybeAwaitable<T>
-    >
-    let a: AnyArgs = []
-
-    if (typeof options === "object") {
-      f = work! as Func<Args, MaybeAwaitable<T>>
-      a = args
-      const o = options as MultiLevelTaskOptions
-      taskOptions.priority = o.priority ?? taskOptions.priority
-      taskOptions.timeout = o.timeoutMilliseconds
-        ? Date.now() + o.timeoutMilliseconds
-        : taskOptions.timeout
-      taskOptions.escalate = o.delayMilliseconds
-        ? Date.now() + o.delayMilliseconds
-        : taskOptions.escalate
-    } else {
-      if (args.length > 0) {
-        a = [work].concat(args) as AnyArgs
-      } else if (work) {
-        a = [work] as AnyArgs
+        // Cancel anything we can't run that curator hasn't removed
+        if (task.options.timeout < Date.now()) {
+          task.cancel()
+        } else {
+          // Run the work
+          return task.work(...task.args)
+        }
       }
     }
 
+    return undefined
+  }
+
+  queue(
+    options: MultiLevelTaskOptions,
+    work: Func<AnyArgs, MaybeAwaitableAny>,
+    ...args: AnyArgs
+  ): boolean {
+    const taskOptions: TaskRuntimeOptions = {
+      priority: options.priority ?? TaskPriority.MEDIUM,
+      timeout: ~~options.timeout.milliseconds() + Date.now(),
+      escalate: options.delayMilliseconds
+        ? Date.now() + options.delayMilliseconds
+        : options.delayMilliseconds,
+    }
+
     // Create and setup the task
-    const task: MutiLevelQueueTask<T> = {
-      work: track(f), // Ensure we add any known tracking
-      args: a,
-      promise: new DeferredPromise(),
+    const task: MultiLevelQueueTask = {
+      work: track(work), // Ensure we add any known tracking
+      args: args,
       options: taskOptions,
+      cancel: options.cancel,
     }
 
     this._queue[taskOptions.priority].push(task)
 
-    // If anything is waiting signal it
     this._signal.notify()
 
-    return task.promise
+    return true
   }
 }
 
@@ -192,67 +194,41 @@ type TaskRuntimeOptions = {
   escalate?: number
 }
 
-type MutiLevelQueueTask<T> = {
-  work: Func<AnyArgs, MaybeAwaitable<T>>
+type MultiLevelQueueTask = {
+  work: Func<AnyArgs, MaybeAwaitableAny>
   args: AnyArgs
   options: TaskRuntimeOptions
-  promise: DeferredPromise<T>
+  cancel: EmptyCallback
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type MultiLevelQueueTask_T = MutiLevelQueueTask<any>
-
-type MultiLevelQueue = Record<TaskPriority, MultiLevelQueueTask_T[]>
+type MultiLevelQueue = Record<TaskPriority, MultiLevelQueueTask[]>
 
 interface MultiLevelWorker {
   run(): Promise<void>
 }
 
-class MultiLevelWorkerThread implements MultiLevelWorker {
-  readonly _queue: MultiLevelQueue
-  readonly _signal: Signal
-  readonly _abort: AbortSignal
+class QueueWorkerThread implements MultiLevelWorker {
+  readonly _queue: MultiLevelPriorityQueue
+  readonly _signal: AbortSignal
 
-  constructor(queue: MultiLevelQueue, signal: Signal, abort: AbortSignal) {
+  constructor(queue: MultiLevelPriorityQueue, signal: AbortSignal) {
     this._queue = queue
     this._signal = signal
-    this._abort = abort
   }
 
   async run(): Promise<void> {
-    let task: Optional<MultiLevelQueueTask_T>
-    while (!this._abort.aborted) {
-      task = this._next()
-      if (task) {
-        try {
-          task.promise.resolve(await task.work(...task.args))
-        } catch (err) {
-          task.promise.reject(err)
-        }
-      } else {
-        await this._signal.wait(Duration.ofMilli(500))
-      }
-    }
-
-    // Process remaining tasks then we are done
-    while ((task = this._next())) {
+    while (!this._signal.aborted) {
       try {
-        task.promise.resolve(await task.work(...task.args))
+        const work = this._queue.next()
+        if (work !== undefined) {
+          await work
+        } else {
+          await this._queue.wait()
+        }
       } catch (err) {
-        task.promise.reject(err)
+        error(`Unhandled error in parallel queue worker: ${err}`)
       }
     }
-  }
-
-  private _next(): Optional<MultiLevelQueueTask_T> {
-    for (let p = 0; p < 4; ++p) {
-      const task = this._queue[p as TaskPriority].shift()
-      if (task) {
-        return task
-      }
-    }
-
-    return
   }
 }
 
@@ -273,6 +249,7 @@ class QueueCurator implements MultiLevelWorker {
   private _curate(): void {
     // Check for an abort
     if (this._abort.aborted) {
+      this._cleanup(true)
       this._signal.notify()
 
       // Cancel the interval
@@ -280,16 +257,23 @@ class QueueCurator implements MultiLevelWorker {
       return
     }
 
+    this._cleanup()
+  }
+
+  private _cleanup(finish: boolean = false) {
     // Process each queue looking for things that are expired
     for (let n = 3; n >= 0; --n) {
       const queue = this._queue[n as TaskPriority]
 
+      // Clean everything
+      if (finish) {
+        while (queue.length > 0) {
+          queue.shift()!.cancel()
+        }
+      }
+
       while (queue.length > 0 && queue[0].options.timeout < Date.now()) {
-        queue
-          .shift()!
-          .promise.reject(
-            new TimeoutError("Failed to start task before timeout expired"),
-          )
+        queue.shift()!.cancel()
       }
 
       while (
@@ -303,10 +287,9 @@ class QueueCurator implements MultiLevelWorker {
     }
   }
 
-  run(): Promise<void> {
-    return this._signal.wait().then((_) => {
-      return
-    })
+  async run(): Promise<void> {
+    const _ = await this._signal.wait()
+    return
   }
 }
 

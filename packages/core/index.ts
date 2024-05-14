@@ -46,6 +46,9 @@ export type Resolver<T> = (value: MaybeAwaitable<T>) => void
  */
 export type Rejector = (reason: unknown) => void
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type DeferredAny = DeferredPromise<any>
+
 /**
  * This is a helper class that provides an implementation of the
  * {@link PromiseLike} interface, backed by an underlying {@link Promise} which

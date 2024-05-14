@@ -2,19 +2,21 @@
  * Testing Multi Level Queue behaviors
  */
 
-import { TimeoutError } from "../errors.js"
-import { delay } from "../time.js"
+import { Duration, delay } from "../time.js"
+import { NO_OP_CALLBACK } from "../type/utils.js"
 import {
   DefaultMultiLevelPriorityQueue,
   TaskPriority,
+  createQueueWorker,
   type MultiLevelPriorityQueue,
+  type MultiLevelTaskOptions,
 } from "./multiLevelQueue.js"
 
 describe("Multi level queue should be able to handle generic workloads", () => {
-  let queue: MultiLevelPriorityQueue = new DefaultMultiLevelPriorityQueue(1)
+  let queue: MultiLevelPriorityQueue
 
   beforeEach(() => {
-    queue = new DefaultMultiLevelPriorityQueue(1)
+    queue = new DefaultMultiLevelPriorityQueue()
   })
 
   afterEach(async () => {
@@ -22,117 +24,136 @@ describe("Multi level queue should be able to handle generic workloads", () => {
   })
 
   it("Should handle simple task behavior", async () => {
-    let ret = await queue.queue(() => 1)
-    expect(ret).toBe(1)
+    const opts: MultiLevelTaskOptions = {
+      timeout: Duration.ofMilli(10),
+      cancel: NO_OP_CALLBACK,
+    }
 
-    ret = await queue.queue(() => Promise.resolve(1))
-    expect(ret).toBe(1)
+    expect(queue.queue(opts, () => 1)).toBeTruthy()
 
-    ret = await queue.queue({ priority: TaskPriority.LOW }, () =>
+    expect(await queue.next()).toBe(1)
+
+    expect(queue.queue(opts, () => Promise.resolve(1))).toBeTruthy()
+    expect(await queue.next()).toBe(1)
+
+    queue.queue({ ...opts, priority: TaskPriority.LOW }, () =>
       Promise.resolve(2),
     )
-    expect(ret).toBe(2)
+    expect(await queue.next()).toBe(2)
+    queue.queue(opts, (...args: number[]) => Promise.resolve(args[0]), 4)
 
-    ret = await queue.queue((...args: number[]) => Promise.resolve(args[0]), 4)
-    expect(ret).toBe(4)
+    expect(await queue.next()).toBe(4)
   })
 
   it("Should process things in the correct order", async () => {
-    const f = async (): Promise<number> => {
-      await delay(10)
-      return Date.now()
+    const f = (idx: number): number => {
+      return idx
     }
 
-    const promises: PromiseLike<number>[] = []
-    promises.push(queue.queue(f)) // index 0
-    await delay(1) // Ensure we start task 1
-    promises.push(queue.queue({ priority: TaskPriority.HIGH }, f)) // index 1
-    promises.push(queue.queue({ priority: TaskPriority.CRITICAL }, f)) // index 2
-    promises.push(queue.queue(f)) // index 3
-    promises.push(queue.queue({ priority: TaskPriority.HIGH }, f)) // index 4
-
-    const res = await Promise.allSettled(promises)
-    const values = res.map((r) => (r.status === "fulfilled" ? r.value : -1))
-    expect(values.every((v) => v > 0)).toBeTruthy()
-    expect(values[0]).toBeLessThan(values[1])
-    expect(values[2]).toBeLessThan(values[1]) // Critical over High even though queued out o forder
-    expect(values[2]).toBeGreaterThan(values[0]) // Critical after started
-    expect(values[4]).toBeLessThan(values[3])
-    expect(values[4]).toBeGreaterThan(values[1])
-  })
-
-  it("Should allow multiple workers", async () => {
-    await queue.shutdown() // Stop the original
-
-    queue = new DefaultMultiLevelPriorityQueue(4)
-
-    const results: number[] = []
-    const promises: PromiseLike<unknown>[] = []
-
-    for (let n = 0; n < 4; ++n) {
-      queue.queue(async () => {
-        await delay(20)
-
-        return -1
-      })
+    const opts: MultiLevelTaskOptions = {
+      timeout: Duration.ofMilli(10),
+      cancel: NO_OP_CALLBACK,
     }
 
-    for (let n = 0; n < 8; ++n) {
-      promises.push(
-        queue
-          .queue({ priority: TaskPriority.MEDIUM }, () => 2)
-          .then((r) => results.push(r)),
-      )
-    }
+    // Queue the order
+    queue.queue(opts, f, 1)
+    queue.queue({ ...opts, priority: TaskPriority.HIGH }, f, 2)
+    queue.queue({ ...opts, priority: TaskPriority.CRITICAL }, f, 3)
+    queue.queue(opts, f, 4)
+    queue.queue({ ...opts, priority: TaskPriority.HIGH }, f, 5)
 
-    for (let n = 0; n < 8; ++n) {
-      promises.push(
-        queue
-          .queue({ priority: TaskPriority.HIGH }, () => 1)
-          .then((r) => results.push(r)),
-      )
-    }
-
-    for (let n = 0; n < 8; ++n) {
-      promises.push(
-        queue
-          .queue({ priority: TaskPriority.LOW }, () => 3)
-          .then((r) => results.push(r)),
-      )
-    }
-
-    for (let n = 0; n < 8; ++n) {
-      promises.push(
-        queue
-          .queue({ priority: TaskPriority.CRITICAL }, () => 0)
-          .then((r) => results.push(r)),
-      )
-    }
-
-    await Promise.allSettled(promises)
-
-    for (let n = 1; n < results.length; ++n) {
-      expect(results[n - 1]).toBeLessThanOrEqual(results[n])
-    }
+    // Should be critical, high, high, low, low (3, 2, 5, 1, 4)
+    expect(await queue.next()).toBe(3)
+    expect(await queue.next()).toBe(2)
+    expect(await queue.next()).toBe(5)
+    expect(await queue.next()).toBe(1)
+    expect(await queue.next()).toBe(4)
   })
 
   it("Should timeout work that cannot be accomplished in time", async () => {
-    const promise = queue.queue(async () => await delay(1000))
+    const f = async (idx: number): Promise<number> => {
+      await delay(10)
+      return idx
+    }
 
+    let cancelled = 0
+    const cancel = () => {
+      cancelled++
+    }
+
+    const opts: MultiLevelTaskOptions = {
+      timeout: Duration.ofMilli(35),
+      cancel,
+    }
+
+    // Ensure the curator kills the task
+    queue.queue({ ...opts, cancel: NO_OP_CALLBACK }, f, 1)
+    await delay(300)
+    expect(await queue.next()).toBeUndefined()
+
+    queue.queue(opts, f, 1)
+    queue.queue({ ...opts, priority: TaskPriority.HIGH }, f, 2)
+    queue.queue({ ...opts, priority: TaskPriority.CRITICAL }, f, 3)
+    queue.queue(opts, f, 4)
+    queue.queue({ ...opts, priority: TaskPriority.HIGH }, f, 5)
+
+    // We expect that only the first 3 will be finished in time
+    expect(await queue.next()).toBe(3)
+    expect(await queue.next()).toBe(2)
+    expect(await queue.next()).toBe(5)
+
+    // Everything should have timed out beyond this point
     await delay(10)
+    expect(await queue.next()).toBeUndefined()
 
-    const work = queue.queue(
-      { priority: TaskPriority.CRITICAL, timeoutMilliseconds: 300 },
-      () => 1,
-    )
+    // both tasks should be cancelled
+    expect(cancelled).toBe(2)
 
-    const results = await Promise.allSettled([promise, work])
+    // Add one more to wait for the curator to verify it times things out
+    queue.queue(opts, f, 1)
+    await delay(300)
 
-    expect(results[0].status === "fulfilled")
-    expect(results[1].status === "rejected")
-    expect(
-      results[1].status === "rejected" &&
-        results[1].reason instanceof TimeoutError,
-    )
-  }, 2_000)
+    expect(await queue.next()).toBeUndefined()
+    expect(cancelled).toBe(3)
+  })
+
+  it("should function with workers", async () => {
+    const f = async (idx: number): Promise<number> => {
+      await delay(2)
+      return idx
+    }
+
+    let cancelled = 0
+    const cancel = () => {
+      cancelled++
+    }
+
+    const opts: MultiLevelTaskOptions = {
+      timeout: Duration.ofMilli(35),
+      cancel,
+    }
+
+    // Ensure the queue is working
+    queue.queue(opts, f, 1)
+    expect(await queue.next()).toBe(1)
+
+    const controller = new AbortController()
+
+    // Start a worker
+    const worker = createQueueWorker(queue, controller.signal)
+
+    // Queue some work
+    for (let n = 0; n < 10; ++n) {
+      queue.queue(opts, f, 1)
+    }
+
+    await delay(50)
+    controller.abort("shutdown")
+
+    // Worker should have handled the work
+    expect(cancelled).toBe(0)
+
+    // Should stop the worker
+    await worker
+  })
 })

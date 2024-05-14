@@ -22,7 +22,14 @@ describe("Postgres should be able to execute queries", () => {
     postgresContainer = await new PostgreSqlContainer().start()
     pool = new PostgresConnectionPool({
       name: "testPostgresPool",
-      clientConfig: postgresContainer.getConnectionUri(),
+      clientConfig: {
+        user: postgresContainer.getUsername(),
+        password: postgresContainer.getPassword(),
+        database: postgresContainer.getDatabase(),
+        host: postgresContainer.getHost(),
+        port: postgresContainer.getPort(),
+        connectionTimeout: 2_000,
+      },
     })
 
     executor = new DefaultPostgresDatabase({ pool })

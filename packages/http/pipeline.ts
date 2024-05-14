@@ -280,6 +280,7 @@ export function createPipeline(
 function createTransform<Stage extends HttpPipelineStage>(
   stage: Stage,
   sources: HttpPipelineTransform[],
+  options: HttpPipelineOptions,
 ): Transform {
   switch (stage) {
     case HttpPipelineStage.ROUTING: {
@@ -371,8 +372,8 @@ function createTransform<Stage extends HttpPipelineStage>(
           },
           {
             name: shedder.transformName,
-            mode: StreamConcurrencyMode.FixedConcurrency,
-            maxConcurrency: 2, // TODO: Don't let excess work through this stage, drive based on throughput not fixed
+            mode: StreamConcurrencyMode.Parallel,
+            maxConcurrency: (options?.maxConcurrency ?? 2) << 1, // Double the concurrency to ensure we have work?
             onBackpressure: () => {
               HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
                 stage: stage,
@@ -539,7 +540,7 @@ class DefaultHttpPipeline
         (t) => t.stage === stage,
       )
       if (transforms && transforms.length > 0) {
-        end = pipe(end, createTransform(stage, transforms))
+        end = pipe(end, createTransform(stage, transforms, options))
       }
     }
 

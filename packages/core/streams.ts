@@ -8,11 +8,20 @@ import {
   type TransformCallback,
   type TransformOptions,
 } from "stream"
-import { Semaphore } from "./concurrency.js"
-import { MaybeAwaitable } from "./index.js"
+import { Semaphore, Signal } from "./concurrency.js"
+import { MaybeAwaitable, type FrameworkPriority } from "./index.js"
 import { DefaultLogger } from "./logging.js"
+import {
+  DefaultMultiLevelPriorityQueue,
+  asTaskPriority,
+  type MultiLevelPriorityQueue,
+} from "./structures/multiLevelQueue.js"
 import { Duration } from "./time.js"
-import { type EmptyCallback, type Optional } from "./type/utils.js"
+import {
+  type Consumer,
+  type EmptyCallback,
+  type Optional,
+} from "./type/utils.js"
 
 /**
  * Custom type allowing mapping a type through a {@link MaybeAwaitable} to a new value
@@ -107,6 +116,8 @@ export function pipe<T extends Writable | Duplex>(
   }
 }
 
+type PriorityTransform<T> = (workload: T) => FrameworkPriority
+
 /** Limit exposed transform options */
 type RESTRICTED_TRANSFORM_OPTIONS =
   | "flush"
@@ -117,6 +128,12 @@ type RESTRICTED_TRANSFORM_OPTIONS =
   | "write"
   | "objectMode" // This is always true
 
+interface PrioritizationOptions {
+  tasktimeoutMs: number
+  prioritize: PriorityTransform<unknown>
+  cancellation: Consumer<unknown>
+}
+
 interface NamedTransformStreamOptions {
   /** the name of the transform */
   name?: string
@@ -126,6 +143,8 @@ interface NamedTransformStreamOptions {
   maxConcurrency?: number
   /** A callback for when backpressure is detected */
   onBackpressure?: EmptyCallback
+  /** The timeout for tasks that aren't picked up (default is 50) */
+  priority?: PrioritizationOptions
 }
 
 export interface NamedTransformOptions
@@ -142,6 +161,8 @@ export enum StreamConcurrencyMode {
   Parallel,
   /** Limit outstanding operations to a capped concurrency value */
   FixedConcurrency,
+  /** Limit outstanding and use a priority assignment to choose the next work */
+  PriorityFixed,
 }
 
 /**
@@ -185,6 +206,14 @@ export const createNamedTransform = <T, U>(
         return new ParallelNamedTransform(transform, options)
       case StreamConcurrencyMode.FixedConcurrency:
         return new FixedConcurrencyNamedTransform(transform, options)
+      case StreamConcurrencyMode.PriorityFixed:
+        return options.priority
+          ? new FixedPriorityNamedTransform(
+              transform,
+              options.priority,
+              options,
+            )
+          : new FixedConcurrencyNamedTransform(transform, options)
     }
   }
 
@@ -422,6 +451,139 @@ class FixedConcurrencyNamedTransform<T, U> extends AbstractNamedTransform<
       // Check if this was a final since the execution is potentially after the
       // last callback if there is no data forwarded to the `data` event
       this._checkFinal()
+    }
+  }
+}
+
+/**
+ * Allows a fixed number of tasks to be executing at any time while enforcing
+ * priority on the workload based on a {@link PriorityTransform} passed to the constructor
+ */
+class FixedPriorityNamedTransform<T, U> extends AbstractNamedTransform<T, U> {
+  private _prioritize: PriorityTransform<T>
+  private _queue: MultiLevelPriorityQueue
+  private _semaphore: Semaphore
+  private finishCallback?: StreamCallback
+  private _timeout: Duration
+  private _cancel: Consumer<T>
+  private _signal: Signal = new Signal() // Need to fire this on read/cancel to keep down hwm
+
+  constructor(
+    transform: TransformFunc<T, U>,
+    priority: PrioritizationOptions,
+    options?: NamedTransformOptions,
+  ) {
+    super(transform, {
+      ...options,
+      final: (cb: StreamCallback) => {
+        this.finishCallback = cb
+        this._checkFinal()
+      },
+    })
+
+    this._prioritize = priority.prioritize
+    this._cancel = priority.cancellation
+    this._queue = new DefaultMultiLevelPriorityQueue()
+
+    const maxConcurrency =
+      options?.maxConcurrency ?? Math.max(1, this.writableHighWaterMark >> 1)
+    this._semaphore = new Semaphore(maxConcurrency)
+
+    this._timeout = Duration.ofMilli(priority.tasktimeoutMs)
+
+    this.on("data", () => {
+      // Release the current
+      this._semaphore.release()
+
+      // Queue any next work
+      this._queueNext()
+    })
+  }
+
+  private async _queueNext(): Promise<void> {
+    if (this._queue.size > 0) {
+      await this._semaphore.acquire()
+
+      const work = this._queue.next()
+      if (work !== undefined) {
+        try {
+          const res = await work
+          if (res !== undefined) {
+            // Work was removed, notify
+            this._signal.notify()
+
+            // Push the results
+            this.push(res)
+          } else {
+            this._semaphore.release()
+          }
+        } catch (err) {
+          this.emit("error", err)
+        }
+      } else {
+        this._semaphore.release()
+      }
+    }
+
+    // Check if we are done
+    this._checkFinal()
+  }
+
+  override async _transform(
+    chunk: T,
+    _encoding: BufferEncoding,
+    callback: TransformCallback,
+  ): Promise<void> {
+    const priority = this._prioritize(chunk)
+
+    this._queue.queue(
+      {
+        priority: asTaskPriority(priority),
+        timeout: this._timeout,
+        cancel: () => {
+          // Notify anyone waiting there is new space
+          this._signal.notify()
+
+          // Check if we are done
+          this._checkFinal()
+
+          // Cancel the chunk of work
+          this._cancel(chunk)
+        },
+      },
+      async () => {
+        try {
+          return await this._applyTransform(chunk)
+        } catch (err) {
+          this.emit("error", err)
+        }
+
+        return
+      },
+    )
+
+    // Try to queue more work
+    this._queueNext()
+
+    return callback()
+  }
+
+  private _checkFinal(): void {
+    // Check if the final callback was passed along and our semaphore is drained
+    if (
+      this.finishCallback &&
+      this._semaphore.running === 0 &&
+      this._queue.size === 0
+    ) {
+      // End the stream
+      this.push(null)
+
+      // Stop our queue
+      this._queue.shutdown()
+
+      // Invoke the callback
+      this.finishCallback()
+      this.finishCallback = undefined
     }
   }
 }

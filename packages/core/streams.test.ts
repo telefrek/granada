@@ -1,6 +1,11 @@
+import { info } from "console"
 import { Readable, Writable } from "stream"
 import { finished } from "stream/promises"
-import { StreamConcurrencyMode, createNamedTransform } from "./streams.js"
+import {
+  StreamConcurrencyMode,
+  createNamedTransform,
+  type NamedTransformOptions,
+} from "./streams.js"
 import { delay } from "./time.js"
 
 describe("Named Transform streams should work normally", () => {
@@ -20,18 +25,89 @@ describe("Named Transform streams should work normally", () => {
     expect(typeof results[0]).toEqual("string")
   })
 
-  it("Should be able to filter values in parallel", async () => {
-    const results = await Readable.from(generator())
-      .pipe(
-        createNamedTransform((d: number) => (d % 2 == 0 ? d : undefined), {
-          name: "ParallelTest",
-          mode: StreamConcurrencyMode.Parallel,
-        }),
-      )
-      .toArray()
+  it("Should be able to generate the same results with all concurrency modes", async () => {
+    const check = (r: number[]): void => {
+      expect(r.length).toEqual(10)
+      for (let n = 0; n < r.length; ++n) {
+        expect(r[n]).toBe(n)
+      }
+      return
+    }
 
-    expect(results.length).toEqual(5) // 0, 2, 4, 6, 8
-    expect(results.reduce((l, r) => l + r, 0)).toEqual(20)
+    let cancelled = 0
+
+    const opts = <NamedTransformOptions>{
+      maxConcurrency: 2,
+      priority: {
+        prioritize: (_) => 3,
+        cancellation: (_) => {
+          ++cancelled
+        },
+        tasktimeoutMs: 25,
+      },
+    }
+
+    for (const mode of [
+      StreamConcurrencyMode.Serial,
+      StreamConcurrencyMode.Parallel,
+      StreamConcurrencyMode.FixedConcurrency,
+      StreamConcurrencyMode.PriorityFixed,
+    ]) {
+      const results = await Readable.from(generator())
+        .pipe(
+          createNamedTransform((d: number) => d, {
+            ...opts,
+            mode,
+          }),
+        )
+        .toArray()
+
+      check(results)
+    }
+
+    expect(cancelled).toBe(0)
+  })
+
+  it("Should be able to filter values in all concurrency modes", async () => {
+    const check = (res: number[]): void => {
+      expect(res.length).toEqual(5)
+      expect(res.reduce((l, r) => l + r, 0)).toEqual(20)
+      return
+    }
+
+    let cancelled = 0
+
+    const opts = <NamedTransformOptions>{
+      maxConcurrency: 2,
+      priority: {
+        prioritize: (_) => 3,
+        cancellation: (_) => {
+          ++cancelled
+        },
+        tasktimeoutMs: 25,
+      },
+    }
+
+    for (const mode of [
+      StreamConcurrencyMode.Serial,
+      StreamConcurrencyMode.Parallel,
+      StreamConcurrencyMode.FixedConcurrency,
+      StreamConcurrencyMode.PriorityFixed,
+    ]) {
+      info(`Checking mode: ${mode}`)
+      const results = await Readable.from(generator())
+        .pipe(
+          createNamedTransform((d: number) => (d % 2 === 0 ? d : undefined), {
+            ...opts,
+            mode,
+          }),
+        )
+        .toArray()
+
+      check(results)
+    }
+
+    expect(cancelled).toBe(0)
   })
 
   it("Should be able to handle backpressure", async () => {

@@ -8,13 +8,18 @@ import {
   createSimpleLimiter,
   type Limiter,
 } from "@telefrek/core/backpressure/limits.js"
-import type { FrameworkPriority, MaybeAwaitable } from "@telefrek/core/index.js"
-import { debug, info } from "@telefrek/core/logging"
+import {
+  DeferredPromise,
+  type FrameworkPriority,
+  type MaybeAwaitable,
+} from "@telefrek/core/index.js"
+import { debug, error, info } from "@telefrek/core/logging"
 import { getGranadaMeter } from "@telefrek/core/observability/metrics.js"
 import { trace } from "@telefrek/core/observability/tracing.js"
 import {
   DefaultMultiLevelPriorityQueue,
   asTaskPriority,
+  createQueueWorker,
   type MultiLevelPriorityQueue,
 } from "@telefrek/core/structures/multiLevelQueue.js"
 import type { Pool } from "@telefrek/core/structures/pool.js"
@@ -102,6 +107,8 @@ export class DefaultPostgresDatabase implements PostgresDatabase {
   readonly _defaultTimeout: Duration
   readonly _queue: MultiLevelPriorityQueue
   readonly _limit: Limiter
+  readonly _controller: AbortController = new AbortController()
+  readonly _workers: Promise<void>[] = []
 
   constructor(options: PostgresDatabaseOptions) {
     this._pool = options.pool
@@ -113,15 +120,25 @@ export class DefaultPostgresDatabase implements PostgresDatabase {
     this._limit = createSimpleLimiter(vegasBuilder(2).withMax(48).build())
 
     // TODO: Change queue working size based on rate limiting
-    this._queue = new DefaultMultiLevelPriorityQueue(
-      options.maxParallelism ?? 4,
-    )
+    this._queue = new DefaultMultiLevelPriorityQueue()
+
+    // Add some workers
+    for (let n = 0; n < 4; ++n) {
+      info(`Creating pool worker...`)
+      this._workers.push(
+        createQueueWorker(this._queue, this._controller.signal),
+      )
+    }
   }
 
   async close(): Promise<void> {
     info(`Postgres: Shutting down queue`)
     // Stop the queue
     await this._queue.shutdown()
+
+    // Abort the controller to stop the workers
+    this._controller.abort("shutting down")
+    await Promise.all(this._workers)
 
     info(`Postgres: Shutting down pool`)
     // Stop the pool
@@ -150,18 +167,33 @@ export class DefaultPostgresDatabase implements PostgresDatabase {
     timeout?: Duration,
   ): Promise<QueryResult<T>> {
     // TODO: Hook in the monitoring of pool errors
-    const result = await this._queue.queue(
+    const deferred = new DeferredPromise<QueryResult<T>>()
+
+    const execute = this.executeQuery.bind(this)
+    const pool = this._pool
+    const queryTimeout = timeout ?? this._defaultTimeout
+
+    info(`Submitting: ${query.name}`)
+
+    // Queue the work...
+    this._queue.queue(
       {
         priority: asTaskPriority(query.priority ?? 5),
-        timeoutMilliseconds: ~~(timeout ?? this._defaultTimeout).milliseconds(),
+        timeout: queryTimeout,
+        cancel: () => deferred.reject(new QueryError("timeout")),
       },
-      this.executeQuery<T>,
-      query,
-      this._pool,
-      timeout ?? this._defaultTimeout,
+      async () => {
+        try {
+          info(`Executing query: ${query.name}`)
+          deferred.resolve(await execute(query, pool, queryTimeout))
+        } catch (err) {
+          error(`Rejecting... ${err}`)
+          deferred.reject(err)
+        }
+      },
     )
 
-    return result
+    return deferred
   }
 
   @trace((query: PostgresQuery) => query.name)

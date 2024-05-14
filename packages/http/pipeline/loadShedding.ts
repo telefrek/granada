@@ -2,13 +2,13 @@
  * Load shedding components
  */
 
-import type { MaybeAwaitable } from "@telefrek/core"
+import { DeferredPromise, type MaybeAwaitable } from "@telefrek/core/index.js"
 import {
   DefaultMultiLevelPriorityQueue,
   TaskPriority,
-  type MultiLevelTaskOptions,
-} from "@telefrek/core/structures/multiLevelQueue"
-import type { Optional } from "@telefrek/core/type/utils"
+} from "@telefrek/core/structures/multiLevelQueue.js"
+import { Duration } from "@telefrek/core/time.js"
+import type { Optional } from "@telefrek/core/type/utils.js"
 import type { HttpOperationContext } from "../context.js"
 import { HttpErrorCode, translateHttpError } from "../errors.js"
 import { HttpPipelineLoadShedder, HttpPipelineStage } from "../pipeline.js"
@@ -40,7 +40,7 @@ class DefaultHttpPipelineLoadShedder implements HttpPipelineLoadShedder {
 
   constructor(options: LoadSheddingOptions) {
     this.highWatermark = options.maxOutstandingRequests
-    const queue = new DefaultMultiLevelPriorityQueue(4) // TODO: More testing to see if this is necessary as stream parallelism required
+    const queue = new DefaultMultiLevelPriorityQueue() // TODO: More testing to see if this is necessary as stream parallelism required
 
     this.transform = async (context: HttpOperationContext) => {
       try {
@@ -52,22 +52,22 @@ class DefaultHttpPipelineLoadShedder implements HttpPipelineLoadShedder {
           return
         }
 
-        return await queue
-          .queue(
-            <MultiLevelTaskOptions>{
-              // TODO: Map this to context hints
-              priority: TaskPriority.LOW,
-              timeoutMilliseconds: options.thresholdMs,
-              delayMilliseconds: options.allowPriorityUpgrade
-                ? options.thresholdMs > 1
-                : undefined,
+        const deferred = new DeferredPromise<Optional<HttpOperationContext>>()
+
+        queue.queue(
+          {
+            // TODO: Map this to context hints
+            priority: TaskPriority.LOW,
+            timeout: Duration.ofMilli(options.thresholdMs),
+            cancel: () => {
+              context.operation.fail({ errorCode: HttpErrorCode.TIMEOUT })
+              deferred.resolve(undefined)
             },
-            () => context,
-          )
-          .catch((err) => {
-            context.operation.fail(translateHttpError(err))
-            return context
-          })
+          },
+          () => deferred.resolve(context),
+        )
+
+        return await deferred
       } catch (err) {
         context.operation.fail(translateHttpError(err))
       }
