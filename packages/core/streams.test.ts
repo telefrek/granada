@@ -14,7 +14,7 @@ describe("Named Transform streams should work normally", () => {
 
   it("Should be able to transform between two types", async () => {
     const results = await Readable.from(generator())
-      .pipe(createNamedTransform<number, string>((d) => d.toString()))
+      .pipe(createNamedTransform((d: number) => d.toString()))
       .toArray()
     expect(results.length).toEqual(10)
     expect(typeof results[0]).toEqual("string")
@@ -23,10 +23,10 @@ describe("Named Transform streams should work normally", () => {
   it("Should be able to filter values in parallel", async () => {
     const results = await Readable.from(generator())
       .pipe(
-        createNamedTransform<number, number>(
-          (d) => (d % 2 == 0 ? d : undefined),
-          { name: "ParallelTest", mode: StreamConcurrencyMode.Parallel },
-        ),
+        createNamedTransform((d: number) => (d % 2 == 0 ? d : undefined), {
+          name: "ParallelTest",
+          mode: StreamConcurrencyMode.Parallel,
+        }),
       )
       .toArray()
 
@@ -35,7 +35,7 @@ describe("Named Transform streams should work normally", () => {
   })
 
   it("Should be able to handle backpressure", async () => {
-    const readable = await Readable.from(generator(25), { highWaterMark: 2 })
+    const readable = Readable.from(generator(25), { highWaterMark: 2 })
     const writer = new Writable({
       objectMode: true,
       highWaterMark: 1, // Create a high watermark,
@@ -44,27 +44,20 @@ describe("Named Transform streams should work normally", () => {
       },
     })
 
-    const abort = new AbortController()
-    setTimeout(() => {
-      abort.abort("Timed out before finishing...")
-    }, 4_000)
-
     await finished(
       readable
         .pipe(
-          createNamedTransform<number, number>(
-            (l) => {
+          createNamedTransform(
+            (l: number) => {
               return l + 10
             },
             {
               name: "Backpressure Transform",
               highWaterMark: 2,
-              signal: abort.signal,
             },
           ),
         )
         .pipe(writer),
     )
-    expect(abort.signal.aborted).toBeFalsy()
   })
 })

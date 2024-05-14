@@ -4,6 +4,8 @@
 
 import { ValueType } from "@opentelemetry/api"
 import { getGranadaMeter } from "@telefrek/core/observability/metrics.js"
+import { isNamedTransform, type NamedTransform } from "@telefrek/core/streams"
+import type { Transform } from "stream"
 
 /**
  * Metrics related to http request handling (server)
@@ -97,11 +99,15 @@ export const HttpRequestPipelineMetrics = {
       valueType: ValueType.INT,
     },
   ),
-  LoadSheddingStageDelay: getGranadaMeter().createHistogram(
-    "load_shedding_arrival_time",
+  PipelineWatermarkGauge: getGranadaMeter().createObservableGauge(
+    "pipeline_watermarks",
+    { description: "The watermarks for each stage", valueType: ValueType.INT },
+  ),
+  PipelineStageArrivalTime: getGranadaMeter().createHistogram(
+    "pipeline_stage_arrival_time",
     {
       description:
-        "The amount of time between a request being accepted to the load shedding stage",
+        "The amount of time between a request being accepted to the indicated stage",
       valueType: ValueType.DOUBLE,
       unit: "seconds",
       advice: {
@@ -121,6 +127,40 @@ export const HttpRequestPipelineMetrics = {
     },
   ),
 } as const
+
+const MONITORED_TRANSFORMS: NamedTransform[] = []
+
+export function removeTransform(transform: Transform): void {
+  if (isNamedTransform(transform)) {
+    const idx = MONITORED_TRANSFORMS.indexOf(transform)
+    if (idx >= 0) {
+      MONITORED_TRANSFORMS.splice(idx, 1)
+    }
+  }
+}
+
+export function monitorTransform(transform: Transform): void {
+  if (isNamedTransform(transform)) {
+    const idx = MONITORED_TRANSFORMS.indexOf(transform)
+    if (idx < 0) {
+      MONITORED_TRANSFORMS.push(transform)
+    }
+  }
+}
+
+// Hook the monitors to to keep this simple
+HttpRequestPipelineMetrics.PipelineWatermarkGauge.addCallback((monitor) => {
+  for (const transform of MONITORED_TRANSFORMS) {
+    monitor.observe(transform.readableLength, {
+      watermark: "read",
+      transform: transform.name,
+    })
+    monitor.observe(transform.writableLength, {
+      watermark: "write",
+      transform: transform.name,
+    })
+  }
+})
 
 /**
  * Metrics related to request handling

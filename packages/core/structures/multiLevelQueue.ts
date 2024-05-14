@@ -69,15 +69,15 @@ export interface MultiLevelPriorityQueue {
  * Default implementation of the {@link MultiLevelPriorityQueue}
  */
 export class DefaultMultiLevelPriorityQueue implements MultiLevelPriorityQueue {
-  _queue: MultiLevelQueue = {
+  private _queue: MultiLevelQueue = {
     [TaskPriority.CRITICAL]: [],
     [TaskPriority.HIGH]: [],
     [TaskPriority.MEDIUM]: [],
     [TaskPriority.LOW]: [],
   }
-  _signal: Signal = new Signal()
-  _workers: QueueWorker[]
-  _curator: QueueWorker
+  private _signal: Signal = new Signal()
+  private _workers: QueueWorker[]
+  private _curator: QueueWorker
 
   constructor(size: number) {
     this._workers = []
@@ -244,7 +244,7 @@ class MultiLevelWorkerThread implements MultiLevelWorker {
     }
   }
 
-  _next(): Optional<MultiLevelQueueTask_T> {
+  private _next(): Optional<MultiLevelQueueTask_T> {
     for (let p = 0; p < 4; ++p) {
       const task = this._queue[p as TaskPriority].shift()
       if (task) {
@@ -270,7 +270,7 @@ class QueueCurator implements MultiLevelWorker {
     this._timeout = setInterval(curate, 250)
   }
 
-  _curate(): void {
+  private _curate(): void {
     // Check for an abort
     if (this._abort.aborted) {
       this._signal.notify()

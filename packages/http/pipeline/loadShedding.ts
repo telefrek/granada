@@ -10,8 +10,7 @@ import {
 } from "@telefrek/core/structures/multiLevelQueue"
 import type { Optional } from "@telefrek/core/type/utils"
 import type { HttpOperationContext } from "../context.js"
-import { translateHttpError } from "../errors.js"
-import { HttpRequestPipelineMetrics } from "../metrics.js"
+import { HttpErrorCode, translateHttpError } from "../errors.js"
 import { HttpPipelineLoadShedder, HttpPipelineStage } from "../pipeline.js"
 
 export interface LoadSheddingOptions {
@@ -43,23 +42,32 @@ class DefaultHttpPipelineLoadShedder implements HttpPipelineLoadShedder {
     this.highWatermark = options.maxOutstandingRequests
     const queue = new DefaultMultiLevelPriorityQueue(4) // TODO: More testing to see if this is necessary as stream parallelism required
 
-    this.transform = async (context) => {
+    this.transform = async (context: HttpOperationContext) => {
       try {
-        HttpRequestPipelineMetrics.LoadSheddingStageDelay.record(
-          context.operation.started.duration.seconds(),
-        )
+        if (
+          context.operation.started.duration.milliseconds() >
+          options.thresholdMs
+        ) {
+          context.operation.fail({ errorCode: HttpErrorCode.TIMEOUT })
+          return
+        }
 
-        return await queue.queue(
-          <MultiLevelTaskOptions>{
-            // TODO: Map this to context hints
-            priority: TaskPriority.LOW,
-            timeoutMilliseconds: options.thresholdMs,
-            delayMilliseconds: options.allowPriorityUpgrade
-              ? options.thresholdMs > 1
-              : undefined,
-          },
-          () => context,
-        )
+        return await queue
+          .queue(
+            <MultiLevelTaskOptions>{
+              // TODO: Map this to context hints
+              priority: TaskPriority.LOW,
+              timeoutMilliseconds: options.thresholdMs,
+              delayMilliseconds: options.allowPriorityUpgrade
+                ? options.thresholdMs > 1
+                : undefined,
+            },
+            () => context,
+          )
+          .catch((err) => {
+            context.operation.fail(translateHttpError(err))
+            return context
+          })
       } catch (err) {
         context.operation.fail(translateHttpError(err))
       }

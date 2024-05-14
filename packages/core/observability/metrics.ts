@@ -9,6 +9,7 @@ import opentelemetry, {
 } from "@opentelemetry/api"
 import type { EventLoopUtilization } from "perf_hooks"
 import type { HeapInfo, HeapSpaceInfo } from "v8"
+import { registerShutdown } from "../lifecycle.js"
 import type { Optional } from "../type/utils.js"
 import { GRANADA_VERSION } from "../version.js"
 
@@ -169,10 +170,14 @@ async function trackHeapMetrics(meter: Meter): Promise<void> {
   // Read these on a cadence since it may be expensive
   let lastHeapValues: HeapSpaceInfo[] = []
   let lastHeapInfo: Optional<HeapInfo>
-  setInterval(() => {
+  const interval = setInterval(() => {
     lastHeapValues = getHeapSpaceStatistics()
     lastHeapInfo = getHeapStatistics()
   }, 15_000)
+
+  registerShutdown(()=>{
+    clearInterval(interval)
+  })
 
   meter
     .createObservableGauge("heap_space_used_size", {

@@ -65,14 +65,14 @@ export interface HttpServer extends Emitter<HttpServerEvents> {
    *
    * @returns A promise to optionally use for tracking listening
    */
-  _listen(port: number): MaybeAwaitable<void>
+  listen(port: number): MaybeAwaitable<void>
 
   /**
    * Closes the server, rejecting any further calls
    *
    * @param graceful Flag to indicate if we want a graceful shutdown
    */
-  _close(graceful?: boolean): MaybeAwaitable<void>
+  close(graceful?: boolean): MaybeAwaitable<void>
 
   /**
    * Change the readiness flag

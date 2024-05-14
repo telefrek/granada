@@ -43,7 +43,7 @@ export interface PostgresPoolOptions extends PoolOptions {
  * Default implementation of a {@link PoolBase} for postgres
  */
 export class PostgresConnectionPool extends PoolBase<pg.Client> {
-  _clientConfig: pg.ClientConfig
+  private _clientConfig: pg.ClientConfig
 
   constructor(options: PostgresPoolOptions) {
     super(options)

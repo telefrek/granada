@@ -9,38 +9,35 @@ import { LifecycleEvents } from "@telefrek/core/lifecycle.js"
 import { DefaultLogger, LogLevel, type Logger } from "@telefrek/core/logging.js"
 import { Tracing, TracingContext } from "@telefrek/core/observability/tracing"
 import {
-  NamedTransformStream,
   StreamConcurrencyMode,
   createNamedTransform,
   drain,
   pipe,
-  type StreamCallback,
   type TransformFunc,
 } from "@telefrek/core/streams.js"
 import { Timestamp } from "@telefrek/core/time.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
 import { on } from "events"
-import { Readable, promises as StreamPromise, Writable } from "stream"
+import { Readable, Writable, type Transform } from "stream"
 import {
   HTTP_OPERATION_CONTEXT_STORE,
   isTerminal,
   type HttpOperationContext,
 } from "./context.js"
-import { translateHttpError } from "./errors.js"
+import { HttpErrorCode, translateHttpError } from "./errors.js"
 import {
   type HttpHandler,
   type HttpRequest,
   type HttpResponse,
 } from "./index.js"
-import { HttpRequestPipelineMetrics } from "./metrics.js"
-import { HttpOperationState, type HttpOperationSource } from "./operations.js"
+import { HttpRequestPipelineMetrics, monitorTransform } from "./metrics.js"
+import { type HttpOperationSource } from "./operations.js"
 import {
   createRouter,
   setRoutingParameters,
   traceRoute,
   type Router,
 } from "./routing.js"
-import { notFound } from "./utils.js"
 
 /**
  * The default {@link Logger} for {@link HttpPipeline} operations
@@ -283,7 +280,7 @@ export function createPipeline(
 function createTransform<Stage extends HttpPipelineStage>(
   stage: Stage,
   sources: HttpPipelineTransform[],
-): NamedTransformStream<HttpOperationContext, HttpOperationContext> {
+): Transform {
   switch (stage) {
     case HttpPipelineStage.ROUTING: {
       const router = createRouter()
@@ -292,12 +289,19 @@ function createTransform<Stage extends HttpPipelineStage>(
         router.addRouter(pipelineRouter.basePath, pipelineRouter.router)
       }
 
-      return createNamedTransform<HttpOperationContext, HttpOperationContext>(
+      const routing = createNamedTransform<
+        HttpOperationContext,
+        HttpOperationContext
+      >(
         (context) => {
           if (!isTerminal(context)) {
             HttpRequestPipelineMetrics.PipelineStageCounter.add(1, {
               stage: stage,
             })
+            HttpRequestPipelineMetrics.PipelineStageArrivalTime.record(
+              context.operation.started.duration.seconds(),
+              { stage: stage },
+            )
             const routeInfo = router.lookup({
               path: context.operation.request.path.original,
               method: context.operation.request.method,
@@ -316,21 +320,23 @@ function createTransform<Stage extends HttpPipelineStage>(
           return
         },
         {
-          name: "http.pipeline.router",
+          name: "router",
           mode: StreamConcurrencyMode.Parallel,
           onBackpressure: () => {
             HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
               stage: stage,
-              name: "http.pipeline.router",
+              name: "router",
             })
           },
         },
       )
+
+      monitorTransform(routing)
+
+      return routing
     }
     case HttpPipelineStage.LOAD_SHEDDING: {
-      let current: Optional<
-        NamedTransformStream<HttpOperationContext, HttpOperationContext>
-      >
+      let current: Optional<Transform>
       for (const source of sources) {
         const shedder = source as HttpPipelineLoadShedder
 
@@ -340,26 +346,33 @@ function createTransform<Stage extends HttpPipelineStage>(
               HttpRequestPipelineMetrics.PipelineStageCounter.add(1, {
                 stage: stage,
               })
+              HttpRequestPipelineMetrics.PipelineStageArrivalTime.record(
+                context.operation.started.duration.seconds(),
+                { stage: stage },
+              )
 
-              return HTTP_OPERATION_CONTEXT_STORE.run(context, async () => {
-                return TracingContext.with(
-                  Tracing.setSpan(
-                    TracingContext.active(),
-                    context.operation.span,
-                  ),
-                  async () => {
-                    return await shedder.transform(context)
-                  },
-                )
-              })
+              return await HTTP_OPERATION_CONTEXT_STORE.run(
+                context,
+                async () => {
+                  return await TracingContext.with(
+                    Tracing.setSpan(
+                      TracingContext.active(),
+                      context.operation.span,
+                    ),
+                    async () => {
+                      return await shedder.transform(context)
+                    },
+                  )
+                },
+              )
             }
 
             return
           },
           {
             name: shedder.transformName,
-            highWaterMark: shedder.highWatermark,
-            mode: StreamConcurrencyMode.Parallel,
+            mode: StreamConcurrencyMode.FixedConcurrency,
+            maxConcurrency: 2, // TODO: Don't let excess work through this stage, drive based on throughput not fixed
             onBackpressure: () => {
               HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
                 stage: stage,
@@ -368,6 +381,8 @@ function createTransform<Stage extends HttpPipelineStage>(
             },
           },
         )
+
+        monitorTransform(namedPipeline)
 
         if (current !== undefined) {
           current = pipe(current, namedPipeline)
@@ -395,8 +410,8 @@ interface PipelineDetails {
 }
 
 type Transformations = {
-  start: NamedTransformStream<HttpOperationContext, HttpOperationContext>
-  end: NamedTransformStream<HttpOperationContext, HttpOperationContext>
+  start: Transform
+  end: Transform
 }
 
 class DefaultHttpPipeline
@@ -424,15 +439,16 @@ class DefaultHttpPipeline
   private _createHandlerTransform(defaultHandler: HttpHandler): HttpTransform {
     return async (
       context: HttpOperationContext,
-    ): Promise<HttpOperationContext> => {
+    ): Promise<Optional<HttpOperationContext>> => {
       // Only process if we're not completed and there are no other responses already
-      if (
-        context.operation.state !== HttpOperationState.COMPLETED &&
-        !(context.operation.response || context.response)
-      ) {
+      if (!isTerminal(context)) {
         HttpRequestPipelineMetrics.PipelineStageCounter.add(1, {
           stage: "handler",
         })
+        HttpRequestPipelineMetrics.PipelineStageArrivalTime.record(
+          context.operation.started.duration.seconds(),
+          { stage: "handler" },
+        )
         try {
           // Either use the context handler or the default
           const handler = context.handler ?? defaultHandler
@@ -471,9 +487,11 @@ class DefaultHttpPipeline
             await drain(context.operation.request.body.contents)
           }
         }
+
+        return context
       }
 
-      return context
+      return
     }
   }
 
@@ -481,8 +499,11 @@ class DefaultHttpPipeline
     handler: HttpHandler,
     options: HttpPipelineOptions,
   ): Transformations {
-    const start = new NamedTransformStream(
+    const start = createNamedTransform(
       (context: HttpOperationContext) => {
+        HttpRequestPipelineMetrics.PipelineStageCounter.add(1, {
+          stage: "dequeue",
+        })
         PIPELINE_LOGGER.debug(
           `dequeueing: ${context.operation.request.method} ${context.operation.request.path.original}`,
         )
@@ -500,6 +521,8 @@ class DefaultHttpPipeline
         },
       },
     )
+
+    monitorTransform(start)
 
     let end = start
 
@@ -522,85 +545,91 @@ class DefaultHttpPipeline
 
     for (const middleware of this._configuration.middleware ?? []) {
       if (middleware.modifyRequest) {
-        end = pipe(
-          end,
-          createNamedTransform(
-            (ctx) => {
-              return HTTP_OPERATION_CONTEXT_STORE.run(ctx, async () => {
-                try {
-                  ctx.response = await middleware.modifyRequest!(
-                    ctx.operation.request,
-                  )
-                } catch (err) {
-                  ctx.operation.fail(translateHttpError(err))
-                }
+        const middlewareTransform = createNamedTransform(
+          (ctx: HttpOperationContext) => {
+            return HTTP_OPERATION_CONTEXT_STORE.run(ctx, async () => {
+              try {
+                ctx.response = await middleware.modifyRequest!(
+                  ctx.operation.request,
+                )
+              } catch (err) {
+                ctx.operation.fail(translateHttpError(err))
+              }
 
-                return ctx
+              return ctx
+            })
+          },
+          {
+            name: middleware.name,
+            mode: StreamConcurrencyMode.Parallel, // Run in parallel
+            onBackpressure: () => {
+              HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
+                stage: "middleware.before",
+                name: middleware.name,
               })
             },
-            {
-              name: middleware.name,
-              onBackpressure: () => {
-                HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
-                  stage: "middleware.before",
-                  name: middleware.name,
-                })
-              },
-            },
-          ),
+          },
         )
+        monitorTransform(middlewareTransform)
+
+        end = pipe(end, middlewareTransform)
       }
     }
 
     // Add the handler stage
-    end = pipe(
-      end,
-      createNamedTransform(this._createHandlerTransform(handler), {
+    const handlerTransform = createNamedTransform(
+      this._createHandlerTransform(handler),
+      {
         name: "handler",
-        mode: StreamConcurrencyMode.Parallel,
+        mode: StreamConcurrencyMode.FixedConcurrency,
         maxConcurrency: options.maxConcurrency,
-        highWaterMark: options.highWaterMark,
+        writableHighWaterMark: 1, // Don't let work backlog here
         onBackpressure: () => {
           HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
             stage: "handler",
             name: "handler",
           })
         },
-      }),
+      },
     )
+
+    monitorTransform(handlerTransform)
+
+    end = pipe(end, handlerTransform)
 
     for (const middleware of this._configuration.middleware ?? []) {
       if (middleware.modifyResponse) {
-        end = pipe(
-          end,
-          createNamedTransform(
-            (ctx) => {
-              return HTTP_OPERATION_CONTEXT_STORE.run(ctx, async () => {
-                try {
-                  if (ctx.response) {
-                    await middleware.modifyResponse!(
-                      ctx.operation.request,
-                      ctx.response,
-                    )
-                  }
-                } catch (err) {
-                  ctx.operation.fail(translateHttpError(err))
+        const middlewareTransform = createNamedTransform(
+          (ctx: HttpOperationContext) => {
+            return HTTP_OPERATION_CONTEXT_STORE.run(ctx, async () => {
+              try {
+                if (ctx.response) {
+                  await middleware.modifyResponse!(
+                    ctx.operation.request,
+                    ctx.response,
+                  )
                 }
+              } catch (err) {
+                ctx.operation.fail(translateHttpError(err))
+              }
 
-                return ctx
+              return ctx
+            })
+          },
+          {
+            name: middleware.name,
+            mode: StreamConcurrencyMode.Parallel,
+            onBackpressure: () => {
+              HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
+                stage: "middleware.before",
+                name: middleware.name,
               })
             },
-            {
-              name: middleware.name,
-              onBackpressure: () => {
-                HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
-                  stage: "middleware.before",
-                  name: middleware.name,
-                })
-              },
-            },
-          ),
+          },
         )
+        monitorTransform(middlewareTransform)
+
+        end = pipe(end, middlewareTransform)
       }
     }
 
@@ -611,65 +640,87 @@ class DefaultHttpPipeline
     source: HttpOperationSource,
     options: HttpPipelineOptions,
   ): Readable {
-    const readable = Readable.from(on(source, "received"), {
-      highWaterMark: options.highWaterMark,
-      objectMode: true,
-      emitClose: true,
-      autoDestroy: true,
-    })
+    const controller = new AbortController()
+
+    const readable = Readable.from(
+      on(source, "received", { signal: controller.signal }),
+      {
+        highWaterMark: options.highWaterMark,
+        objectMode: true,
+        emitClose: true,
+        autoDestroy: true,
+      },
+    )
 
     source.once("finished", () => {
+      // Abort the iteration
+      controller.abort()
+
       // Destroy the readable stream
       readable.destroy()
     })
 
-    return readable
-      .on("error", (err) => {
-        PIPELINE_LOGGER.error(`Error in pipeline ${err}`)
-      })
-      .pipe(
-        createNamedTransform<unknown, HttpOperationContext>(
-          (chunk) => {
-            return {
-              operation: Array.isArray(chunk) ? chunk[0] : chunk,
-            }
-          },
-          {
-            mode: StreamConcurrencyMode.Parallel,
-            name: "OperationContextBuilder",
-          },
-        ),
-      )
+    const context = createNamedTransform<unknown, HttpOperationContext>(
+      (chunk) => {
+        return {
+          operation: Array.isArray(chunk) ? chunk[0] : chunk,
+        }
+      },
+      {
+        mode: StreamConcurrencyMode.Parallel,
+        name: "context.builder",
+        onBackpressure: () => {
+          HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
+            stage: "context.builder",
+          })
+        },
+      },
+    )
+
+    monitorTransform(context)
+
+    return pipe(readable, context)
   }
 
-  private _buildConsumer(options: HttpPipelineOptions): Writable {
-    const check = this._checkState.bind(this)
+  private _buildConsumer(): Writable {
+    // const check = this._checkState.bind(this)
 
     return new Writable({
       objectMode: true,
       emitClose: true,
-      highWaterMark: options?.highWaterMark,
-      destroy: (err, callback) => {
-        if (err) {
-          PIPELINE_LOGGER.error(`Error during pipeline causing destroy: ${err}`)
+      autoDestroy: true,
+      destroy(error, callback) {
+        if (error) {
+          PIPELINE_LOGGER.error(`Error during pipeline destroy: ${error}`)
         }
-        PIPELINE_LOGGER.info(`Pipeline destroyed`)
+
+        PIPELINE_LOGGER.info(`Pipeline stream ended`)
         callback()
       },
-      write(
-        context: HttpOperationContext,
-        _: BufferEncoding,
-        callback: StreamCallback,
-      ) {
-        check()
-          .then(() => {
-            if (!isTerminal(context)) {
-              context.operation.complete(context.response ?? notFound())
+      writev(chunks, callback) {
+        // Pull chunks in bulk to finish them
+        for (const chunk of chunks) {
+          const ctx = chunk.chunk as HttpOperationContext
+          HttpRequestPipelineMetrics.PipelineStageCounter.add(1, {
+            stage: "complete",
+          })
+          HttpRequestPipelineMetrics.PipelineStageArrivalTime.record(
+            ctx.operation.started.duration.seconds(),
+            { stage: "complete" },
+          )
+          if (!isTerminal(ctx)) {
+            if (ctx.response) {
+              ctx.operation.complete(ctx.response)
+            } else {
+              ctx.operation.fail({
+                errorCode: HttpErrorCode.UNKNOWN,
+                description: "no response generated",
+              })
             }
-          })
-          .finally(() => {
-            callback()
-          })
+          }
+        }
+
+        callback()
       },
     }).on("error", (err) => {
       PIPELINE_LOGGER.error(`Error during pipeline write: ${err}`, err)
@@ -685,7 +736,7 @@ class DefaultHttpPipeline
       started: Timestamp.now(),
       source: this._buildReadable(source, options),
       transformations: this._buildMiddleware(handler, options),
-      destination: this._buildConsumer(options),
+      destination: this._buildConsumer(),
       options,
     }
 
@@ -696,7 +747,7 @@ class DefaultHttpPipeline
       })
       .pipe(details.transformations.start)
     details.transformations.end
-      .on("error", (err) => {
+      .on("error", (err: unknown) => {
         PIPELINE_LOGGER.error(`Error in pipeline middleware: ${err}`)
       })
       .pipe(details.destination)
@@ -741,13 +792,16 @@ class DefaultHttpPipeline
     const details = this._sources.get(source)
     if (details) {
       PIPELINE_LOGGER.debug(`Removing source: ${source.id}`)
+      details.source.emit("error", new Error("pipeline aborted..."))
 
-      const finished = StreamPromise.finished(details.destination, {
-        error: true,
-        writable: true,
-      })
+      // const finished = StreamPromise.finished(details.destination, {
+      //   error: true,
+      //   writable: true,
+      // })
 
-      await finished
+      // await finished
+
+      PIPELINE_LOGGER.debug(`Finished source: ${source.id}`)
     }
 
     return this._sources.delete(source)
@@ -762,6 +816,7 @@ class DefaultHttpPipeline
 
     // Clear the sources
     for (const source of this._sources.keys()) {
+      PIPELINE_LOGGER.info(`Removing source: ${source.id}`)
       await this.remove(source)
     }
   }

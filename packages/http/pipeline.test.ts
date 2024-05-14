@@ -66,7 +66,7 @@ describe("Pipelines should support clients and servers end to end", () => {
     } else {
       TEST_LOGGER.info(`Started pipeline`)
     }
-    promise = server._listen(port)
+    promise = server.listen(port)
     client = createHttp2Client(certDir, port)
   })
 
@@ -83,7 +83,7 @@ describe("Pipelines should support clients and servers end to end", () => {
     }
 
     if (server) {
-      await server._close(false)
+      await server.close(false)
       await promise
     }
 

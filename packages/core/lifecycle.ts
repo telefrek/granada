@@ -2,8 +2,10 @@
  * Package exports
  */
 
-import { MaybeAwaitable } from "./index.js"
-import { error, fatal } from "./logging.js"
+import { Socket } from "net"
+import { clearTimeout } from "timers"
+import { MaybeAwaitable, getDebugInfo } from "./index.js"
+import { error, fatal, warn } from "./logging.js"
 
 /**
  * Set of supported events on an object with a defined lifecycle
@@ -86,3 +88,74 @@ process.on("SIGTERM", async () => {
   fatal("Received SIGTERM, shutting down system...")
   await shutdown()
 })
+
+/**
+ * Make sure we acknowledge that this method might exist
+ */
+interface getActiveHandles extends NodeJS.Process {
+  /**
+   * Get the set of active handles that are still using the event loop
+   *
+   * @returns The set of resources that are alive (could be a wide variety of objects)
+   */
+  _getActiveHandles?: () => unknown[]
+}
+
+interface Destroyable {
+  destroy(): void
+}
+
+function isDestroyable(obj: unknown): obj is Destroyable {
+  return (
+    typeof obj === "object" &&
+    obj !== null &&
+    "destroy" in obj &&
+    typeof obj.destroy === "function"
+  )
+}
+
+/**
+ * Finds dangling resources and shows information about them
+ *
+ * @param forceClose Flag to indicate if these should be force closed
+ */
+export function checkDanglingResources(forceClose: boolean = true): void {
+  process.getActiveResourcesInfo().forEach((resource) => {
+    warn(`Suspect resource: ${resource}`)
+    switch (resource) {
+      case "Timeout": {
+        warn(`Clearing timeouts...`)
+        const timeout = setTimeout(() => {}, 1_000)
+        clearTimeout(timeout)
+        for (let n = +timeout; n > 0; --n) {
+          clearTimeout(n)
+        }
+        warn(`Done`)
+      }
+    }
+  })
+
+  const handles = (process as getActiveHandles)._getActiveHandles
+  if (handles !== undefined) {
+    handles().forEach((handle) => {
+      warn(`Open handle: ${getDebugInfo(handle)}`)
+      if (forceClose) {
+        if (handle instanceof Socket) {
+          warn(`Destroying socket...`)
+          handle
+            .on("error", (err) => {
+              error(`Error from socket ${err}`)
+            })
+            .destroy(new Error("Processing ended"))
+          warn(`Destroyed`)
+        } else if (isDestroyable(handle)) {
+          warn(`Destroying object...`)
+          handle.destroy()
+          warn(`Object destroyed`)
+        } else if (typeof handle === "number" || typeof handle === "string") {
+          clearTimeout(handle)
+        }
+      }
+    })
+  }
+}

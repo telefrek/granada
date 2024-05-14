@@ -10,7 +10,7 @@ abstract class AbstractLimitAlgorithm
   extends EmitterFor<LimitEvents>
   implements LimitAlgorithm
 {
-  _limit: number
+  protected _limit: number
 
   constructor(initialLimit: number) {
     super()
@@ -103,16 +103,16 @@ export function vegasBuilder(limit: number): VegasLimitBuilder {
  * Builder class to help create Vegas {@link LimitAlgorithm} instances
  */
 export class VegasLimitBuilder {
-  _limit: number
-  _limitMax: number
-  _alpha: VegasEstimate
-  _beta: VegasEstimate
-  _threshold: VegasEstimate
-  _increase: VegasEstimate
-  _decrease: VegasEstimate
+  private _limit: number
+  private _limitMax: number
+  private _alpha: VegasEstimate
+  private _beta: VegasEstimate
+  private _threshold: VegasEstimate
+  private _increase: VegasEstimate
+  private _decrease: VegasEstimate
 
-  _smoothing: number
-  _probeMultiplier: number
+  private _smoothing: number
+  private _probeMultiplier: number
 
   constructor(limit: number) {
     this._limit = limit
@@ -282,20 +282,20 @@ export class VegasLimitBuilder {
  * Uses a variant of the Vegas TCP congestion algorithm ({@link https://en.wikipedia.org/wiki/TCP_Vegas})
  */
 class VegasLimitAlgorithm extends AbstractLimitAlgorithm {
-  readonly _alpha: VegasEstimate
-  readonly _beta: VegasEstimate
-  readonly _threshold: VegasEstimate
-  readonly _increase: VegasEstimate
-  readonly _decrease: VegasEstimate
-  readonly _maxLimit: number
+  private readonly _alpha: VegasEstimate
+  private readonly _beta: VegasEstimate
+  private readonly _threshold: VegasEstimate
+  private readonly _increase: VegasEstimate
+  private readonly _decrease: VegasEstimate
+  private readonly _maxLimit: number
 
-  readonly _smoothing: number
-  readonly _probeMultiplier: number
+  private readonly _smoothing: number
+  private readonly _probeMultiplier: number
 
-  _estimatedLimit = 0
-  _probeCount = 0
-  _probeJitter = 0
-  _rttNoLoad = 0
+  private _estimatedLimit = 0
+  private _probeCount = 0
+  private _probeJitter = 0
+  private _rttNoLoad = 0
 
   constructor(builder: VegasLimitBuilder) {
     super(builder.limit)

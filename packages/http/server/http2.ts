@@ -132,7 +132,7 @@ export class NodeHttp2Server extends HttpServerBase {
     }
   }
 
-  _setupRequestMapping(): void {
+  private _setupRequestMapping(): void {
     this._server.on("error", (err) => {
       this._logger.error(`Error: ${err}`, err)
       this.emit("error", err)

@@ -44,7 +44,7 @@ describe("Services should work for basic use cases", () => {
     }
 
     if (server) {
-      await server._close(false)
+      await server.close(false)
     }
 
     if (promise) {

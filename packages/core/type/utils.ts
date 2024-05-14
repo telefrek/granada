@@ -102,6 +102,11 @@ export type Func<Args extends AnyArgs, Result> = (...args: Args) => Result
 export type Callback<Args extends AnyArgs> = (...args: Args) => void
 
 /**
+ * A function that consumes a value
+ */
+export type Consumer<T> = (obj: T) => MaybeAwaitable<void>
+
+/**
  * A {@link Callback} that takes no arguments
  */
 export type EmptyCallback = () => void

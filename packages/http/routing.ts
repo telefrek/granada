@@ -507,7 +507,10 @@ class RouterImpl implements Router {
    * @param children The children to inspect
    * @param info The info for the collision check
    */
-  _guardUnmappable(children: RouteTrieNode[], info: RouteSegmentInfo): void {
+  private _guardUnmappable(
+    children: RouteTrieNode[],
+    info: RouteSegmentInfo,
+  ): void {
     if (
       children.some((c) => c.info !== info && c.info !== RouteSegmentInfo.None)
     ) {
@@ -524,7 +527,10 @@ class RouterImpl implements Router {
    * @param segment The {@link RouteSegment} we want to add at this point
    * @returns The resulting {@link RouteTrieNode} where the next operations would happen
    */
-  _mergeSegment(current: RouteTrieNode, segment: RouteSegment): RouteTrieNode {
+  private _mergeSegment(
+    current: RouteTrieNode,
+    segment: RouteSegment,
+  ): RouteTrieNode {
     // Easy case
     if (current.children === undefined) {
       const next: RouteTrieNode = {
@@ -655,7 +661,7 @@ class RouterImpl implements Router {
     }
   }
 
-  _split(
+  private _split(
     current: RouteTrieNode,
     segment: RouteSegment,
     prefixLegnth: number,
@@ -722,7 +728,7 @@ class RouterImpl implements Router {
    * @param segments The remaining {@link RouteSegment}
    * @param node The terminal {@link RouteTrieNode}
    */
-  _addFast(
+  private _addFast(
     current: RouteTrieNode,
     segments: RouteSegment[],
     node: RouteTrieNode,
@@ -752,7 +758,7 @@ class RouterImpl implements Router {
    *
    * @returns The set of {@link RouteSegment} found for this template path
    */
-  _verifyRoute(template: string): RouteSegment[] {
+  private _verifyRoute(template: string): RouteSegment[] {
     // verify the template matches
     if (!TEMPLATE_REGEX.test(template)) {
       throw new RoutingError(`Template is not valid: ${template}`)

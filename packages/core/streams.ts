@@ -1,20 +1,18 @@
 import { randomUUID as v4 } from "crypto"
 import {
+  Duplex,
+  Readable,
   Stream,
-  TransformCallback,
-  type Duplex,
-  type Readable,
+  Writable,
+  type Transform,
+  type TransformCallback,
   type TransformOptions,
-  type Writable,
 } from "stream"
 import { Semaphore } from "./concurrency.js"
 import { MaybeAwaitable } from "./index.js"
-import { error } from "./logging.js"
-import {
-  NO_OP_CALLBACK,
-  type EmptyCallback,
-  type Optional,
-} from "./type/utils.js"
+import { DefaultLogger } from "./logging.js"
+import { Duration } from "./time.js"
+import { type EmptyCallback, type Optional } from "./type/utils.js"
 
 /**
  * Custom type allowing mapping a type through a {@link MaybeAwaitable} to a new value
@@ -74,6 +72,10 @@ export async function drain(readable: Readable): Promise<void> {
   }
 }
 
+const STREAM_LOGGER = new DefaultLogger({
+  name: "stream",
+})
+
 /**
  * Pipes the source to the destination while handling errors
  *
@@ -92,23 +94,32 @@ export function pipe<T extends Writable | Duplex>(
     case "propogate":
       return source
         .on("error", (err) => {
-          error(`Stream error: ${err}, propogating...`)
+          STREAM_LOGGER.error(`Stream error: ${err}, propogating...`)
           destination.emit("error", err)
         })
         .pipe(destination) as T
     case "suppress":
       return source
         .on("error", (err) => {
-          error(`Stream error: ${err}, suppressing`)
+          STREAM_LOGGER.error(`Stream error: ${err}, suppressing`)
         })
         .pipe(destination) as T
   }
 }
 
-export interface NamedTransformOptions
-  extends Omit<TransformOptions, "flush" | "final"> {
+/** Limit exposed transform options */
+type RESTRICTED_TRANSFORM_OPTIONS =
+  | "flush"
+  | "final"
+  | "transform"
+  | "construct"
+  | "read"
+  | "write"
+  | "objectMode" // This is always true
+
+interface NamedTransformStreamOptions {
   /** the name of the transform */
-  name: string
+  name?: string
   /** The concurrency mode (default is Serial) */
   mode?: StreamConcurrencyMode
   /** The maximum concurrency (default is highWaterMark / 2) */
@@ -117,131 +128,300 @@ export interface NamedTransformOptions
   onBackpressure?: EmptyCallback
 }
 
+export interface NamedTransformOptions
+  extends Omit<TransformOptions, RESTRICTED_TRANSFORM_OPTIONS>,
+    NamedTransformStreamOptions {}
+
+/**
+ * Controls {@link NamedTransform} runtime concurrency behavior
+ */
 export enum StreamConcurrencyMode {
+  /** Only run one operation at a time */
   Serial,
+  /** Run multiple operations simultaneously */
   Parallel,
-  // TODO: implement Dynamic,
+  /** Limit outstanding operations to a capped concurrency value */
+  FixedConcurrency,
 }
 
 /**
- * Creates a {@link NamedTransformStream} from a given {@link TransformFunc}
+ * Interface with useful values for tracking
+ */
+export interface NamedTransform {
+  name: string
+  readonly readableLength: number
+  readonly writableLength: number
+}
+
+export function isNamedTransform(
+  transform: unknown,
+): transform is NamedTransform {
+  return (
+    typeof transform === "object" &&
+    transform !== null &&
+    "name" in transform &&
+    typeof transform.name === "string" &&
+    "readableLength" in transform &&
+    "writableLength" in transform
+  )
+}
+
+/**
+ * Creates a {@link NamedTransform} from a given {@link TransformFunc}
  *
  * @param transform The {@link TransformFunc} to use
- * @param spanExtractor The optional function to extract the {@link Span} for tracing
- * @returns A {@link NamedTransformStream}
+ * @param options The optional {@link NamedTransformOptions} for controlling behavior
+ *
+ * @returns A {@link NamedTransform}
  */
 export const createNamedTransform = <T, U>(
   transform: TransformFunc<T, U>,
   options?: NamedTransformOptions,
-): NamedTransformStream<T, U> => new NamedTransformStream(transform, options)
-
-/**
- * Create a generic {@link Stream.Transform} using a {@link TransformFunc}
- */
-export class NamedTransformStream<T, U> extends Stream.Transform {
-  private onBackpressure: EmptyCallback
-
-  private onFinal?: StreamCallback
-
-  private executeAsync: (chunk: T, callback: StreamCallback) => Promise<void>
-
-  private _pending: number
-
-  readonly mode: StreamConcurrencyMode
-  readonly name: string
-
-  constructor(transform: TransformFunc<T, U>, options?: NamedTransformOptions) {
-    // Set some defaults that can be over-written by the options if passed
-    super({
-      emitClose: true,
-      autoDestroy: true,
-      objectMode: true,
-      final: (callback) => {
-        this.onFinal = callback
-        this._checkFinal()
-      },
-      ...options,
-    })
-    this.name = options?.name ?? v4()
-    this.mode = options?.mode ?? StreamConcurrencyMode.Serial
-
-    this.onBackpressure = options?.onBackpressure ?? NO_OP_CALLBACK
-    this._pending = 0
-
-    switch (this.mode) {
-      case StreamConcurrencyMode.Serial:
-        this.executeAsync = async (chunk, callback) => {
-          try {
-            const val = await transform(chunk)
-            if (val !== undefined && !this.push(val)) {
-              this.onBackpressure()
-            }
-            callback()
-          } catch (err) {
-            callback(err as Error)
-          }
-        }
-        break
+): Transform => {
+  // Check the options
+  if (options) {
+    switch (options.mode ?? StreamConcurrencyMode.Serial) {
       case StreamConcurrencyMode.Parallel:
-        {
-          const semaphore = new Semaphore(
-            Math.max(
-              1,
-              options?.maxConcurrency ?? this.readableHighWaterMark >> 1,
-            ),
-          )
-
-          this.executeAsync = async (chunk, callback) => {
-            await semaphore.acquire()
-            callback()
-
-            try {
-              const val = await transform(chunk)
-              if (val !== undefined && !this.push(val)) {
-                this.onBackpressure()
-              }
-            } catch (err) {
-              this.emit("error", err)
-            } finally {
-              semaphore.release()
-            }
-          }
-        }
-        break
+        return new ParallelNamedTransform(transform, options)
+      case StreamConcurrencyMode.FixedConcurrency:
+        return new FixedConcurrencyNamedTransform(transform, options)
     }
   }
 
-  /**
-   * Check if the stream has ended
-   */
-  private _checkFinal(): void {
-    // If there is no pending work and a callback is registerred, fire it
-    if (this._pending === 0 && this.onFinal) {
-      // Fire final and clear it
-      if (this.onFinal) {
-        this.onFinal()
-        this.onFinal = undefined
+  return new SerialNamedTransform(transform)
+}
+
+// Unlocked transform options
+interface FullNamedTransformOptions
+  extends TransformOptions,
+    NamedTransformStreamOptions {}
+
+/**
+ * Simple base class to ensure we extract naming and implement the interface
+ */
+abstract class AbstractNamedTransform<T, U>
+  extends Stream.Transform
+  implements NamedTransform
+{
+  protected _applyTransform: TransformFunc<T, U>
+  readonly name: string
+
+  constructor(
+    transform: TransformFunc<T, U>,
+    options?: FullNamedTransformOptions,
+  ) {
+    super({
+      ...options,
+      objectMode: true,
+    })
+    this._applyTransform = transform
+    this.name = options?.name ?? v4()
+
+    // Check for need to bind backpressure monitoring
+    if (options?.onBackpressure) {
+      // Hijack the hook and add the backpressure
+      const push = this.push.bind(this)
+      const backpressure = options.onBackpressure
+
+      // Monkey patch
+      this.push = (chunk, encoding) => {
+        if (!push(chunk, encoding)) {
+          backpressure()
+          return false
+        }
+        return true
       }
     }
   }
+}
 
-  /**
-   * Implements the {@link Stream.Transform} with typed values
-   *
-   * @param chunk The chunk of data to transform
-   * @param _encoding Ignored since we are always in object mode
-   * @param callback The callback to fire on completion
-   */
+/**
+ * Simple class that applies the function in serial
+ */
+class SerialNamedTransform<T, U> extends AbstractNamedTransform<T, U> {
+  constructor(transform: TransformFunc<T, U>, options?: NamedTransformOptions) {
+    super(transform, options)
+  }
+
+  // Just process these one at a time
   override async _transform(
     chunk: T,
     _encoding: BufferEncoding,
     callback: TransformCallback,
   ): Promise<void> {
-    this._pending++
-    await this.executeAsync(chunk, callback).finally(() => {
-      this._pending--
+    try {
+      callback(undefined, await this._applyTransform(chunk))
+    } catch (err) {
+      callback(err as Error)
+    }
+  }
+}
+
+/**
+ *
+ */
+class ParallelNamedTransform<T, U> extends AbstractNamedTransform<T, U> {
+  private _semaphore: Semaphore
+  private finishCallback?: StreamCallback
+
+  constructor(
+    transform: TransformFunc<T, U>,
+    options?: NamedTransformStreamOptions,
+  ) {
+    super(transform, {
+      ...options,
+      final: (cb: StreamCallback) => {
+        this.finishCallback = cb
+        return this._checkFinal()
+      },
     })
 
-    this._checkFinal()
+    const maxConcurrency =
+      options?.maxConcurrency ?? Math.max(1, this.writableHighWaterMark >> 1)
+    this._semaphore = new Semaphore(maxConcurrency)
+  }
+
+  private _checkFinal(): void {
+    if (this.finishCallback && this._semaphore.running === 0) {
+      // End the stream
+      this.push(null)
+
+      // Invoke the callback
+      this.finishCallback()
+      this.finishCallback = undefined
+    }
+  }
+
+  override async _transform(
+    chunk: T,
+    _encoding: BufferEncoding,
+    callback: TransformCallback,
+  ): Promise<void> {
+    // Try to get the semaphore but don't wait forever...
+    while (!(await this._semaphore.acquire(Duration.ofMilli(500)))) {
+      // Stream needs to stop, get out
+      if (this.errored) {
+        return callback()
+      }
+    }
+
+    // Unlock further execution and don't wait for this result
+    callback()
+
+    try {
+      // Get the result and push it
+      const result = await this._applyTransform(chunk)
+      if (result !== undefined) {
+        this.push(result)
+      }
+    } catch (err) {
+      this.emit("error", err)
+    } finally {
+      // MUST release this or everything will lock up
+      this._semaphore.release()
+
+      // Check if this was a final since the execution is potentially after the
+      // last callback
+      this._checkFinal()
+    }
+  }
+}
+
+class FixedConcurrencyNamedTransform<T, U> extends AbstractNamedTransform<
+  T,
+  U
+> {
+  private _semaphore: Semaphore
+  private finishCallback?: StreamCallback
+
+  constructor(transform: TransformFunc<T, U>, options?: NamedTransformOptions) {
+    super(transform, {
+      ...options,
+      final: (cb: StreamCallback) => {
+        this.finishCallback = cb
+        this._checkFinal()
+      },
+    })
+
+    const maxConcurrency =
+      options?.maxConcurrency ?? Math.max(1, this.writableHighWaterMark >> 1)
+    this._semaphore = new Semaphore(maxConcurrency)
+
+    /**
+     * This is really kind of an ugly hack but for now is working....
+     *
+     * Basically, letting something run a bunch of work in parallel can allow a
+     * critical amount of readHighWatermark to build up because there is no gate
+     * to stop this.  To ensure that we don't let too much work get propogated
+     * to the other side, we don't unlock the semaphore until it is consumed.
+     * This can happen in two ways:
+     *
+     * 1. The pipeline pulls it via a read() call
+     * 2. The pipeline publishes it from the 'data' event
+     *
+     * We can't hook the first side of this because it is only called to
+     * initiate reading on the `readable` event firing and misses A LOT of
+     * events, draining the semaphore and griding the pipeline to a halt.
+     *
+     * Instead, we hook the data event because it is ALWAYS published (at least
+     * through the stream implementations to date) and while it might not be the
+     * value used (you can't manipulate it either way honestly) then we can
+     * listen to this event since the read or the iterator paths in flow, etc.
+     * internally still fire this for every item to allow secondary introspection.
+     */
+    this.on("data", (_) => {
+      // Release a semaphore lease on data publish
+      this._semaphore.release()
+
+      // We need to check final here as well because all writes may be done
+      // and we are gating on the read path at a later consumption point
+      this._checkFinal()
+    })
+  }
+
+  private _checkFinal(): void {
+    // Check if the final callback was passed along and our semaphore is drained
+    if (this.finishCallback && this._semaphore.running === 0) {
+      // End the stream
+      this.push(null)
+
+      // Invoke the callback
+      this.finishCallback()
+      this.finishCallback = undefined
+    }
+  }
+
+  override async _transform(
+    chunk: T,
+    _encoding: BufferEncoding,
+    callback: TransformCallback,
+  ): Promise<void> {
+    // Try to get the semaphore but don't wait forever...
+    while (!(await this._semaphore.acquire(Duration.ofMilli(500)))) {
+      // Stream needs to stop, get out
+      if (this.errored) {
+        return callback()
+      }
+    }
+
+    // Unlock further execution and don't wait for this result
+    callback()
+
+    try {
+      // Get the result and push it
+      const result = await this._applyTransform(chunk)
+      if (result !== undefined) {
+        this.push(result)
+      } else {
+        // We have to release when there is no data published to prevent exhaustion
+        this._semaphore.release()
+      }
+    } catch (err) {
+      this.emit("error", err)
+    } finally {
+      // Check if this was a final since the execution is potentially after the
+      // last callback if there is no data forwarded to the `data` event
+      this._checkFinal()
+    }
   }
 }

@@ -55,32 +55,32 @@ describe("Testing Concurrency", () => {
 
     // Verify the semaphore basics
     const semaphore = new Semaphore(4)
-    expect(semaphore.limit()).toBe(4)
-    expect(semaphore.available()).toBe(4)
+    expect(semaphore.limit).toBe(4)
+    expect(semaphore.available).toBe(4)
 
     // Should not be able to set invalid sizes
     expect(() => semaphore.resize(-1)).toThrow()
 
     // We should be able to get a lease right now
     expect(semaphore.tryAcquire()).toBeTruthy()
-    expect(semaphore.available()).toBe(3)
+    expect(semaphore.available).toBe(3)
     expect(semaphore.tryAcquire()).toBeTruthy()
-    expect(semaphore.available()).toBe(2)
+    expect(semaphore.available).toBe(2)
     expect(semaphore.tryAcquire()).toBeTruthy()
-    expect(semaphore.available()).toBe(1)
+    expect(semaphore.available).toBe(1)
     expect(semaphore.tryAcquire()).toBeTruthy()
-    expect(semaphore.available()).toBe(0)
+    expect(semaphore.available).toBe(0)
     expect(semaphore.tryAcquire()).toBeFalsy()
 
     // Release the semaphores
     semaphore.release()
-    expect(semaphore.available()).toBe(1)
+    expect(semaphore.available).toBe(1)
     semaphore.release()
     semaphore.release()
     semaphore.release()
 
     // Verify the available has been restored
-    expect(semaphore.available()).toBe(4)
+    expect(semaphore.available).toBe(4)
 
     await Promise.all(
       [...Array(10).keys()].map(async (_) => {

@@ -72,7 +72,7 @@ export class ServicePipelineBuilder {
       NOT_FOUND_HANDLER,
       options,
     )
-    return this._server._listen(port)
+    return this._server.listen(port)
   }
 }
 

@@ -7,9 +7,9 @@ import { LimitAlgorithm, LimitedOperation, Limiter } from "./limits.js"
  * Base class for all implementations of the {@link Limiter}
  */
 abstract class AbstractLimiter implements Limiter {
-  _limitAlgorithm: LimitAlgorithm
-  _limit: number
-  _inFlight: number
+  protected _limitAlgorithm: LimitAlgorithm
+  protected _limit: number
+  protected _inFlight: number
 
   // Allow retrieving the internal limit
   get limit() {
@@ -67,10 +67,10 @@ abstract class AbstractLimiter implements Limiter {
    * Base {@link LimitedOperation} that handles state tracking and mainpulation of the underlying {@link AbstractLimiter}
    */
   AbstractLimitOperation = class implements LimitedOperation {
-    _limiter: AbstractLimiter
-    _finished: boolean
-    _timer: Timer
-    _running: number
+    private _limiter: AbstractLimiter
+    private _finished: boolean
+    private _timer: Timer
+    private _running: number
 
     /**
      * Requires the base {@link AbstractLimiter} which can be updated
@@ -110,7 +110,7 @@ abstract class AbstractLimiter implements Limiter {
     /**
      * Private method to update the finished state and limiter inFlight value
      */
-    _update(): void {
+    private _update(): void {
       // Ensure we only finish this once for any state
       if (!this._finished) {
         this._finished = true
@@ -126,7 +126,7 @@ abstract class AbstractLimiter implements Limiter {
  * Simple {@link Limiter} that uses a {@link Semaphore} to gate access
  */
 class SimpleLimiter extends AbstractLimiter {
-  _semaphore: Semaphore
+  private _semaphore: Semaphore
 
   /**
    * SimpleLimiter requires at least a {@link LimitAlgorithm} and optional limit (default is 1)
@@ -164,8 +164,8 @@ class SimpleLimiter extends AbstractLimiter {
    * Wrapped {@link LimitedOperation} for releasing the internal {@link Semaphore}
    */
   SimpleLimitedOperation = class implements LimitedOperation {
-    _delegate: LimitedOperation
-    _semaphore: Semaphore
+    private _delegate: LimitedOperation
+    private _semaphore: Semaphore
 
     /**
      * Requires the objects to manage as internal state
