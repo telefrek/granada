@@ -2,7 +2,47 @@
  * Basic implementation of a prefix tree (trie)
  */
 
+import { info } from "console"
 import type { Optional } from "../type/utils.js"
+
+/**
+ * Determine the longest common prefix between two strings
+ *
+ * @param left The left string
+ * @param right The right string
+ * @param offset The optional offset for the left side search
+ * @returns The length of the longest common prefix (-1 if there is no overlap)
+ */
+export function lcp(left: string, right: string): number
+export function lcp(left: string, right: string, offset: number): number
+export function lcp(left: string, right: string, offset: number = 0): number {
+  // Find the upper bound
+  const l = Math.min(left.length - offset, right.length)
+
+  // If no match on the first character or one is zero no lcp
+  if (l === 0 || left[offset] !== right[0]) {
+    return -1
+  } else if (offset === 0) {
+    // Check all characters
+    for (let n = 1; n < l; ++n) {
+      if (left[n] !== right[n]) {
+        return n
+      }
+    }
+
+    return l
+  }
+
+  // Check all characters using the offset
+  for (let n = 1; n < l; ++n) {
+    if (left[n + offset] !== right[n]) {
+      return n
+    }
+  }
+
+  // Must be match of the shortest of the strings
+  return l
+}
 
 /**
  * A prefix trie for storing information
@@ -45,6 +85,57 @@ export interface Trie<T> {
 }
 
 /**
+ * An augmented result that contains parameters as well as the value
+ */
+export interface ParameterizedPathResult<T> {
+  /** The value stored at the path */
+  value: T
+  /** The parameters that were extracted (if any) */
+  parameters?: Map<string, string>
+}
+
+/**
+ * This is an extended {@link Trie} that behaves in mostly the same way but
+ * allows usage of parameters, wildcards and terminal cases
+ */
+export interface ParameterizedPathTrie<T> {
+  /**
+   * Check to see if the key is in the trie
+   *
+   * @param path The path to locate
+   *
+   * @returns True if the path exists
+   */
+  has(path: string): boolean
+
+  /**
+   * Retrieve the value stored at the path and any parameters extracted
+   *
+   * @param path The path to locate
+   *
+   * @returns The object associated with the path if it exists
+   */
+  get(path: string): Optional<ParameterizedPathResult<T>>
+
+  /**
+   * Set the value at the given path
+   *
+   * @param path The path to store the object at
+   * @param obj The value to store that location
+   */
+  set(path: string, obj: T): void
+
+  /**
+   * Remove the value from the trie
+   *
+   * @param path The path to remove
+   *
+   * @returns True if the path was in the trie
+   */
+  remove(path: string): boolean
+}
+
+/**
  * Default implementation of the {@link Trie} interface
  */
 export class DefaultTrie<T> implements Trie<T> {
@@ -78,43 +169,45 @@ export class DefaultTrie<T> implements Trie<T> {
   }
 }
 
+export class DefaultParameterizedPathTrie<T>
+  implements ParameterizedPathTrie<T>
+{
+  private readonly _root: ParameterizedTrieNode<T> = {
+    segment: { type: "root" },
+    children: [],
+  }
+
+  has(path: string): boolean {
+    return searchParameterizedTrie(path, this._root)?.value !== undefined
+  }
+
+  get(path: string): Optional<ParameterizedPathResult<T>> {
+    return searchParameterizedTrie(path, this._root)
+  }
+
+  set(path: string, obj: T): void {
+    insertParameterizedTrie(path, obj, this._root)
+  }
+
+  remove(_path: string): boolean {
+    return false
+  }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//
+// Normal Trie implementation
+//
+///////////////////////////////////////////////////////////////////////////////
+
 /**
- * Determine the longest common prefix between two strings
- *
- * @param left The left string
- * @param right The right string
- * @param offset The optional offset for the left side search
- * @returns The length of the longest common prefix (-1 if there is no overlap)
+ * Internal node for storing {@link Trie} data
  */
-export function lcp(left: string, right: string): number
-export function lcp(left: string, right: string, offset: number): number
-export function lcp(left: string, right: string, offset: number = 0): number {
-  // Find the upper bound
-  const l = Math.min(left.length - offset, right.length)
-
-  // If no match on the first character or one is zero no lcp
-  if (l === 0 || left[offset] !== right[0]) {
-    return -1
-  } else if (offset === 0) {
-    // Check all characters
-    for (let n = 1; n < l; ++n) {
-      if (left[n] !== right[n]) {
-        return n
-      }
-    }
-
-    return l
-  }
-
-  // Check all characters using the offset
-  for (let n = 1; n < l; ++n) {
-    if (left[n + offset] !== right[n]) {
-      return n
-    }
-  }
-
-  // Must be match of the shortest of the strings
-  return l
+interface TrieNode<T> {
+  prefix: string
+  children: TrieNode<T>[]
+  parent?: TrieNode<T>
+  value?: T
 }
 
 /**
@@ -149,15 +242,10 @@ function collapse<T>(node: TrieNode<T>): void {
  * @param path The path to insert
  * @param value The value to insert at the locatoin
  * @param root The root {@link TrieNode} to start the insert at
- * @param idx The substring in the path to start from (default 0)
  */
-function insertTrie<T>(
-  path: string,
-  value: T,
-  root: TrieNode<T>,
-  idx: number = 0,
-): void {
+function insertTrie<T>(path: string, value: T, root: TrieNode<T>): void {
   let l = -1
+  let idx = 0
 
   let current: Optional<TrieNode<T>>
   let last = root
@@ -223,16 +311,12 @@ function insertTrie<T>(
  *
  * @param path The path to find in the trie
  * @param root The current {@link TrieNode}
- * @param idx The index along the path to search from
  * @returns The matching {@link TrieNode}
  */
-function searchTrie<T>(
-  path: string,
-  root: TrieNode<T>,
-  idx: number = 0,
-): Optional<TrieNode<T>> {
+function searchTrie<T>(path: string, root: TrieNode<T>): Optional<TrieNode<T>> {
   // Setup state variables
   let l = -1
+  let idx = 0
 
   // Get pointers to the current and child nodes
   let current: Optional<TrieNode<T>>
@@ -274,12 +358,222 @@ function searchTrie<T>(
   return
 }
 
+///////////////////////////////////////////////////////////////////////////////
+//
+// ParameterizedPathTrie Impl
+//
+///////////////////////////////////////////////////////////////////////////////
+
 /**
- * Internal node for storing {@link Trie} data
+ * Valid segment types for a {@link ParameterizedPath}
  */
-interface TrieNode<T> {
-  parent?: TrieNode<T>
-  prefix: string
+type Segment =
+  | TextSegment
+  | ParameterSegment
+  | WildcardSegment
+  | TerminalSegment
+  | RootSegment
+
+interface ParameterizedTrieNode<T> {
+  segment: Segment
+  children: ParameterizedTrieNode<T>[]
+  parent?: ParameterizedTrieNode<T>
   value?: T
-  children: TrieNode<T>[]
+}
+
+/**
+ * Definition of a path
+ */
+type ParameterizedPath = Segment[]
+
+/**
+ * A plain text segment
+ */
+type TextSegment = {
+  type: "text"
+  prefix: string
+}
+
+/**
+ * A parameter segment with a name
+ */
+type ParameterSegment = {
+  type: "parameter"
+  parameterName: string
+}
+
+/**
+ * A wildcard segment
+ */
+type WildcardSegment = {
+  type: "wildcard"
+}
+
+/**
+ * A terminal segment
+ */
+type TerminalSegment = {
+  type: "terminal"
+}
+
+/**
+ * A root segment
+ */
+type RootSegment = {
+  type: "root"
+}
+
+function segmentPath(path: string): ParameterizedPath {
+  return [
+    {
+      type: "text",
+      prefix: path,
+    },
+  ]
+}
+
+function insertParameterizedTrie<T>(
+  path: string,
+  value: T,
+  root: ParameterizedTrieNode<T>,
+): void {
+  let l = -1
+  let error: Optional<unknown>
+
+  let current: Optional<ParameterizedTrieNode<T>>
+  let last = root
+  const children = root.children
+  let candidate: Optional<ParameterizedTrieNode<T>>
+
+  const segments = segmentPath(path)
+
+  /**
+   * HERE THERE BE DRAGONS
+   *
+   * Note that everything we do to the trie while inserting must be something we
+   * roll back on failures...
+   */
+
+  let n: number
+  for (n = 0; n < segments.length; ++n) {
+    switch (segments[n].type) {
+      case "text": {
+        // Try to add the segment
+        for (const child of children) {
+          if (child.segment.type === "text") {
+            if ((l = lcp(path, child.segment.prefix)) > 0) {
+              candidate = child
+              break
+            }
+          } else {
+            candidate = child
+            break
+          }
+        }
+
+        if (candidate) {
+          info(`Found candidate, that's unfortunate...${l}`)
+        } else {
+          // Create the trie from this point on and we're done
+          current = {
+            parent: last,
+            segment: segments[n],
+            children: [],
+          }
+
+          last.children.push(current)
+
+          last = current
+
+          ++n
+          for (; n < segments.length; ++n) {
+            const newNode: ParameterizedTrieNode<T> = {
+              segment: segments[n],
+              parent: last,
+              children: [],
+            }
+            last.children.push(newNode)
+            last = newNode
+          }
+
+          last.value = value
+          return
+        }
+      }
+    }
+  }
+
+  // Throw any errors
+  if (error) {
+    // Rollback...
+
+    throw error
+  }
+}
+
+function searchParameterizedTrie<T>(
+  path: string,
+  root: ParameterizedTrieNode<T>,
+): Optional<ParameterizedPathResult<T>> {
+  let idx = 0
+  let l = -1
+
+  let parameters: Optional<Map<string, string>>
+  let current: Optional<ParameterizedTrieNode<T>>
+  let children = root.children
+  let candidate: Optional<ParameterizedTrieNode<T>>
+
+  // We need to find candidates where there is a lcp match or parameter break
+  for (const child of children) {
+    if (child.segment.type === "text") {
+      if ((l = lcp(path, child.segment.prefix)) > 0) {
+        candidate = child
+        break
+      }
+    } else {
+      candidate = child
+      break
+    }
+  }
+
+  // Check our candidates
+  while (candidate) {
+    // We have a segment match
+    if (l > 0) {
+      idx += l
+
+      if (idx === path.length) {
+        return candidate.value !== undefined
+          ? {
+              value: candidate.value,
+              parameters,
+            }
+          : undefined
+      } else if (l !== (candidate.segment as TextSegment).prefix.length) {
+        // There was a partial match but it wasnt the full segment, bounce it
+        return undefined
+      } else {
+        current = candidate
+        candidate = undefined
+        children = current.children
+
+        for (const child of children) {
+          if (child.segment.type === "text") {
+            if ((l = lcp(path, child.segment.prefix)) > 0) {
+              candidate = child
+              break
+            }
+          } else {
+            candidate = child
+            break
+          }
+        }
+
+        // Continue with our loop
+        continue
+      }
+    }
+  }
+
+  return
 }

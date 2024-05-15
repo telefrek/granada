@@ -2,7 +2,20 @@
  * Tests for the Trie structures
  */
 
-import { DefaultTrie } from "./trie.js"
+import { DefaultParameterizedPathTrie, DefaultTrie } from "./trie.js"
+
+describe("A ParameterizedTrie should work for all use and edge cases", () => {
+  it("Should allow normal trie behavior", () => {
+    const trie = new DefaultParameterizedPathTrie<number>()
+
+    expect(trie.has("/foo")).toBeFalsy()
+    expect(trie.get("/foo")).toBeUndefined()
+
+    trie.set("/foo", 1)
+    expect(trie.has("/foo")).toBeTruthy()
+    expect(trie.get("/foo")?.value).toBe(1)
+  }, 600_000)
+})
 
 describe("A Trie should work for all use and edge cases", () => {
   it("Should allow happy path manipulations", () => {
