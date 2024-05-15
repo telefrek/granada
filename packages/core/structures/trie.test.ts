@@ -8,12 +8,17 @@ describe("A ParameterizedTrie should work for all use and edge cases", () => {
   it("Should allow normal trie behavior", () => {
     const trie = new DefaultParameterizedPathTrie<number>()
 
+    expect(trie.has("foo")).toBeFalsy()
     expect(trie.has("/foo")).toBeFalsy()
     expect(trie.get("/foo")).toBeUndefined()
 
     trie.set("/foo", 1)
     expect(trie.has("/foo")).toBeTruthy()
     expect(trie.get("/foo")?.value).toBe(1)
+    expect(trie.get("foo")).toBeUndefined()
+
+    // Test an invalid path
+    expect(() => trie.set("foo", 1)).toThrow()
   }, 600_000)
 })
 

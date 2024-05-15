@@ -186,10 +186,18 @@ export class DefaultParameterizedPathTrie<T>
   }
 
   set(path: string, obj: T): void {
+    if (!PARAMETERIZED_PATH_REGEX.test(path)) {
+      throw new Error(`Invalid path: ${path}`)
+    }
+
     insertParameterizedTrie(path, obj, this._root)
   }
 
-  remove(_path: string): boolean {
+  remove(path: string): boolean {
+    if (!PARAMETERIZED_PATH_REGEX.test(path)) {
+      throw new Error(`Invalid path: ${path}`)
+    }
+
     return false
   }
 }
@@ -423,13 +431,53 @@ type RootSegment = {
   type: "root"
 }
 
+const PARAMETERIZED_PATH_REGEX =
+  /^\/(([a-zA-Z0-9_]+|:[a-zA-Z][0-9a-zA-Z_]*|\*{1,2})?\/)*/
+
+const WILDCARD = "*"
+const TERMINATOR = "**"
+const URI_SEGMENT_REGEX = /^[a-zA-Z0-9-]+$/
+const PARAMETER_REGEX = /^:[a-zA-Z][0-9a-zA-Z_]*$/
+
 function segmentPath(path: string): ParameterizedPath {
-  return [
-    {
-      type: "text",
-      prefix: path,
-    },
-  ]
+  const segments: ParameterizedPath = []
+  let current = ""
+
+  for (const segment of path.split("/")) {
+    switch (true) {
+      case URI_SEGMENT_REGEX.test(segment):
+        current += "/" + segment
+        break
+      case segment === WILDCARD:
+        if (current.length > 0) {
+          segments.push({ type: "text", prefix: current })
+          current = ""
+        }
+        segments.push({ type: "wildcard" })
+        break
+      case segment === TERMINATOR:
+        if (current.length > 0) {
+          segments.push({ type: "text", prefix: current })
+          current = ""
+        }
+        segments.push({ type: "terminal" })
+        return segments
+      case PARAMETER_REGEX.test(segment):
+        if (current.length > 0) {
+          segments.push({ type: "text", prefix: current })
+          current = ""
+        }
+        segments.push({ type: "parameter", parameterName: segment })
+        break
+    }
+  }
+
+  if (current.length > 0) {
+    segments.push({ type: "text", prefix: current })
+    current = ""
+  }
+
+  return segments
 }
 
 function insertParameterizedTrie<T>(
