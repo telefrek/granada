@@ -60,6 +60,7 @@ class HostingRouter implements Router {
                 : await createFileContentResponse(filePath)
             },
             template: request.path,
+            priority: 3, // Not the highest but should be higher than default since it affects rendering/client access
           }
         } else if (filePath !== check) {
           fatal(`Attempt to traverse file system detected: ${request.path}`)

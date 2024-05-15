@@ -2,6 +2,7 @@
  * Package containing all of the routing information for associating a given path/method combination with a handler
  */
 
+import type { FrameworkPriority } from "@telefrek/core"
 import {
   Tracing,
   TracingContext,
@@ -117,6 +118,9 @@ export interface RouteInfo {
 
   /** The handler to invoke */
   handler: HttpHandler
+
+  /** The handler priority */
+  priority?: FrameworkPriority
 }
 
 /**
@@ -831,7 +835,7 @@ class RouterImpl implements Router {
           break
         case URI_SEGMENT_REGEX.test(segment):
           // Add this segment to the current and continue
-          currentSegment += `/${segment}`
+          currentSegment += `${currentSegment.length > 0 ? "/" : ""}${segment}`
           break
         default:
           // This should never happen iwth valid routes

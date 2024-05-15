@@ -307,6 +307,9 @@ function createTransform<Stage extends HttpPipelineStage>(
             })
 
             if (routeInfo) {
+              // Pass along any priority information
+              context.priority = routeInfo.priority
+
               context.handler = traceRoute(routeInfo)
               if (routeInfo.parameters) {
                 setRoutingParameters(routeInfo.parameters, context)

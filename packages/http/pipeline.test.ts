@@ -3,7 +3,7 @@
  */
 
 import { EmitterFor } from "@telefrek/core/events"
-import { type MaybeAwaitable } from "@telefrek/core/index.js"
+import { getDebugInfo, type MaybeAwaitable } from "@telefrek/core/index.js"
 import { consumeJsonStream } from "@telefrek/core/json.js"
 import { getTracer } from "@telefrek/core/observability/tracing"
 import { consumeString, drain } from "@telefrek/core/streams.js"
@@ -36,8 +36,16 @@ import {
   createTestRouter,
 } from "./testUtils.js"
 
+import { info } from "@telefrek/core/logging"
 import { randomUUID as v4 } from "crypto"
-import { createRequest, jsonBody, noContents } from "./utils.js"
+import { createRouter, getRoutingParameters } from "./routing.js"
+import {
+  createRequest,
+  jsonBody,
+  jsonContents,
+  noContents,
+  notFound,
+} from "./utils.js"
 
 const INDEX_HTML = `<!doctype html><html><head><title>Test</title></head><body>Test Page</body></html>`
 
@@ -53,28 +61,167 @@ describe("Pipeline components should behave as designed", () => {
       this.id = v4()
     }
   }
+  let pipeline: HttpPipeline
+  let source: HttpOperationSource
+
+  beforeEach(() => {
+    source = new TestSource()
+  })
+
+  afterEach(async () => {
+    // Kill the source
+    source.emit("finished")
+
+    if (pipeline) {
+      // Remove the source explicitly
+      pipeline.remove(source)
+
+      // Shutdown the pipeline
+      await pipeline.stop()
+    }
+  })
+
+  describe("Routing should send data to the correct places", () => {
+    it("Should find the correct routes with parameters", async () => {
+      const router = createRouter()
+
+      // Single path
+      router.addHandler("/path1", (_) => noContents(), HttpMethod.GET)
+
+      // Only PUT
+      router.addHandler("/path2/**", (_) => noContents(), HttpMethod.PUT)
+
+      // Mixed routes
+      router.addHandler("/path3/*/:foo", (_) => noContents(), HttpMethod.DELETE)
+
+      // All methods
+      router.addHandler("/path/:id/:resource", (_) =>
+        jsonContents({
+          id: getRoutingParameters()?.get("id"),
+          resource: getRoutingParameters()?.get("resource"),
+        }),
+      )
+
+      info(getDebugInfo(router))
+
+      // Use the routing
+      pipeline = createPipeline({
+        transforms: [USE_ROUTER(router, "/")],
+      })
+
+      // Add the pipeline
+      expect(pipeline.add(source, (_) => notFound())).toBeTruthy()
+
+      const noRoute = createHttpOperation({
+        request: createRequest({
+          path: "/no/path/exists",
+          method: HttpMethod.GET,
+        }),
+        span: getTracer().startSpan("test"),
+        timeout: Duration.ofSeconds(1),
+      })
+
+      const path1 = createHttpOperation({
+        request: createRequest({ path: "/path1", method: HttpMethod.GET }),
+        span: getTracer().startSpan("test"),
+        timeout: Duration.ofSeconds(1),
+      })
+
+      const path1Bad = createHttpOperation({
+        request: createRequest({ path: "/path1", method: HttpMethod.DELETE }),
+        span: getTracer().startSpan("test"),
+        timeout: Duration.ofSeconds(1),
+      })
+
+      const path2 = createHttpOperation({
+        request: createRequest({
+          path: "/path2/this/path/should/exist",
+          method: HttpMethod.PUT,
+        }),
+        span: getTracer().startSpan("test"),
+        timeout: Duration.ofSeconds(1),
+      })
+
+      const path2Bad = createHttpOperation({
+        request: createRequest({
+          path: "/path2/this/path/should/exist",
+          method: HttpMethod.GET,
+        }),
+        span: getTracer().startSpan("test"),
+        timeout: Duration.ofSeconds(1),
+      })
+
+      const path3 = createHttpOperation({
+        request: createRequest({
+          path: "/path3/junk/value",
+          method: HttpMethod.DELETE,
+        }),
+        span: getTracer().startSpan("test"),
+        timeout: Duration.ofSeconds(1),
+      })
+
+      const path3Bad = createHttpOperation({
+        request: createRequest({
+          path: "/path3/junk/value",
+          method: HttpMethod.GET,
+        }),
+        span: getTracer().startSpan("test"),
+        timeout: Duration.ofSeconds(1),
+      })
+
+      const multiParam = createHttpOperation({
+        request: createRequest({
+          path: "/path/1/two",
+          method: HttpMethod.DELETE,
+        }),
+        span: getTracer().startSpan("test"),
+        timeout: Duration.ofSeconds(1),
+      })
+
+      for (const op of [
+        noRoute,
+        path1,
+        path1Bad,
+        path2,
+        path2Bad,
+        path3,
+        path3Bad,
+        multiParam,
+      ]) {
+        source.emit("received", op)
+      }
+
+      // Let the requests clear
+      await delay(50)
+
+      // Stop the pipeline
+      await pipeline.stop()
+
+      // Unmapped paths
+      expect(noRoute.response?.status.code).toBe(HttpStatusCode.NOT_FOUND)
+      expect(path1Bad.response?.status.code).toBe(HttpStatusCode.NOT_FOUND)
+      expect(path2Bad.response?.status.code).toBe(HttpStatusCode.NOT_FOUND)
+      expect(path3Bad.response?.status.code).toBe(HttpStatusCode.NOT_FOUND)
+
+      expect(path1.response?.status.code).toBe(HttpStatusCode.NO_CONTENT)
+      expect(path2.response?.status.code).toBe(HttpStatusCode.NO_CONTENT)
+      expect(path3.response?.status.code).toBe(HttpStatusCode.NO_CONTENT)
+
+      expect(multiParam.response?.status.code).toBe(HttpStatusCode.OK)
+      expect(multiParam.response?.body).not.toBeUndefined()
+
+      const contents = (await consumeJsonStream(
+        multiParam.response!.body!.contents,
+      )) as { id: number; resource: string }
+      expect(contents).not.toBeUndefined()
+
+      // Ensure the parameter types were correct
+      expect(contents.id).toBe(1)
+      expect(contents.resource).toBe("two")
+    })
+  })
 
   describe("Load Shedding should limit max wait times", () => {
-    let pipeline: HttpPipeline
-    let source: HttpOperationSource
-
-    beforeEach(() => {
-      source = new TestSource()
-    })
-
-    afterEach(async () => {
-      // Kill the source
-      source.emit("finished")
-
-      if (pipeline) {
-        // Remove the source explicitly
-        pipeline.remove(source)
-
-        // Shutdown the pipeline
-        await pipeline.stop()
-      }
-    })
-
     it("Should work with no backpressure", async () => {
       // Create the pipeline
       pipeline = createPipeline({
