@@ -72,6 +72,8 @@ export interface HttpOperation extends Emitter<HttpOperationEvents> {
   readonly span: Span
   /** {@link Timestamp} when this was received */
   readonly started: Timestamp
+  /** The duration for the request */
+  readonly duration: Duration
 
   readonly id: string
 
@@ -152,6 +154,7 @@ class DefaultHttpOperation
   private _error: Optional<HttpError>
   private _response: Optional<HttpResponse>
   private _timer?: NodeJS.Timeout
+  private _duration?: Duration
 
   get id(): string {
     return this._id
@@ -159,6 +162,10 @@ class DefaultHttpOperation
 
   get started(): Timestamp {
     return this._timestamp
+  }
+
+  get duration(): Duration {
+    return this._duration ?? this._timestamp.duration
   }
 
   get signal(): Optional<AbortSignal> {
@@ -253,6 +260,10 @@ class DefaultHttpOperation
       case HttpOperationState.ABORTED:
       case HttpOperationState.COMPLETED:
       case HttpOperationState.TIMEOUT:
+        // Set completion if not already done
+        this._duration = this._duration ?? this._timestamp.duration
+
+        // Fire the emit event
         this.emit("finished")
       // eslint-disable-next-line no-fallthrough
       case HttpOperationState.WRITING:

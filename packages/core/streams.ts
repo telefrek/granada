@@ -128,10 +128,12 @@ type RESTRICTED_TRANSFORM_OPTIONS =
   | "write"
   | "objectMode" // This is always true
 
-interface PrioritizationOptions {
+export interface PrioritizationOptions {
   tasktimeoutMs: number
-  prioritize: PriorityTransform<unknown>
-  cancellation: Consumer<unknown>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  prioritize: PriorityTransform<any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  cancellation: Consumer<any>
 }
 
 interface NamedTransformStreamOptions {
@@ -475,6 +477,7 @@ class FixedPriorityNamedTransform<T, U> extends AbstractNamedTransform<T, U> {
   ) {
     super(transform, {
       ...options,
+      autoDestroy: true, // We must automatically destroy to release MLPQ resources
       final: (cb: StreamCallback) => {
         this.finishCallback = cb
         this._checkFinal()
@@ -498,6 +501,16 @@ class FixedPriorityNamedTransform<T, U> extends AbstractNamedTransform<T, U> {
       // Queue any next work
       this._queueNext()
     })
+  }
+
+  override async _destroy(
+    error: Error | null,
+    callback: StreamCallback,
+  ): Promise<void> {
+    // Stop the queue
+    await this._queue.shutdown()
+
+    return callback(error)
   }
 
   private async _queueNext(): Promise<void> {

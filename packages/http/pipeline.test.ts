@@ -2,8 +2,10 @@
  * Exercise the pipelines!
  */
 
+import { EmitterFor } from "@telefrek/core/events"
 import { type MaybeAwaitable } from "@telefrek/core/index.js"
 import { consumeJsonStream } from "@telefrek/core/json.js"
+import { getTracer } from "@telefrek/core/observability/tracing"
 import { consumeString, drain } from "@telefrek/core/streams.js"
 import { Duration, delay } from "@telefrek/core/time.js"
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "fs"
@@ -11,9 +13,16 @@ import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { type HttpClient } from "./client.js"
 import { HttpMethod, HttpStatusCode } from "./index.js"
-import type { HttpOperationSource } from "./operations.js"
+import {
+  HttpOperationSourceEvents,
+  HttpOperationState,
+  createHttpOperation,
+  type HttpOperation,
+  type HttpOperationSource,
+} from "./operations.js"
 import { createPipeline, type HttpPipeline } from "./pipeline.js"
 import { hostFolder } from "./pipeline/hosting.js"
+import { createLoadSheddingTransform } from "./pipeline/loadShedding.js"
 import { USE_ROUTER } from "./pipeline/routing.js"
 import { type HttpServer } from "./server.js"
 import {
@@ -26,9 +35,158 @@ import {
   createHttp2Server,
   createTestRouter,
 } from "./testUtils.js"
-import { createRequest, jsonBody } from "./utils.js"
+
+import { randomUUID as v4 } from "crypto"
+import { createRequest, jsonBody, noContents } from "./utils.js"
 
 const INDEX_HTML = `<!doctype html><html><head><title>Test</title></head><body>Test Page</body></html>`
+
+describe("Pipeline components should behave as designed", () => {
+  class TestSource
+    extends EmitterFor<HttpOperationSourceEvents>
+    implements HttpOperationSource
+  {
+    id: string
+
+    constructor() {
+      super()
+      this.id = v4()
+    }
+  }
+
+  describe("Load Shedding should limit max wait times", () => {
+    let pipeline: HttpPipeline
+    let source: HttpOperationSource
+
+    beforeEach(() => {
+      source = new TestSource()
+    })
+
+    afterEach(async () => {
+      // Kill the source
+      source.emit("finished")
+
+      if (pipeline) {
+        // Remove the source explicitly
+        pipeline.remove(source)
+
+        // Shutdown the pipeline
+        await pipeline.stop()
+      }
+    })
+
+    it("Should work with no backpressure", async () => {
+      // Create the pipeline
+      pipeline = createPipeline({
+        transforms: [
+          createLoadSheddingTransform({
+            thresholdMs: 25,
+            maxOutstandingRequests: 2,
+          }),
+        ],
+      })
+
+      // Add the pipeline
+      expect(
+        pipeline.add(source, (_req, _abort) => noContents(), {
+          maxConcurrency: 4,
+          highWaterMark: 4,
+        }),
+      ).toBe(true)
+
+      // Track the operations
+      const operations: HttpOperation[] = []
+
+      // Run 25 through the system as fast as possible
+      for (let n = 0; n < 25; ++n) {
+        const op = createHttpOperation({
+          request: createRequest(),
+          timeout: Duration.ofSeconds(1),
+          span: getTracer().startSpan("test"),
+        })
+        operations.push(op)
+        source.emit("received", op)
+      }
+
+      // Give the pipeline some time to process the results
+      await delay(250)
+
+      // Verify all the operations were completed
+      for (const op of operations) {
+        expect(op.state).toBe(HttpOperationState.COMPLETED)
+        expect(op.error).toBeUndefined()
+        expect(op.response).not.toBeUndefined()
+        expect(op.response?.status.code).toBe(HttpStatusCode.NO_CONTENT)
+      }
+    })
+
+    it("Should work with backpressure, keeping task execution below the delay threshold", async () => {
+      // Create the pipeline
+      pipeline = createPipeline({
+        transforms: [
+          createLoadSheddingTransform({
+            thresholdMs: 25,
+            maxOutstandingRequests: 2,
+          }),
+        ],
+      })
+
+      // Add the pipeline
+      expect(
+        pipeline.add(
+          source,
+          async (_req, _abort) => {
+            await delay(50)
+            return noContents()
+          },
+          {
+            maxConcurrency: 4,
+            highWaterMark: 4,
+          },
+        ),
+      ).toBe(true)
+
+      // Track the operations
+      const operations: HttpOperation[] = []
+
+      // Run 25 through the system as fast as possible
+      for (let n = 0; n < 25; ++n) {
+        const op = createHttpOperation({
+          request: createRequest(),
+          timeout: Duration.ofSeconds(1),
+          span: getTracer().startSpan("test"),
+        })
+        operations.push(op)
+        source.emit("received", op)
+      }
+
+      // Give the pipeline some time to process the results
+      await delay(250)
+
+      let completed = 0
+      let timeout = 0
+
+      // Verify all the operations were completed
+      for (const op of operations) {
+        if (op.state === HttpOperationState.COMPLETED) {
+          expect(op.error).toBeUndefined()
+          expect(op.response).not.toBeUndefined()
+          expect(op.response?.status.code).toBe(HttpStatusCode.NO_CONTENT)
+          expect(op.duration.milliseconds()).toBeGreaterThan(50) // Should be greater than execution time
+          completed++
+        } else {
+          expect(op.state).toBe(HttpOperationState.TIMEOUT)
+          expect(op.duration.milliseconds()).toBeLessThan(75) // Should be less than the delay in the queue _ task
+          timeout++
+        }
+      }
+
+      // There should be a mix of completed and timeouts
+      expect(completed).toBeGreaterThan(0)
+      expect(timeout).toBeGreaterThan(0)
+    })
+  })
+})
 
 describe("Pipelines should support clients and servers end to end", () => {
   let server: HttpServer

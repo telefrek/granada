@@ -249,14 +249,18 @@ class QueueCurator implements MultiLevelWorker {
   private _curate(): void {
     // Check for an abort
     if (this._abort.aborted) {
+      // Clean any pending work
       this._cleanup(true)
-      this._signal.notify()
 
       // Cancel the interval
       clearInterval(this._timeout)
+
+      // Signal that we are done
+      this._signal.notify()
       return
     }
 
+    // Clean outstanding work only
     this._cleanup()
   }
 

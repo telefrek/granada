@@ -124,7 +124,6 @@ export class DefaultPostgresDatabase implements PostgresDatabase {
 
     // Add some workers
     for (let n = 0; n < 4; ++n) {
-      info(`Creating pool worker...`)
       this._workers.push(
         createQueueWorker(this._queue, this._controller.signal),
       )
@@ -173,8 +172,6 @@ export class DefaultPostgresDatabase implements PostgresDatabase {
     const pool = this._pool
     const queryTimeout = timeout ?? this._defaultTimeout
 
-    info(`Submitting: ${query.name}`)
-
     // Queue the work...
     this._queue.queue(
       {
@@ -184,7 +181,6 @@ export class DefaultPostgresDatabase implements PostgresDatabase {
       },
       async () => {
         try {
-          info(`Executing query: ${query.name}`)
           deferred.resolve(await execute(query, pool, queryTimeout))
         } catch (err) {
           error(`Rejecting... ${err}`)

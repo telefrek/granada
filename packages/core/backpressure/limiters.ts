@@ -1,6 +1,7 @@
 import { Semaphore } from "../concurrency.js"
-import { Timer } from "../time.js"
-import type { Optional } from "../type/utils.js"
+import type { MaybeAwaitable } from "../index.js"
+import { Timestamp } from "../time.js"
+import { type Optional } from "../type/utils.js"
 import { LimitAlgorithm, LimitedOperation, Limiter } from "./limits.js"
 
 /**
@@ -41,9 +42,9 @@ abstract class AbstractLimiter implements Limiter {
     return this._limit
   }
 
-  tryAcquire(): Optional<LimitedOperation> {
-    return
-  }
+  abstract tryAcquire(): Optional<LimitedOperation>
+
+  abstract acquire(): MaybeAwaitable<LimitedOperation>
 
   /**
    * Handler for the {@link LimitAlgorithm} `changed` event
@@ -60,35 +61,35 @@ abstract class AbstractLimiter implements Limiter {
    * @returns A basic {@link LimitedOperation}
    */
   protected createOperation(): LimitedOperation {
-    return new this.AbstractLimitOperation(this)
+    return new this.DefaultLimitOperation(this)
   }
 
   /**
    * Base {@link LimitedOperation} that handles state tracking and mainpulation of the underlying {@link AbstractLimiter}
    */
-  AbstractLimitOperation = class implements LimitedOperation {
+  DefaultLimitOperation = class implements LimitedOperation {
     private _limiter: AbstractLimiter
     private _finished: boolean
-    private _timer: Timer
+    private _timestamp: Timestamp
     private _running: number
 
     /**
      * Requires the base {@link AbstractLimiter} which can be updated
      *
      * @param limiter The {@link AbstractLimiter} to update
+     * @param onFinish The {@link EmptyCallback} to fire when completed
      */
     constructor(limiter: AbstractLimiter) {
       this._limiter = limiter
       this._finished = false
       this._running = ++limiter._inFlight
-      this._timer = new Timer()
-      this._timer.start()
+      this._timestamp = new Timestamp()
     }
 
     success(): void {
       this._update()
       this._limiter._limitAlgorithm.update(
-        this._timer.stop(),
+        this._timestamp.duration,
         this._running,
         false,
       )
@@ -101,7 +102,7 @@ abstract class AbstractLimiter implements Limiter {
     dropped(): void {
       this._update()
       this._limiter._limitAlgorithm.update(
-        this._timer.stop(),
+        this._timestamp.duration,
         this._running,
         true,
       )
@@ -150,6 +151,14 @@ class SimpleLimiter extends AbstractLimiter {
     }
 
     return
+  }
+
+  override async acquire(): Promise<LimitedOperation> {
+    await this._semaphore.acquire()
+    return new this.SimpleLimitedOperation(
+      this._semaphore,
+      this.createOperation(),
+    )
   }
 
   protected override onChange(newLimit: number): void {

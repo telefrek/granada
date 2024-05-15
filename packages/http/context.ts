@@ -2,6 +2,7 @@
  * Handling context tracking for an operation
  */
 
+import type { FrameworkPriority } from "@telefrek/core"
 import type { Optional } from "@telefrek/core/type/utils.js"
 import { AsyncLocalStorage } from "async_hooks"
 import type { HttpHandler, HttpResponse } from "./index.js"
@@ -41,6 +42,7 @@ export interface HttpOperationContext {
   operation: HttpOperation
   response?: HttpResponse
   handler?: HttpHandler
+  priority?: FrameworkPriority
 
   [key: string | symbol]: unknown
 }

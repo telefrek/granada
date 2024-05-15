@@ -13,12 +13,14 @@ import {
   createNamedTransform,
   drain,
   pipe,
+  type PrioritizationOptions,
   type TransformFunc,
 } from "@telefrek/core/streams.js"
-import { Timestamp } from "@telefrek/core/time.js"
+import { Duration, Timestamp } from "@telefrek/core/time.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
 import { on } from "events"
 import { Readable, Writable, type Transform } from "stream"
+import { finished } from "stream/promises"
 import {
   HTTP_OPERATION_CONTEXT_STORE,
   isTerminal,
@@ -208,13 +210,10 @@ type HttpPipelineStageTransform<Stage extends HttpPipelineStage> = {
  * Represents configuration for load shedding
  */
 export type HttpPipelineLoadShedder =
-  HttpPipelineStageTransform<HttpPipelineStage.LOAD_SHEDDING> & {
-    /** The configured high water mark for the underlying stream */
-    highWatermark: number
-
-    /** The {@link HttpTransform} */
-    transform: HttpTransform
-  }
+  HttpPipelineStageTransform<HttpPipelineStage.LOAD_SHEDDING> &
+    PrioritizationOptions & {
+      maxOutstandingRequests?: number
+    }
 
 /**
  * Represents a pipeline router
@@ -280,7 +279,6 @@ export function createPipeline(
 function createTransform<Stage extends HttpPipelineStage>(
   stage: Stage,
   sources: HttpPipelineTransform[],
-  options: HttpPipelineOptions,
 ): Transform {
   switch (stage) {
     case HttpPipelineStage.ROUTING: {
@@ -342,7 +340,7 @@ function createTransform<Stage extends HttpPipelineStage>(
         const shedder = source as HttpPipelineLoadShedder
 
         const namedPipeline = createNamedTransform(
-          async (context: HttpOperationContext) => {
+          (context: HttpOperationContext) => {
             if (!isTerminal(context)) {
               HttpRequestPipelineMetrics.PipelineStageCounter.add(1, {
                 stage: stage,
@@ -352,33 +350,23 @@ function createTransform<Stage extends HttpPipelineStage>(
                 { stage: stage },
               )
 
-              return await HTTP_OPERATION_CONTEXT_STORE.run(
-                context,
-                async () => {
-                  return await TracingContext.with(
-                    Tracing.setSpan(
-                      TracingContext.active(),
-                      context.operation.span,
-                    ),
-                    async () => {
-                      return await shedder.transform(context)
-                    },
-                  )
-                },
-              )
+              return context
             }
 
             return
           },
           {
             name: shedder.transformName,
-            mode: StreamConcurrencyMode.Parallel,
-            maxConcurrency: (options?.maxConcurrency ?? 2) << 1, // Double the concurrency to ensure we have work?
+            mode: StreamConcurrencyMode.PriorityFixed,
+            maxConcurrency: shedder.maxOutstandingRequests,
             onBackpressure: () => {
               HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
                 stage: stage,
                 name: shedder.transformName,
               })
+            },
+            priority: {
+              ...shedder,
             },
           },
         )
@@ -422,6 +410,7 @@ class DefaultHttpPipeline
   private _state: HttpPipelineState
   private readonly _signal: Signal
   private readonly _configuration: HttpPipelineConfiguration
+  private _clearing: number = 0
 
   private _sources: Map<HttpOperationSource, PipelineDetails> = new Map()
 
@@ -540,7 +529,7 @@ class DefaultHttpPipeline
         (t) => t.stage === stage,
       )
       if (transforms && transforms.length > 0) {
-        end = pipe(end, createTransform(stage, transforms, options))
+        end = pipe(end, createTransform(stage, transforms))
       }
     }
 
@@ -791,21 +780,26 @@ class DefaultHttpPipeline
 
   async remove(source: HttpOperationSource): Promise<boolean> {
     const details = this._sources.get(source)
+    const ret = this._sources.delete(source)
+
     if (details) {
-      PIPELINE_LOGGER.debug(`Removing source: ${source.id}`)
-      details.source.emit("error", new Error("pipeline aborted..."))
+      PIPELINE_LOGGER.info(`Removing source: ${source.id}`)
+      this._clearing++
 
-      // const finished = StreamPromise.finished(details.destination, {
-      //   error: true,
-      //   writable: true,
-      // })
+      // Push a null
+      details.source.push(null)
 
-      // await finished
+      await finished(details.destination, {
+        error: true,
+        writable: true,
+      })
 
-      PIPELINE_LOGGER.debug(`Finished source: ${source.id}`)
+      PIPELINE_LOGGER.info(`Finished source: ${source.id}`)
+      this._clearing--
+      this._signal.notify()
     }
 
-    return this._sources.delete(source)
+    return ret
   }
 
   async stop(): Promise<void> {
@@ -819,6 +813,10 @@ class DefaultHttpPipeline
     for (const source of this._sources.keys()) {
       PIPELINE_LOGGER.info(`Removing source: ${source.id}`)
       await this.remove(source)
+    }
+
+    while (this._clearing > 0) {
+      await this._signal.wait(Duration.ofMilli(100))
     }
   }
 

@@ -366,7 +366,7 @@ export class Semaphore {
    * NOTE: This is not checked so repeated calling may corrupt the state
    */
   public release() {
-    if (this._callbacks.length > 0 && this._running < this._concurrency) {
+    if (this._callbacks.length > 0 && this._running <= this._concurrency) {
       // Fire the mutex to release another unit of work
       this._callbacks.shift()!(true)
     } else {
