@@ -2,23 +2,49 @@
  * Tests for the Trie structures
  */
 
-import { DefaultParameterizedPathTrie, DefaultTrie } from "./trie.js"
+import { getDebugInfo } from "../index.js"
+import { info } from "../logging.js"
+import type { Optional } from "../type/utils.js"
+import {
+  DefaultParameterizedPathTrie,
+  DefaultTrie,
+  type ParameterizedPathResult,
+} from "./trie.js"
 
 describe("A ParameterizedTrie should work for all use and edge cases", () => {
   it("Should allow normal trie behavior", () => {
     const trie = new DefaultParameterizedPathTrie<number>()
 
-    expect(trie.has("foo")).toBeFalsy()
-    expect(trie.has("/foo")).toBeFalsy()
-    expect(trie.get("/foo")).toBeUndefined()
+    let res: Optional<ParameterizedPathResult<number>>
 
     trie.set("/foo", 1)
     expect(trie.has("/foo")).toBeTruthy()
     expect(trie.get("/foo")?.value).toBe(1)
-    expect(trie.get("foo")).toBeUndefined()
-
-    // Test an invalid path
-    expect(() => trie.set("foo", 1)).toThrow()
+    trie.set("/fold", 2)
+    expect(trie.get("/fold")?.value).toBe(2)
+    trie.set("/fold/one", 3)
+    expect(trie.get("/fold/one")?.value).toBe(3)
+    trie.set("/fold/:foo", 4)
+    res = trie.get("/fold/two")
+    expect(res).not.toBeUndefined()
+    expect(res?.value).toBe(4)
+    expect(res?.parameters?.size).toBe(1)
+    expect(res?.parameters?.get(":foo")).toBe("two")
+    trie.set("/fold/:foo/bar", 5)
+    res = trie.get("/fold/bar/bar")
+    expect(res).not.toBeUndefined()
+    expect(res?.value).toBe(5)
+    expect(res?.parameters?.size).toBe(1)
+    expect(res?.parameters?.get(":foo")).toBe("bar")
+    trie.set("/*/foo", 6)
+    expect(trie.get("/silly/foo")?.value).toBe(6)
+    expect(trie.get("/1/foo/")?.value).toBe(6)
+    trie.set("/*/foo/:bar", 7)
+    trie.set("/cat/**", 8)
+    info(getDebugInfo(trie))
+    expect(trie.get("/cat/one/two/three")?.value).toBe(8)
+    expect(() => trie.set(`/first/two/three/four/**/five`, -1)).toThrow()
+    expect(trie.get("/first")).toBeUndefined()
   }, 600_000)
 })
 

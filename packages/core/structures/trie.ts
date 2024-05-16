@@ -2,8 +2,7 @@
  * Basic implementation of a prefix tree (trie)
  */
 
-import { info } from "console"
-import type { Optional } from "../type/utils.js"
+import { type EmptyCallback, type Optional } from "../type/utils.js"
 
 /**
  * Determine the longest common prefix between two strings
@@ -186,10 +185,6 @@ export class DefaultParameterizedPathTrie<T>
   }
 
   set(path: string, obj: T): void {
-    if (!PARAMETERIZED_PATH_REGEX.test(path)) {
-      throw new Error(`Invalid path: ${path}`)
-    }
-
     insertParameterizedTrie(path, obj, this._root)
   }
 
@@ -323,7 +318,6 @@ function insertTrie<T>(path: string, value: T, root: TrieNode<T>): void {
  */
 function searchTrie<T>(path: string, root: TrieNode<T>): Optional<TrieNode<T>> {
   // Setup state variables
-  let l = -1
   let idx = 0
 
   // Get pointers to the current and child nodes
@@ -332,9 +326,8 @@ function searchTrie<T>(path: string, root: TrieNode<T>): Optional<TrieNode<T>> {
 
   // Search for root child with match
   for (const child of children) {
-    // Check for any lcp
-    // NOTE: For really dense trie this isn't as efficient as lookup
-    if ((l = lcp(path, child.prefix, idx)) > 0) {
+    // Check for child that starts on the current path
+    if (path.startsWith(child.prefix, idx)) {
       current = child
       break
     }
@@ -343,19 +336,17 @@ function searchTrie<T>(path: string, root: TrieNode<T>): Optional<TrieNode<T>> {
   // Loop until we find it or run out of search space
   while (current !== undefined) {
     // Not a full match, get out
-    if (l !== current.prefix.length) {
-      return
-    } else if (l + idx === path.length) {
+    if (current.prefix.length + idx === path.length) {
       // Full match
       return current
     } else {
-      idx += l // Add the prefix length
+      idx += current.prefix.length // Add the prefix length
       children = current.children
 
       // Clear the current node
       current = undefined
       for (const child of children) {
-        if ((l = lcp(path, child.prefix, idx)) > 0) {
+        if (path.startsWith(child.prefix, idx)) {
           current = child
           break
         }
@@ -382,10 +373,17 @@ type Segment =
   | TerminalSegment
   | RootSegment
 
+/**
+ * A node for a {@link ParameterizedTrie}
+ */
 interface ParameterizedTrieNode<T> {
+  /** The {@link Segment} at this position */
   segment: Segment
+  /** The children of this node */
   children: ParameterizedTrieNode<T>[]
+  /** The parent of this segment */
   parent?: ParameterizedTrieNode<T>
+  /** The value at this path if one was set */
   value?: T
 }
 
@@ -434,38 +432,61 @@ type RootSegment = {
 const PARAMETERIZED_PATH_REGEX =
   /^\/(([a-zA-Z0-9_]+|:[a-zA-Z][0-9a-zA-Z_]*|\*{1,2})?\/)*/
 
+const PATH_SEPARATOR = "/"
 const WILDCARD = "*"
 const TERMINATOR = "**"
 const URI_SEGMENT_REGEX = /^[a-zA-Z0-9-]+$/
 const PARAMETER_REGEX = /^:[a-zA-Z][0-9a-zA-Z_]*$/
 
-function segmentPath(path: string): ParameterizedPath {
+/**
+ * Parse the path into a {@link ParameterizedPath}
+ *
+ * @param path The path to divide into {@link Segment} chunks
+ * @returns A {@link ParameterizedPath}
+ */
+function _segmentPath(path: string): ParameterizedPath {
   const segments: ParameterizedPath = []
   let current = ""
 
-  for (const segment of path.split("/")) {
+  // Split the path into chunks
+  const split = (path.startsWith("/") ? path.substring(1) : path).split(
+    PATH_SEPARATOR,
+  )
+  for (let n = 0; n < split.length; ++n) {
+    const segment = split[n]
     switch (true) {
       case URI_SEGMENT_REGEX.test(segment):
-        current += "/" + segment
+        current += `/${segment}`
         break
       case segment === WILDCARD:
         if (current.length > 0) {
-          segments.push({ type: "text", prefix: current })
+          segments.push({ type: "text", prefix: current + "/" })
           current = ""
+        } else {
+          segments.push({ type: "text", prefix: "/" })
         }
         segments.push({ type: "wildcard" })
         break
       case segment === TERMINATOR:
         if (current.length > 0) {
-          segments.push({ type: "text", prefix: current })
+          segments.push({ type: "text", prefix: current + "/" })
           current = ""
+        } else {
+          segments.push({ type: "text", prefix: "/" })
         }
         segments.push({ type: "terminal" })
+        if (n < split.length - 1) {
+          throw new Error(
+            `Cannot have a termination before the end of the segment ${path}`,
+          )
+        }
         return segments
       case PARAMETER_REGEX.test(segment):
         if (current.length > 0) {
-          segments.push({ type: "text", prefix: current })
+          segments.push({ type: "text", prefix: current + "/" })
           current = ""
+        } else {
+          segments.push({ type: "text", prefix: "/" })
         }
         segments.push({ type: "parameter", parameterName: segment })
         break
@@ -480,147 +501,384 @@ function segmentPath(path: string): ParameterizedPath {
   return segments
 }
 
+interface Modification<T> {
+  node: ParameterizedTrieNode<T>
+  rollback: EmptyCallback
+}
+
+/**
+ * Insert the segment into the children and return a modification
+ *
+ * @param children The target set of children to add to
+ * @param segment The {@link Segment} to add
+ * @returns A {@link Modification} for this operation
+ */
+function _insertSegment<T>(
+  parent: ParameterizedTrieNode<T>,
+  segment: Segment,
+): Modification<T> {
+  const newNode = <ParameterizedTrieNode<T>>{
+    segment,
+    parent,
+    children: [],
+  }
+
+  parent.children.push(newNode)
+
+  return {
+    node: newNode,
+    rollback: () => {
+      // Remove this new node
+      parent.children.splice(parent.children.indexOf(newNode))
+    },
+  }
+}
+
+/**
+ * Split the node and add the segment which may be covered or covering
+ *
+ * @param original The original {@link ParameterizedTrieNode}
+ * @param target The new {@link ParameterizedTrieNode} that is being added
+ * @param len The length of the LCP between the two nodes
+ *
+ * @returns An {@link Modification} with the results and rollback
+ */
+function _splitNode<T>(
+  original: ParameterizedTrieNode<T>,
+  target: TextSegment,
+  len: number,
+): Modification<T> {
+  const parent = original.parent!
+  const left = original.segment as TextSegment
+  const leftSplit = len === target.prefix.length
+
+  const newParent = <ParameterizedTrieNode<T>>{
+    segment: {
+      type: "text",
+      prefix: left.prefix.substring(0, len),
+    },
+    children: [original],
+    parent: original.parent,
+  }
+
+  original.parent = newParent
+  original.segment = {
+    type: "text",
+    prefix: left.prefix.substring(len),
+  }
+  parent.children.splice(parent.children.indexOf(original))
+  parent.children.push(newParent)
+
+  let newNode = newParent
+  if (!leftSplit) {
+    newNode = <ParameterizedTrieNode<T>>{
+      segment: {
+        type: "text",
+        prefix: target.prefix.substring(len),
+      },
+      children: [],
+      parent: newParent,
+    }
+    newParent.children.push(newNode)
+  }
+
+  return {
+    node: newNode,
+    rollback: () => {
+      // Remove the new parent (which may be the new node) from the trie
+      parent.children.splice(parent.children.indexOf(newParent))
+
+      // Re-add the original and restore it's properties
+      parent.children.push(original)
+      original.parent = parent
+      original.segment = left
+
+      newParent.children = [] // Remove any links to other nodes
+    },
+  }
+}
+
 function insertParameterizedTrie<T>(
   path: string,
   value: T,
   root: ParameterizedTrieNode<T>,
 ): void {
+  const undoStack: EmptyCallback[] = []
+  let error: Optional<Error>
   let l = -1
-  let error: Optional<unknown>
+  let current = root
+  let children = root.children
 
-  let current: Optional<ParameterizedTrieNode<T>>
-  let last = root
-  const children = root.children
-  let candidate: Optional<ParameterizedTrieNode<T>>
+  // Verify the path
+  if (!PARAMETERIZED_PATH_REGEX.test(path)) {
+    throw new Error(`Invalid path: ${path}`)
+  }
 
-  const segments = segmentPath(path)
+  // Create the path segments
+  for (const segment of _segmentPath(path)) {
+    // Stop if there is an error
+    if (error) {
+      break
+    }
+    // Clear the previous lookup
+    l = -1
 
-  /**
-   * HERE THERE BE DRAGONS
-   *
-   * Note that everything we do to the trie while inserting must be something we
-   * roll back on failures...
-   */
-
-  let n: number
-  for (n = 0; n < segments.length; ++n) {
-    switch (segments[n].type) {
-      case "text": {
-        // Try to add the segment
-        for (const child of children) {
-          if (child.segment.type === "text") {
-            if ((l = lcp(path, child.segment.prefix)) > 0) {
-              candidate = child
+    switch (segment.type) {
+      case "text":
+        {
+          let match: Optional<ParameterizedTrieNode<T>>
+          do {
+            if (children.some((c) => c.segment.type === "terminal")) {
+              error = new Error(
+                `There is a terminal preventing text ${segment.prefix}`,
+              )
               break
             }
-          } else {
-            candidate = child
-            break
-          }
-        }
 
-        if (candidate) {
-          info(`Found candidate, that's unfortunate...${l}`)
-        } else {
-          // Create the trie from this point on and we're done
-          current = {
-            parent: last,
-            segment: segments[n],
-            children: [],
-          }
+            match = children.find(
+              (c) =>
+                c.segment.type === "text" &&
+                (l = lcp(segment.prefix, c.segment.prefix)) > 0,
+            )
 
-          last.children.push(current)
-
-          last = current
-
-          ++n
-          for (; n < segments.length; ++n) {
-            const newNode: ParameterizedTrieNode<T> = {
-              segment: segments[n],
-              parent: last,
-              children: [],
+            // Covering match
+            if (match && (match.segment as TextSegment).prefix.length === l) {
+              segment.prefix = segment.prefix.substring(l)
+              current = match
+              children = current.children
+              l = -1
+            } else if (match) {
+              current = match
+              match = undefined
+              children = current.children
             }
-            last.children.push(newNode)
-            last = newNode
+          } while (match !== undefined)
+
+          // If the segment is a full match, no further work needed
+          if (segment.prefix.length > 0) {
+            const modification =
+              l > 0
+                ? _splitNode(current, segment, l)
+                : _insertSegment(current, segment)
+
+            current = modification.node
+            children = current.children
+            undoStack.push(modification.rollback)
+          }
+        }
+        break
+      case "parameter":
+        {
+          if (
+            children.some(
+              (c) =>
+                c.segment.type === "wildcard" || c.segment.type === "terminal",
+            )
+          ) {
+            error = new Error(
+              `There is a wildcard or terminal preventing parameter ${segment.parameterName}`,
+            )
+            continue
           }
 
-          last.value = value
-          return
+          const parameter = children.find((c) => c.segment.type === "parameter")
+          if (
+            parameter &&
+            (parameter.segment as ParameterSegment).parameterName !==
+              segment.parameterName
+          ) {
+            error = new Error(
+              `There is already another parameter at this position with a different name ${segment.parameterName} (${(parameter.segment as ParameterSegment).parameterName})`,
+            )
+          } else if (parameter) {
+            current = parameter
+            children = current.children
+            continue
+          } else {
+            const modification = _insertSegment(current, segment)
+            undoStack.push(modification.rollback)
+            current = modification.node
+            children = current.children
+          }
         }
-      }
+        break
+      case "wildcard":
+        {
+          if (
+            children.some(
+              (c) =>
+                c.segment.type === "parameter" || c.segment.type === "terminal",
+            )
+          ) {
+            error = new Error(
+              `There is a parameter or terminal preventing wildcard segment`,
+            )
+            continue
+          }
+
+          const wildcard = children.find((c) => c.segment.type === "wildcard")
+          if (wildcard) {
+            current = wildcard
+            children = current.children
+          } else {
+            const modification = _insertSegment(current, segment)
+            undoStack.push(modification.rollback)
+            current = modification.node
+            children = current.children
+          }
+        }
+        break
+      case "terminal":
+        if (children.some((c) => c.segment.type !== "text")) {
+          error = new Error(
+            `There is another special case preventing addition of terminal`,
+          )
+          continue
+        } else {
+          const modification = _insertSegment(current, segment)
+          undoStack.push(modification.rollback)
+          current = modification.node
+          children = current.children
+        }
+        break
     }
   }
 
-  // Throw any errors
+  // Check for errors
   if (error) {
-    // Rollback...
+    // Run all of the undo operatoins
+    for (const operation of undoStack) {
+      operation()
+    }
 
+    // Throw the error
     throw error
   }
+
+  // Set the value at the current node
+  current.value = value
+
+  // Sort the nodes
+  while (current.parent) {
+    current.children.sort(_sortParameterizedTrieNode)
+    current = current.parent
+  }
+
+  current.children.sort(_sortParameterizedTrieNode)
 }
 
+function _sortParameterizedTrieNode<T>(
+  left: ParameterizedTrieNode<T>,
+  right: ParameterizedTrieNode<T>,
+): number {
+  switch (left.segment.type) {
+    case "text":
+      switch (right.segment.type) {
+        case "text":
+          return left.segment.prefix.localeCompare(right.segment.prefix)
+        default:
+          return -1
+      }
+    case "parameter":
+      switch (right.segment.type) {
+        case "text":
+          return 1
+        default:
+          return -1
+      }
+    case "wildcard":
+      switch (right.segment.type) {
+        case "text":
+          return 1
+        default:
+          return 0
+      }
+    case "terminal":
+      switch (right.segment.type) {
+        case "text":
+          return 1
+        default:
+          return 0
+      }
+  }
+
+  return 0
+}
+
+/**
+ * Search the {@link ParameterizedPathTrie} for the given path
+ *
+ * @param path The path to search for
+ * @param root The root {@link ParameterizedTrieNode} to search from
+ * @returns A {@link ParameterizedPathResult} if one is found
+ */
 function searchParameterizedTrie<T>(
   path: string,
   root: ParameterizedTrieNode<T>,
 ): Optional<ParameterizedPathResult<T>> {
   let idx = 0
   let l = -1
-
-  let parameters: Optional<Map<string, string>>
   let current: Optional<ParameterizedTrieNode<T>>
   let children = root.children
-  let candidate: Optional<ParameterizedTrieNode<T>>
+  const parameters = new Map<string, string>()
+  path = path.endsWith("/") ? path.substring(0, path.length - 1) : path
 
-  // We need to find candidates where there is a lcp match or parameter break
-  for (const child of children) {
-    if (child.segment.type === "text") {
-      if ((l = lcp(path, child.segment.prefix)) > 0) {
-        candidate = child
-        break
+  const search = () => {
+    for (const child of children) {
+      switch (child.segment.type) {
+        case "text":
+          if (path.startsWith(child.segment.prefix, idx)) {
+            current = child
+            return
+          }
+          break
+        default:
+          current = child
+          l =
+            path.at(idx) === "/"
+              ? path.indexOf("/", idx + 1)
+              : path.indexOf("/", idx)
+          return
       }
-    } else {
-      candidate = child
-      break
     }
   }
 
-  // Check our candidates
-  while (candidate) {
-    // We have a segment match
-    if (l > 0) {
-      idx += l
+  search()
 
-      if (idx === path.length) {
-        return candidate.value !== undefined
-          ? {
-              value: candidate.value,
-              parameters,
-            }
-          : undefined
-      } else if (l !== (candidate.segment as TextSegment).prefix.length) {
-        // There was a partial match but it wasnt the full segment, bounce it
-        return undefined
-      } else {
-        current = candidate
-        candidate = undefined
-        children = current.children
-
-        for (const child of children) {
-          if (child.segment.type === "text") {
-            if ((l = lcp(path, child.segment.prefix)) > 0) {
-              candidate = child
-              break
-            }
-          } else {
-            candidate = child
-            break
-          }
-        }
-
-        // Continue with our loop
-        continue
-      }
+  while (current) {
+    switch (current.segment.type) {
+      case "text":
+        idx += current.segment.prefix.length
+        break
+      case "parameter":
+        parameters.set(
+          current.segment.parameterName,
+          path.at(idx) === "/"
+            ? path.substring(idx + 1, l < 0 ? undefined : l)
+            : path.substring(idx, l < 0 ? undefined : l),
+        )
+        idx = l < 0 ? path.length : l
+        break
+      case "wildcard":
+        idx = l
+        break
+      case "terminal":
+        idx = path.length
+        break
     }
+
+    if (idx === path.length) {
+      return current.value
+        ? {
+            value: current.value,
+            parameters: parameters.size > 0 ? parameters : undefined,
+          }
+        : undefined
+    }
+
+    children = current.children
+    current = undefined
+    search()
   }
 
   return
