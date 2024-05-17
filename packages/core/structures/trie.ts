@@ -90,7 +90,7 @@ export interface ParameterizedPathResult<T> {
   /** The value stored at the path */
   value: T
   /** The parameters that were extracted (if any) */
-  parameters?: Map<string, string>
+  parameters: Map<string, string>
 }
 
 /**
@@ -115,6 +115,13 @@ export interface ParameterizedPathTrie<T> {
    * @returns The object associated with the path if it exists
    */
   get(path: string): Optional<ParameterizedPathResult<T>>
+
+  /**
+   * Find all potential results along the given path
+   *
+   * @param path The path to resolve results for
+   */
+  resolve(path: string): Iterator<ParameterizedPathResult<T>>
 
   /**
    * Set the value at the given path
@@ -184,6 +191,10 @@ export class DefaultParameterizedPathTrie<T>
     return searchParameterizedTrie(path, this._root)
   }
 
+  resolve(path: string): Iterator<ParameterizedPathResult<T>, void, undefined> {
+    return resolveParameterizedPath(path, this._root)
+  }
+
   set(path: string, obj: T): void {
     insertParameterizedTrie(path, obj, this._root)
   }
@@ -191,6 +202,20 @@ export class DefaultParameterizedPathTrie<T>
   remove(path: string): boolean {
     if (!PARAMETERIZED_PATH_REGEX.test(path)) {
       throw new Error(`Invalid path: ${path}`)
+    }
+
+    const res = searchParameterizedTrie(path, this._root)
+    if (res && res.value !== undefined) {
+      // Get the node
+      const current = res.node
+
+      // Clear the value
+      current.value = undefined
+
+      // Fix the tree
+      collapseParameterized(current)
+
+      return true
     }
 
     return false
@@ -362,6 +387,14 @@ function searchTrie<T>(path: string, root: TrieNode<T>): Optional<TrieNode<T>> {
 // ParameterizedPathTrie Impl
 //
 ///////////////////////////////////////////////////////////////////////////////
+
+/**
+ * Internal extension for the {@link ParameterizedPathResult}
+ */
+interface ExtendedParameterizedPathResult<T>
+  extends ParameterizedPathResult<T> {
+  node: ParameterizedTrieNode<T>
+}
 
 /**
  * Valid segment types for a {@link ParameterizedPath}
@@ -806,6 +839,88 @@ function _sortParameterizedTrieNode<T>(
 }
 
 /**
+ * Resolve all possible values along the path
+ *
+ * @param path The path to resolve
+ * @param root The starting {@link ParameterizedTrieNode}
+ * @returns An {@link Iterator} with the possible
+ * {@link ParameterizedPathResult} along the path
+ */
+function* resolveParameterizedPath<T>(
+  path: string,
+  root: ParameterizedTrieNode<T>,
+): Generator<ParameterizedPathResult<T>, void, unknown> {
+  let idx = 0
+  let l = -1
+  let current: Optional<ParameterizedTrieNode<T>>
+  let children = root.children
+  const parameters = new Map<string, string>()
+  path = path.endsWith("/") ? path.substring(0, path.length - 1) : path
+
+  const search = () => {
+    for (const child of children) {
+      switch (child.segment.type) {
+        case "text":
+          if (path.startsWith(child.segment.prefix, idx)) {
+            current = child
+            return
+          }
+          break
+        default:
+          current = child
+          l =
+            path.at(idx) === "/"
+              ? path.indexOf("/", idx + 1)
+              : path.indexOf("/", idx)
+          return
+      }
+    }
+  }
+
+  search()
+
+  while (current) {
+    switch (current.segment.type) {
+      case "text":
+        idx += current.segment.prefix.length
+        break
+      case "parameter":
+        parameters.set(
+          current.segment.parameterName,
+          path.at(idx) === "/"
+            ? path.substring(idx + 1, l < 0 ? undefined : l)
+            : path.substring(idx, l < 0 ? undefined : l),
+        )
+        idx = l < 0 ? path.length : l
+        break
+      case "wildcard":
+        idx = l
+        break
+      case "terminal":
+        idx = path.length
+        break
+    }
+
+    if (current.value) {
+      yield {
+        value: current.value,
+        parameters,
+      }
+    }
+
+    if (idx === path.length) {
+      return
+    }
+
+    children = current.children
+    current = undefined
+    search()
+  }
+
+  return
+}
+
+/**
  * Search the {@link ParameterizedPathTrie} for the given path
  *
  * @param path The path to search for
@@ -815,7 +930,7 @@ function _sortParameterizedTrieNode<T>(
 function searchParameterizedTrie<T>(
   path: string,
   root: ParameterizedTrieNode<T>,
-): Optional<ParameterizedPathResult<T>> {
+): Optional<ExtendedParameterizedPathResult<T>> {
   let idx = 0
   let l = -1
   let current: Optional<ParameterizedTrieNode<T>>
@@ -871,7 +986,8 @@ function searchParameterizedTrie<T>(
       return current.value
         ? {
             value: current.value,
-            parameters: parameters.size > 0 ? parameters : undefined,
+            parameters,
+            node: current,
           }
         : undefined
     }
@@ -882,4 +998,34 @@ function searchParameterizedTrie<T>(
   }
 
   return
+}
+
+/**
+ * Cleanup the trie when we remove data from a node
+ *
+ * @param node The {@link TrieNode} that changed
+ */
+function collapseParameterized<T>(node: ParameterizedTrieNode<T>): void {
+  // We have children that potentially need adjusting
+  if (node.children.length === 0 && node.parent) {
+    const children = node.parent.children
+    children.splice(children.indexOf(node))
+
+    // Collapse up the tree
+    if (node.parent.value === undefined) {
+      collapseParameterized(node.parent!)
+    }
+  } else if (node.children.length === 1) {
+    // Collapse the child with this node
+    const child = node.children[0]
+    if (node.segment.type === "text" && child.segment.type === "text") {
+      node.segment.prefix = node.segment.prefix + child.segment.prefix
+    } else {
+      node.segment = child.segment
+    }
+    node.children = child.children
+    node.value = child.value
+
+    child.children.forEach((c) => (c.parent = node))
+  }
 }

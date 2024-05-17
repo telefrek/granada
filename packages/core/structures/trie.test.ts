@@ -2,8 +2,6 @@
  * Tests for the Trie structures
  */
 
-import { getDebugInfo } from "../index.js"
-import { info } from "../logging.js"
 import type { Optional } from "../type/utils.js"
 import {
   DefaultParameterizedPathTrie,
@@ -18,33 +16,43 @@ describe("A ParameterizedTrie should work for all use and edge cases", () => {
     let res: Optional<ParameterizedPathResult<number>>
 
     trie.set("/foo", 1)
+    trie.set("/fold", 2)
+    trie.set("/fold/one", 3)
+    trie.set("/fold/:foo", 4)
+    trie.set("/fold/:foo/bar", 5)
+    trie.set("/*/foo", 6)
+    trie.set("/*/foo/:bar", 7)
+    trie.set("/cat/**", 8)
+
+    const it = trie.resolve("/fold/foo/bar")
+    expect((it.next().value as ParameterizedPathResult<number>).value).toBe(2)
+    expect((it.next().value as ParameterizedPathResult<number>).value).toBe(4)
+    expect((it.next().value as ParameterizedPathResult<number>).value).toBe(5)
+    expect(it.next().done).toBeTruthy()
+
     expect(trie.has("/foo")).toBeTruthy()
     expect(trie.get("/foo")?.value).toBe(1)
-    trie.set("/fold", 2)
     expect(trie.get("/fold")?.value).toBe(2)
-    trie.set("/fold/one", 3)
     expect(trie.get("/fold/one")?.value).toBe(3)
-    trie.set("/fold/:foo", 4)
     res = trie.get("/fold/two")
     expect(res).not.toBeUndefined()
     expect(res?.value).toBe(4)
     expect(res?.parameters?.size).toBe(1)
     expect(res?.parameters?.get(":foo")).toBe("two")
-    trie.set("/fold/:foo/bar", 5)
     res = trie.get("/fold/bar/bar")
     expect(res).not.toBeUndefined()
     expect(res?.value).toBe(5)
     expect(res?.parameters?.size).toBe(1)
     expect(res?.parameters?.get(":foo")).toBe("bar")
-    trie.set("/*/foo", 6)
     expect(trie.get("/silly/foo")?.value).toBe(6)
     expect(trie.get("/1/foo/")?.value).toBe(6)
-    trie.set("/*/foo/:bar", 7)
-    trie.set("/cat/**", 8)
-    info(getDebugInfo(trie))
     expect(trie.get("/cat/one/two/three")?.value).toBe(8)
     expect(() => trie.set(`/first/two/three/four/**/five`, -1)).toThrow()
     expect(trie.get("/first")).toBeUndefined()
+
+    expect(trie.remove("/cat/**")).toBeTruthy()
+    expect(trie.remove("/cat/**")).toBeFalsy()
+    expect(trie.get("/cat/one/two/three")?.value).toBeUndefined()
   }, 600_000)
 })
 
