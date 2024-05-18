@@ -54,7 +54,7 @@ export function removeShutdown(
 ): boolean {
   const idx = shutdownHooks.indexOf(callback)
   if (idx >= 0) {
-    shutdownHooks.splice(idx)
+    shutdownHooks.splice(idx, 1)
     return true
   }
 

@@ -107,6 +107,13 @@ export type Callback<Args extends AnyArgs> = (...args: Args) => void
 export type Consumer<T> = (obj: T) => MaybeAwaitable<void>
 
 /**
+ * Function that transforms a value
+ *
+ * @param current The current value if available
+ */
+export type MergeTransform<T> = (current: Optional<T>) => T
+
+/**
  * A {@link Callback} that takes no arguments
  */
 export type EmptyCallback = () => void

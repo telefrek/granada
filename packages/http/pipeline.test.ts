@@ -3,7 +3,7 @@
  */
 
 import { EmitterFor } from "@telefrek/core/events"
-import { getDebugInfo, type MaybeAwaitable } from "@telefrek/core/index.js"
+import { type MaybeAwaitable } from "@telefrek/core/index.js"
 import { consumeJsonStream } from "@telefrek/core/json.js"
 import { getTracer } from "@telefrek/core/observability/tracing"
 import { consumeString, drain } from "@telefrek/core/streams.js"
@@ -36,7 +36,6 @@ import {
   createTestRouter,
 } from "./testUtils.js"
 
-import { info } from "@telefrek/core/logging"
 import { randomUUID as v4 } from "crypto"
 import { createRouter, getRoutingParameters } from "./routing.js"
 import {
@@ -101,8 +100,6 @@ describe("Pipeline components should behave as designed", () => {
           resource: getRoutingParameters()?.get("resource"),
         }),
       )
-
-      info(getDebugInfo(router))
 
       // Use the routing
       pipeline = createPipeline({

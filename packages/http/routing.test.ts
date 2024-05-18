@@ -53,10 +53,10 @@ describe("verify router", () => {
     verifyInfo(router.lookup(request("/valid")))
 
     verifyInfo(router.lookup(request("/")))
-    const info = router.lookup(request("/path/ends/with/v123"))
-    verifyInfo(info)
-    expect(info?.parameters?.size).toBe(1)
-    expect(info?.parameters?.get("variable")).toBe("v123")
+    const routeInfo = router.lookup(request("/path/ends/with/v123"))
+    verifyInfo(routeInfo)
+    expect(routeInfo?.parameters?.size).toBe(1)
+    expect(routeInfo?.parameters?.get("variable")).toBe("v123")
   })
 
   test("A router should accept a top level terminal", () => {

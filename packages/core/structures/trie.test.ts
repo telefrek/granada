@@ -7,6 +7,7 @@ import {
   DefaultParameterizedPathTrie,
   DefaultTrie,
   type ParameterizedPathResult,
+  type PartialParameterizedPathResult,
 } from "./trie.js"
 
 describe("A ParameterizedTrie should work for all use and edge cases", () => {
@@ -15,6 +16,7 @@ describe("A ParameterizedTrie should work for all use and edge cases", () => {
 
     let res: Optional<ParameterizedPathResult<number>>
 
+    trie.set("/", 0)
     trie.set("/foo", 1)
     trie.set("/fold", 2)
     trie.set("/fold/one", 3)
@@ -24,10 +26,20 @@ describe("A ParameterizedTrie should work for all use and edge cases", () => {
     trie.set("/*/foo/:bar", 7)
     trie.set("/cat/**", 8)
 
+    expect(trie.get("/")?.value).toBe(0)
     const it = trie.resolve("/fold/foo/bar")
-    expect((it.next().value as ParameterizedPathResult<number>).value).toBe(2)
-    expect((it.next().value as ParameterizedPathResult<number>).value).toBe(4)
-    expect((it.next().value as ParameterizedPathResult<number>).value).toBe(5)
+    const values = [0, 2, 4, 5]
+    const remainders = ["fold/foo/bar", "/foo/bar", "/bar", ""]
+    for (let n = 0; n < 4; ++n) {
+      const { value, done } = it.next()
+      expect(done).toBeFalsy()
+      expect((value as PartialParameterizedPathResult<number>).value).toBe(
+        values[n],
+      )
+      expect((value as PartialParameterizedPathResult<number>).remainder).toBe(
+        remainders[n],
+      )
+    }
     expect(it.next().done).toBeTruthy()
 
     expect(trie.has("/foo")).toBeTruthy()
@@ -38,12 +50,12 @@ describe("A ParameterizedTrie should work for all use and edge cases", () => {
     expect(res).not.toBeUndefined()
     expect(res?.value).toBe(4)
     expect(res?.parameters?.size).toBe(1)
-    expect(res?.parameters?.get(":foo")).toBe("two")
+    expect(res?.parameters?.get("foo")).toBe("two")
     res = trie.get("/fold/bar/bar")
     expect(res).not.toBeUndefined()
     expect(res?.value).toBe(5)
     expect(res?.parameters?.size).toBe(1)
-    expect(res?.parameters?.get(":foo")).toBe("bar")
+    expect(res?.parameters?.get("foo")).toBe("bar")
     expect(trie.get("/silly/foo")?.value).toBe(6)
     expect(trie.get("/1/foo/")?.value).toBe(6)
     expect(trie.get("/cat/one/two/three")?.value).toBe(8)

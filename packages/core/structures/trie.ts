@@ -2,7 +2,11 @@
  * Basic implementation of a prefix tree (trie)
  */
 
-import { type EmptyCallback, type Optional } from "../type/utils.js"
+import {
+  type EmptyCallback,
+  type MergeTransform,
+  type Optional,
+} from "../type/utils.js"
 
 /**
  * Determine the longest common prefix between two strings
@@ -93,6 +97,12 @@ export interface ParameterizedPathResult<T> {
   parameters: Map<string, string>
 }
 
+export interface PartialParameterizedPathResult<T>
+  extends ParameterizedPathResult<T> {
+  /** The remainder of the search path */
+  remainder: string
+}
+
 /**
  * This is an extended {@link Trie} that behaves in mostly the same way but
  * allows usage of parameters, wildcards and terminal cases
@@ -121,7 +131,7 @@ export interface ParameterizedPathTrie<T> {
    *
    * @param path The path to resolve results for
    */
-  resolve(path: string): Iterator<ParameterizedPathResult<T>>
+  resolve(path: string): Iterator<PartialParameterizedPathResult<T>>
 
   /**
    * Set the value at the given path
@@ -130,6 +140,13 @@ export interface ParameterizedPathTrie<T> {
    * @param obj The value to store that location
    */
   set(path: string, obj: T): void
+
+  /**
+   * Merge the value at the location
+   * @param path the path to alter
+   * @param merge The {@link MergeTransform} to invoke
+   */
+  merge(path: string, merge: MergeTransform<T>): void
 
   /**
    * Remove the value from the trie
@@ -191,12 +208,18 @@ export class DefaultParameterizedPathTrie<T>
     return searchParameterizedTrie(path, this._root)
   }
 
-  resolve(path: string): Iterator<ParameterizedPathResult<T>, void, undefined> {
+  resolve(
+    path: string,
+  ): Iterator<PartialParameterizedPathResult<T>, void, undefined> {
     return resolveParameterizedPath(path, this._root)
   }
 
   set(path: string, obj: T): void {
-    insertParameterizedTrie(path, obj, this._root)
+    insertParameterizedTrie(path, (_) => obj, this._root)
+  }
+
+  merge(path: string, merge: MergeTransform<T>): void {
+    insertParameterizedTrie(path, merge, this._root)
   }
 
   remove(path: string): boolean {
@@ -247,7 +270,7 @@ function collapse<T>(node: TrieNode<T>): void {
   // We have children that potentially need adjusting
   if (node.children.length === 0 && node.parent) {
     const children = node.parent.children
-    children.splice(children.indexOf(node))
+    children.splice(children.indexOf(node), 1)
 
     // Collapse up the tree
     if (node.parent.value === undefined) {
@@ -310,7 +333,7 @@ function insertTrie<T>(path: string, value: T, root: TrieNode<T>): void {
       idx += l
 
       // Remove the current node from the previous children
-      children.splice(children.indexOf(current))
+      children.splice(children.indexOf(current), 1)
       children.push(last)
 
       // Adjust the prefix
@@ -463,7 +486,7 @@ type RootSegment = {
 }
 
 const PARAMETERIZED_PATH_REGEX =
-  /^\/(([a-zA-Z0-9_]+|:[a-zA-Z][0-9a-zA-Z_]*|\*{1,2})?\/)*/
+  /^(\/(:[a-zA-Z])?([a-zA-Z0-9_-]+|\*{1,2}))+\/?$/
 
 const PATH_SEPARATOR = "/"
 const WILDCARD = "*"
@@ -482,9 +505,8 @@ function _segmentPath(path: string): ParameterizedPath {
   let current = ""
 
   // Split the path into chunks
-  const split = (path.startsWith("/") ? path.substring(1) : path).split(
-    PATH_SEPARATOR,
-  )
+  const split = path.split(PATH_SEPARATOR)
+
   for (let n = 0; n < split.length; ++n) {
     const segment = split[n]
     switch (true) {
@@ -521,7 +543,10 @@ function _segmentPath(path: string): ParameterizedPath {
         } else {
           segments.push({ type: "text", prefix: "/" })
         }
-        segments.push({ type: "parameter", parameterName: segment })
+        segments.push({
+          type: "parameter",
+          parameterName: segment.substring(1),
+        })
         break
     }
   }
@@ -529,6 +554,8 @@ function _segmentPath(path: string): ParameterizedPath {
   if (current.length > 0) {
     segments.push({ type: "text", prefix: current })
     current = ""
+  } else if (segments.length === 0) {
+    segments.push({ type: "text", prefix: "/" })
   }
 
   return segments
@@ -562,7 +589,7 @@ function _insertSegment<T>(
     node: newNode,
     rollback: () => {
       // Remove this new node
-      parent.children.splice(parent.children.indexOf(newNode))
+      parent.children.splice(parent.children.indexOf(newNode), 1)
     },
   }
 }
@@ -599,7 +626,8 @@ function _splitNode<T>(
     type: "text",
     prefix: left.prefix.substring(len),
   }
-  parent.children.splice(parent.children.indexOf(original))
+  const idx = parent.children.indexOf(original)
+  parent.children.splice(idx, 1)
   parent.children.push(newParent)
 
   let newNode = newParent
@@ -619,7 +647,7 @@ function _splitNode<T>(
     node: newNode,
     rollback: () => {
       // Remove the new parent (which may be the new node) from the trie
-      parent.children.splice(parent.children.indexOf(newParent))
+      parent.children.splice(parent.children.indexOf(newParent), 1)
 
       // Re-add the original and restore it's properties
       parent.children.push(original)
@@ -633,7 +661,7 @@ function _splitNode<T>(
 
 function insertParameterizedTrie<T>(
   path: string,
-  value: T,
+  merge: MergeTransform<T>,
   root: ParameterizedTrieNode<T>,
 ): void {
   const undoStack: EmptyCallback[] = []
@@ -643,9 +671,12 @@ function insertParameterizedTrie<T>(
   let children = root.children
 
   // Verify the path
-  if (!PARAMETERIZED_PATH_REGEX.test(path)) {
+  if (!PARAMETERIZED_PATH_REGEX.test(path) && path !== "/") {
     throw new Error(`Invalid path: ${path}`)
   }
+
+  // Clean the path
+  path = _cleanPath(path)
 
   // Create the path segments
   for (const segment of _segmentPath(path)) {
@@ -777,6 +808,13 @@ function insertParameterizedTrie<T>(
     }
   }
 
+  try {
+    current.value = merge(current.value)
+  } catch (err) {
+    error =
+      err instanceof Error ? err : new Error("merge error", { cause: err })
+  }
+
   // Check for errors
   if (error) {
     // Run all of the undo operatoins
@@ -787,9 +825,6 @@ function insertParameterizedTrie<T>(
     // Throw the error
     throw error
   }
-
-  // Set the value at the current node
-  current.value = value
 
   // Sort the nodes
   while (current.parent) {
@@ -838,6 +873,16 @@ function _sortParameterizedTrieNode<T>(
   return 0
 }
 
+function _cleanPath(path: string): string {
+  return (
+    "/" +
+    path
+      .split("/")
+      .filter((p) => p.length > 0)
+      .join("/")
+  )
+}
+
 /**
  * Resolve all possible values along the path
  *
@@ -849,13 +894,13 @@ function _sortParameterizedTrieNode<T>(
 function* resolveParameterizedPath<T>(
   path: string,
   root: ParameterizedTrieNode<T>,
-): Generator<ParameterizedPathResult<T>, void, unknown> {
+): Generator<PartialParameterizedPathResult<T>, void, unknown> {
   let idx = 0
   let l = -1
   let current: Optional<ParameterizedTrieNode<T>>
   let children = root.children
   const parameters = new Map<string, string>()
-  path = path.endsWith("/") ? path.substring(0, path.length - 1) : path
+  path = _cleanPath(path)
 
   const search = () => {
     for (const child of children) {
@@ -894,17 +939,18 @@ function* resolveParameterizedPath<T>(
         idx = l < 0 ? path.length : l
         break
       case "wildcard":
-        idx = l
+        idx = l < 0 ? path.length : l
         break
       case "terminal":
         idx = path.length
         break
     }
 
-    if (current.value) {
+    if (current.value !== undefined) {
       yield {
         value: current.value,
         parameters,
+        remainder: path.substring(idx),
       }
     }
 
@@ -936,7 +982,7 @@ function searchParameterizedTrie<T>(
   let current: Optional<ParameterizedTrieNode<T>>
   let children = root.children
   const parameters = new Map<string, string>()
-  path = path.endsWith("/") ? path.substring(0, path.length - 1) : path
+  path = _cleanPath(path)
 
   const search = () => {
     for (const child of children) {
@@ -983,7 +1029,7 @@ function searchParameterizedTrie<T>(
     }
 
     if (idx === path.length) {
-      return current.value
+      return current.value !== undefined
         ? {
             value: current.value,
             parameters,
@@ -1009,7 +1055,7 @@ function collapseParameterized<T>(node: ParameterizedTrieNode<T>): void {
   // We have children that potentially need adjusting
   if (node.children.length === 0 && node.parent) {
     const children = node.parent.children
-    children.splice(children.indexOf(node))
+    children.splice(children.indexOf(node), 1)
 
     // Collapse up the tree
     if (node.parent.value === undefined) {
