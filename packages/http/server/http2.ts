@@ -25,7 +25,6 @@ import {
   SecureServerOptions,
   ServerHttp2Session,
   createSecureServer,
-  type OutgoingHttpHeaders,
 } from "http2"
 import { HttpErrorCode, isHttpError } from "../errors.js"
 import { HttpRequestMetrics, HttpServerMetrics } from "../metrics.js"
@@ -242,10 +241,9 @@ export class NodeHttp2Server extends HttpServerBase {
                 break
             }
           } else {
-            const outgoing = <OutgoingHttpHeaders>{}
+            const outgoing = injectHeaders(response.headers)
 
             // Inject remaining
-            injectHeaders(response.headers, outgoing)
             resp.writeHead(response.status.code, outgoing)
 
             // Checking body

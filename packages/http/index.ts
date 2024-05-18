@@ -49,9 +49,9 @@ export interface HttpHeaders {
   delete(name: string): void
 
   /**
-   * Get the full set of entries
+   * Gets the raw underlying headers
    */
-  [Symbol.iterator](): Iterator<string>
+  getRaw(): NodeJS.Dict<string | string[]>
 }
 
 /**

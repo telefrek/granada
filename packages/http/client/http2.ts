@@ -5,7 +5,7 @@
 import { DeferredPromise, type MaybeAwaitable } from "@telefrek/core/index.js"
 import { info } from "@telefrek/core/logging"
 import type { Optional } from "@telefrek/core/type/utils.js"
-import type { IncomingHttpHeaders, OutgoingHttpHeaders } from "http"
+import type { IncomingHttpHeaders } from "http"
 import {
   constants as Http2Constants,
   connect,
@@ -59,11 +59,10 @@ export class Http2ClientTransport<T extends HttpTransportOptions>
     const deferred = new DeferredPromise<HttpResponse>()
 
     try {
-      const outgoingHeaders: OutgoingHttpHeaders = {
-        [Http2Constants.HTTP2_HEADER_PATH]: request.path.original,
-        [Http2Constants.HTTP2_HEADER_METHOD]: request.method,
-      }
-      injectHeaders(request.headers, outgoingHeaders)
+      const outgoingHeaders = injectHeaders(request.headers)
+
+      outgoingHeaders[Http2Constants.HTTP2_HEADER_PATH] = request.path.original
+      outgoingHeaders[Http2Constants.HTTP2_HEADER_METHOD] = request.method
 
       const http2Stream = this._client
         .request(outgoingHeaders, {

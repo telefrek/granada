@@ -250,26 +250,14 @@ export function createRequest(options?: CreateRequestOptions): HttpRequest {
   }
 }
 
-interface IndexableHeaders {
-  [key: string]: string | string[] | undefined
-}
+/**
+ * Custom class to build {@link HttpHeaders} from the given {@link NodeJS.Dict}
+ */
+export class IndexedHeaders implements HttpHeaders {
+  private readonly _headers: NodeJS.Dict<string | string[]>
 
-class IndexedHeaders implements HttpHeaders {
-  private readonly _headers
-
-  constructor(headers: IndexableHeaders) {
+  constructor(headers: NodeJS.Dict<string | string[]>) {
     this._headers = headers
-  }
-
-  [Symbol.iterator](): Iterator<string, void, undefined> {
-    const headers = this._headers
-    return (function* () {
-      for (const key of Object.keys(headers)) {
-        yield key
-      }
-
-      return
-    })()
   }
 
   private _format(value?: string | string[] | number): Optional<string> {
@@ -295,10 +283,15 @@ class IndexedHeaders implements HttpHeaders {
   delete(name: string): void {
     delete this._headers[name]
   }
+
+  getRaw(): NodeJS.Dict<string | string[]> {
+    return this._headers
+  }
 }
 
 /**
  * Create an empty set of {@link HttpHeaders}
+ *
  * @returns An empty set of {@link HttpHeaders}
  */
 export function emptyHeaders(): HttpHeaders {
@@ -336,13 +329,8 @@ export function extractHeaders(
  * @param headers The {@link HttpHeaders} to inject
  * @param outgoingHeaders The {@link  OutgoingHttpHeaders} to write to
  */
-export function injectHeaders(
-  headers: HttpHeaders,
-  outgoingHeaders: OutgoingHttpHeaders,
-): void {
-  for (const header of headers) {
-    outgoingHeaders[header] = headers.get(header)
-  }
+export function injectHeaders(headers: HttpHeaders): OutgoingHttpHeaders {
+  return headers.getRaw()
 }
 
 /**
