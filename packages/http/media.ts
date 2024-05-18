@@ -137,32 +137,10 @@ export const CONTENT_TYPE_HEADER_2 = "Content-Type"
  * @returns The content type header or undefined
  */
 export function getMediaType(headers: HttpHeaders): Optional<MediaType> {
-  let value: Optional<string | string[]>
-
-  // Fast path is that we have it already lowercase
-  if (headers.has(CONTENT_TYPE_HEADER)) {
-    value = headers.get(CONTENT_TYPE_HEADER)
-  } else if (headers.has(CONTENT_TYPE_HEADER_2)) {
-    value = headers.get(CONTENT_TYPE_HEADER_2)
-  }
-
-  // If undefined, may be that we got a headers collection without lowercase somehow
-  if (value === undefined) {
-    // Iterate the headers trying to find a match
-    for (const header of headers.keys()) {
-      if (header.toLowerCase() === CONTENT_TYPE_HEADER) {
-        value = headers.get(header)
-        break
-      }
-    }
-  }
+  const value = headers.get(CONTENT_TYPE_HEADER)
 
   // Return the value if it was found
-  return typeof value === "string"
-    ? parseMediaType(value)
-    : typeof value === "object" && Array.isArray(value)
-      ? parseMediaType(value[0])
-      : undefined
+  return value ? parseMediaType(value) : undefined
 }
 
 export async function createFileContentResponse(
