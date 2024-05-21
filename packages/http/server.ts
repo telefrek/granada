@@ -2,31 +2,23 @@
  * HTTP Server implementation
  */
 
-import type { Span } from "@opentelemetry/api"
 import { Emitter, EmitterFor } from "@telefrek/core/events.js"
 import { DeferredPromise, type MaybeAwaitable } from "@telefrek/core/index.js"
 import { LifecycleEvents } from "@telefrek/core/lifecycle.js"
-import {
-  DefaultLogger,
-  LogLevel,
-  Logger,
-  type LogWriter,
-} from "@telefrek/core/logging.js"
-import { type Duration } from "@telefrek/core/time.js"
+import { DefaultLogger, LogLevel, Logger } from "@telefrek/core/logging.js"
+import { Duration } from "@telefrek/core/time.js"
 import { HttpErrorCode, type HttpError } from "./errors.js"
-import { HttpRequest, HttpResponse, type TLSConfig } from "./index.js"
+import { HttpResponse, type TLSConfig } from "./index.js"
 import {
-  HttpOperationState,
-  createHttpOperation,
+  type HttpOperation,
   type HttpOperationSourceEvents,
 } from "./operations.js"
 
 /**
  * The default {@link Logger} for {@link HttpPipeline} operations
  */
-let HTTP_SERVER_LOGGER: Logger = new DefaultLogger({
-  name: "HttpServer",
-  level: LogLevel.INFO,
+const HTTP_SERVER_LOGGER: Logger = new DefaultLogger({
+  name: "http.server",
 })
 
 /**
@@ -36,20 +28,6 @@ let HTTP_SERVER_LOGGER: Logger = new DefaultLogger({
  */
 export function setHttpServerLogLevel(level: LogLevel): void {
   HTTP_SERVER_LOGGER.setLevel(level)
-}
-
-/**
- * Update the pipeline log writer
- *
- * @param writer the {@link LogWriter} to use for {@link HttpPipeline}
- * {@link Logger} objects
- */
-export function setHttpServerLogWriter(writer: LogWriter): void {
-  HTTP_SERVER_LOGGER = new DefaultLogger({
-    name: "HttpServer",
-    level: HTTP_SERVER_LOGGER.level,
-    writer: writer,
-  })
 }
 
 /**
@@ -135,68 +113,57 @@ export abstract class HttpServerBase
     this._config = config
     this._logger = logger
     this._ready = config.enabledOnStart ?? true
+    this.emit("initializing")
   }
 
-  abstract listen(port: number): MaybeAwaitable<void>
-  abstract close(graceful?: boolean): MaybeAwaitable<void>
+  listen(port: number): MaybeAwaitable<void> {
+    try {
+      return this._listen(port)
+    } finally {
+      this.emit("started")
+      this.emit("listening", port)
+    }
+  }
+
+  async close(graceful?: boolean): Promise<void> {
+    this.emit("stopping")
+    try {
+      await this._close(graceful)
+    } finally {
+      this.emit("finished")
+    }
+  }
+
+  abstract _listen(port: number): MaybeAwaitable<void>
+  abstract _close(graceful?: boolean): MaybeAwaitable<void>
 
   setReady(enabled: boolean): boolean {
     this._ready = enabled
     return true
   }
 
-  protected handleRequest(
-    request: HttpRequest,
-    controller?: AbortController,
-    span?: Span,
-  ): Promise<HttpResponse> {
-    const operation = createHttpOperation({
-      request,
-      timeout: this._config.requestTimeout,
-      controller,
-      span,
-    })
+  protected async getResponse(
+    operation: HttpOperation,
+  ): Promise<HttpResponse | HttpError> {
+    const deferred = new DeferredPromise()
 
-    this._logger.debug(
-      `(${request.id}): Received [${request.method}] ${request.path.original}${request.query ? request.query.original : ""}`,
-      request,
-    )
+    // We are listening for the finish or the response to fire
 
-    // Create our promise
-    const deferred = new DeferredPromise<HttpResponse>()
+    const fireDeferred = () => {
+      deferred.resolve()
+      operation.removeListener("finished", fireDeferred)
+      operation.removeListener("response", fireDeferred)
+    }
 
-    // Hook the change event for the reading state
-    operation.on("changed", (_state: HttpOperationState) => {
-      switch (operation.state) {
-        case HttpOperationState.ABORTED:
-          this._logger.error(`(${request.id}) Aborted`)
-          deferred.reject(<HttpError>{
-            errorCode: HttpErrorCode.ABORTED,
-          })
-          break
-        case HttpOperationState.TIMEOUT:
-          this._logger.error(`(${request.id}) Timeout`)
-          deferred.reject(<HttpError>{
-            errorCode: HttpErrorCode.TIMEOUT,
-          })
-          break
-        case HttpOperationState.COMPLETED:
-        case HttpOperationState.WRITING:
-          if (operation.response) {
-            deferred.resolve(operation.response)
-          } else {
-            deferred.reject(
-              operation.error ?? {
-                errorCode: HttpErrorCode.UNKNOWN,
-              },
-            )
-          }
-          break
-      }
-    })
+    operation.once("finished", fireDeferred).once("response", fireDeferred)
 
+    // Emit the operation
     this.emit("received", operation)
+    await deferred
 
-    return deferred
+    return (
+      operation.response ??
+      operation.error ?? { errorCode: HttpErrorCode.UNKNOWN }
+    )
   }
 }

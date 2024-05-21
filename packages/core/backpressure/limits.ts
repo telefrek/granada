@@ -3,6 +3,7 @@
  */
 
 import { Emitter } from "../events.js"
+import type { MaybeAwaitable } from "../index.js"
 import { Duration } from "../time.js"
 import type { Optional } from "../type/utils.js"
 import { fixedLimit } from "./algorithms.js"
@@ -76,6 +77,11 @@ export interface Limiter {
    * Attempt to acquire an {@link Optional} {@link LimitedOperation}
    */
   tryAcquire(): Optional<LimitedOperation>
+
+  /**
+   * Acquire a {@link LimitedOperation} blocking operation until available
+   */
+  acquire(): MaybeAwaitable<LimitedOperation>
 
   /**
    * Retrieve the current limit

@@ -139,20 +139,20 @@ export interface CircularArrayBufferOptions {
  */
 export class CircularArrayBuffer<T> implements CircularBuffer<T> {
   // Pointers and state
-  _head = 0
-  _tail = 0
-  _size = 0
-  _closed = false
+  private _head = 0
+  private _tail = 0
+  private _size = 0
+  private _closed = false
 
-  _capacity: number
+  private _capacity: number
 
   // Read/Write signals
-  _readSignal = new Signal()
-  writeSignal = new Signal()
+  private _readSignal = new Signal()
+  private _writeSignal = new Signal()
 
   // Buffer management
-  readonly _MASK: number
-  readonly _buffer: T[]
+  private readonly _MASK: number
+  private readonly _buffer: T[]
 
   constructor(options: CircularArrayBufferOptions) {
     // Clamp the highWaterMark to a value >= 2
@@ -196,7 +196,7 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
       this._size++
 
       // Notify pending writers there is more data
-      this.writeSignal.notify()
+      this._writeSignal.notify()
 
       return true
     }
@@ -218,7 +218,7 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
       }
 
       // Notify pending writers there is more data
-      this.writeSignal.notify()
+      this._writeSignal.notify()
 
       return idx
     }
@@ -241,7 +241,7 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
     this._size++
 
     // Notify pending writers there is more data
-    this.writeSignal.notify()
+    this._writeSignal.notify()
     return true
   }
 
@@ -287,7 +287,7 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
     }
 
     // Notify pending writers there is more data
-    this.writeSignal.notify()
+    this._writeSignal.notify()
 
     return idx
   }
@@ -335,7 +335,7 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
   async remove(timeout?: Duration): Promise<Optional<T>> {
     while (this._size == 0) {
       // If we are closed or can't read, abandon
-      if (this._closed || !(await this.writeSignal.wait(timeout))) {
+      if (this._closed || !(await this._writeSignal.wait(timeout))) {
         return undefined
       }
     }
@@ -398,7 +398,7 @@ export class CircularArrayBuffer<T> implements CircularBuffer<T> {
   close(): void {
     this._closed = true
 
-    this.writeSignal.notifyAll()
+    this._writeSignal.notifyAll()
     this._readSignal.notifyAll()
   }
 }

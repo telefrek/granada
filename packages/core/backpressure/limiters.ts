@@ -1,15 +1,16 @@
 import { Semaphore } from "../concurrency.js"
-import { Timer } from "../time.js"
-import type { Optional } from "../type/utils.js"
+import type { MaybeAwaitable } from "../index.js"
+import { Timestamp } from "../time.js"
+import { type Optional } from "../type/utils.js"
 import { LimitAlgorithm, LimitedOperation, Limiter } from "./limits.js"
 
 /**
  * Base class for all implementations of the {@link Limiter}
  */
 abstract class AbstractLimiter implements Limiter {
-  _limitAlgorithm: LimitAlgorithm
-  _limit: number
-  _inFlight: number
+  protected _limitAlgorithm: LimitAlgorithm
+  protected _limit: number
+  protected _inFlight: number
 
   // Allow retrieving the internal limit
   get limit() {
@@ -41,9 +42,9 @@ abstract class AbstractLimiter implements Limiter {
     return this._limit
   }
 
-  tryAcquire(): Optional<LimitedOperation> {
-    return
-  }
+  abstract tryAcquire(): Optional<LimitedOperation>
+
+  abstract acquire(): MaybeAwaitable<LimitedOperation>
 
   /**
    * Handler for the {@link LimitAlgorithm} `changed` event
@@ -60,35 +61,35 @@ abstract class AbstractLimiter implements Limiter {
    * @returns A basic {@link LimitedOperation}
    */
   protected createOperation(): LimitedOperation {
-    return new this.AbstractLimitOperation(this)
+    return new this.DefaultLimitOperation(this)
   }
 
   /**
    * Base {@link LimitedOperation} that handles state tracking and mainpulation of the underlying {@link AbstractLimiter}
    */
-  AbstractLimitOperation = class implements LimitedOperation {
-    _limiter: AbstractLimiter
-    _finished: boolean
-    _timer: Timer
-    _running: number
+  DefaultLimitOperation = class implements LimitedOperation {
+    private _limiter: AbstractLimiter
+    private _finished: boolean
+    private _timestamp: Timestamp
+    private _running: number
 
     /**
      * Requires the base {@link AbstractLimiter} which can be updated
      *
      * @param limiter The {@link AbstractLimiter} to update
+     * @param onFinish The {@link EmptyCallback} to fire when completed
      */
     constructor(limiter: AbstractLimiter) {
       this._limiter = limiter
       this._finished = false
       this._running = ++limiter._inFlight
-      this._timer = new Timer()
-      this._timer.start()
+      this._timestamp = new Timestamp()
     }
 
     success(): void {
       this._update()
       this._limiter._limitAlgorithm.update(
-        this._timer.stop(),
+        this._timestamp.duration,
         this._running,
         false,
       )
@@ -101,7 +102,7 @@ abstract class AbstractLimiter implements Limiter {
     dropped(): void {
       this._update()
       this._limiter._limitAlgorithm.update(
-        this._timer.stop(),
+        this._timestamp.duration,
         this._running,
         true,
       )
@@ -110,7 +111,7 @@ abstract class AbstractLimiter implements Limiter {
     /**
      * Private method to update the finished state and limiter inFlight value
      */
-    _update(): void {
+    private _update(): void {
       // Ensure we only finish this once for any state
       if (!this._finished) {
         this._finished = true
@@ -126,7 +127,7 @@ abstract class AbstractLimiter implements Limiter {
  * Simple {@link Limiter} that uses a {@link Semaphore} to gate access
  */
 class SimpleLimiter extends AbstractLimiter {
-  _semaphore: Semaphore
+  private _semaphore: Semaphore
 
   /**
    * SimpleLimiter requires at least a {@link LimitAlgorithm} and optional limit (default is 1)
@@ -152,6 +153,14 @@ class SimpleLimiter extends AbstractLimiter {
     return
   }
 
+  override async acquire(): Promise<LimitedOperation> {
+    await this._semaphore.acquire()
+    return new this.SimpleLimitedOperation(
+      this._semaphore,
+      this.createOperation(),
+    )
+  }
+
   protected override onChange(newLimit: number): void {
     // Resize the semaphore
     this._semaphore.resize(newLimit)
@@ -164,8 +173,8 @@ class SimpleLimiter extends AbstractLimiter {
    * Wrapped {@link LimitedOperation} for releasing the internal {@link Semaphore}
    */
   SimpleLimitedOperation = class implements LimitedOperation {
-    _delegate: LimitedOperation
-    _semaphore: Semaphore
+    private _delegate: LimitedOperation
+    private _semaphore: Semaphore
 
     /**
      * Requires the objects to manage as internal state

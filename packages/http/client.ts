@@ -6,36 +6,30 @@ import { isAbortError } from "@telefrek/core/errors.js"
 import { EmitterFor, type Emitter } from "@telefrek/core/events.js"
 import { DeferredPromise, type MaybeAwaitable } from "@telefrek/core/index.js"
 import type { LifecycleEvents } from "@telefrek/core/lifecycle.js"
-import {
-  DefaultLogger,
-  LogLevel,
-  Logger,
-  type LogWriter,
-} from "@telefrek/core/logging.js"
+import { DefaultLogger, LogLevel, Logger } from "@telefrek/core/logging.js"
+import { getTracer } from "@telefrek/core/observability/tracing"
 import { Duration } from "@telefrek/core/time.js"
-import type { Optional } from "@telefrek/core/type/utils.js"
 import { Http2ClientTransport } from "./client/http2.js"
 import { DEFAULT_CLIENT_PIPELINE_CONFIGURATION } from "./client/pipeline.js"
 import { HttpErrorCode, type HttpError } from "./errors.js"
 import {
+  HttpStatusCode,
   type HttpHandler,
   type HttpRequest,
   type HttpResponse,
   type TLSConfig,
 } from "./index.js"
 import {
-  HttpOperationState,
   createHttpOperation,
   type HttpOperationSource,
   type HttpOperationSourceEvents,
 } from "./operations.js"
 import { createPipeline, type HttpPipeline } from "./pipeline.js"
+import { emptyHeaders } from "./utils.js"
 
 /** The logger used for HTTP Clients */
-let HTTP_CLIENT_LOGGER: Logger = new DefaultLogger({
+const HTTP_CLIENT_LOGGER: Logger = new DefaultLogger({
   name: "http.client",
-
-  level: LogLevel.WARN,
 })
 
 /**
@@ -45,20 +39,6 @@ let HTTP_CLIENT_LOGGER: Logger = new DefaultLogger({
  */
 export function setHttpClientLogLevel(level: LogLevel): void {
   HTTP_CLIENT_LOGGER.setLevel(level)
-}
-
-/**
- * Update the writer for the HTTPClient logs
- *
- * @param writer The {@link LogWriter} to use for HTTPClient logs
- */
-export function setHttpClientLogWriter(writer: LogWriter): void {
-  HTTP_CLIENT_LOGGER = new DefaultLogger({
-    name: "http.client",
-
-    level: HTTP_CLIENT_LOGGER.level,
-    writer,
-  })
 }
 
 /**
@@ -87,8 +67,7 @@ export interface HttpClientTransport {
   /**
    *
    * @param request The {@link HttpRequest} to write
-   * @param onHeaderWrite A callback to fire when the headers are written
-   * @param abort
+   * @param abort The optional {@link AbortSignal} to use
    */
   marshal(
     request: HttpRequest,
@@ -123,7 +102,6 @@ export class HttpClientBuilder<
   private _options: T
   private _transport: ClientTransportConstructor<T> | HttpClientTransport =
     Http2ClientTransport<T>
-  private _logger: Optional<Logger>
 
   private _pipeline: HttpPipeline = createPipeline(
     DEFAULT_CLIENT_PIPELINE_CONFIGURATION,
@@ -131,11 +109,6 @@ export class HttpClientBuilder<
 
   constructor(options: T) {
     this._options = options
-  }
-
-  withLogger(logger: Logger): HttpClientBuilder<T> {
-    this._logger = logger
-    return this
   }
 
   withTransport(
@@ -174,15 +147,11 @@ export class HttpClientBuilder<
       }
     }
 
-    const client = new DefaultHttpClient(this._options.name, this._logger)
+    const client = new DefaultHttpClient(this._options.name)
     client.once("finished", () => {
       transport.close()
     })
-    if (
-      this._pipeline.add(client as HttpOperationSource, handler, {
-        highWaterMark: 2,
-      })
-    ) {
+    if (this._pipeline.add(client as HttpOperationSource, handler)) {
       return client
     }
 
@@ -197,16 +166,14 @@ class DefaultHttpClient
   extends EmitterFor<HttpClientEvents>
   implements HttpClient
 {
-  private readonly _logger: Logger
   private _closed: boolean
 
   readonly id: string
 
-  constructor(id: string, logger: Logger = HTTP_CLIENT_LOGGER) {
+  constructor(id: string) {
     super({ captureRejections: true })
 
     this._closed = false
-    this._logger = logger
     this.id = id
   }
 
@@ -215,7 +182,7 @@ class DefaultHttpClient
     this.emit("finished")
   }
 
-  public submit(
+  public async submit(
     request: HttpRequest,
     timeout: Duration = Duration.ofSeconds(15),
   ): Promise<HttpResponse> {
@@ -224,51 +191,40 @@ class DefaultHttpClient
       return Promise.reject(<HttpError>{ errorCode: HttpErrorCode.CLOSED })
     }
 
-    this._logger.debug(
-      `(${request.id}): Submitting [${request.method}] ${request.path.original}${request.query ? request.query.original : ""}`,
-      request,
-    )
+    // TODO: Add all the span details, status, etc.
+    const span = getTracer().startSpan("http.client.request")
 
     // Create the operation
-    // TODO: Create the spans...
-    const operation = createHttpOperation({ request, timeout })
+    const operation = createHttpOperation({ request, timeout, span })
 
     // Create our promise
-    const deferred = new DeferredPromise<HttpResponse>()
+    const deferred = new DeferredPromise()
 
-    // Hook the change event for the reading state
-    operation.on("changed", (_state: HttpOperationState) => {
-      switch (operation.state) {
-        case HttpOperationState.ABORTED:
-          this._logger.error(`(${request.id}) Aborted`)
-          deferred.reject(<HttpError>{
-            errorCode: HttpErrorCode.ABORTED,
-          })
-          break
-        case HttpOperationState.TIMEOUT:
-          this._logger.error(`(${request.id}) Timeout`)
-          deferred.reject(<HttpError>{
-            errorCode: HttpErrorCode.TIMEOUT,
-          })
-          break
-        case HttpOperationState.WRITING:
-        case HttpOperationState.COMPLETED:
-          if (operation.response) {
-            deferred.resolve(operation.response)
-          } else {
-            deferred.reject(
-              operation.error ?? {
-                errorCode: HttpErrorCode.UNKNOWN,
-              },
-            )
-          }
-          break
-      }
-    })
+    operation
+      .once("finished", () => {
+        deferred.resolve()
+      })
+      .once("response", () => {
+        deferred.resolve()
+      })
 
     this.emit("received", operation)
 
-    return deferred
+    await deferred
+
+    if (operation.response) {
+      return operation.response
+    } else {
+      return {
+        status: {
+          code:
+            operation.error?.errorCode === HttpErrorCode.TIMEOUT
+              ? HttpStatusCode.GATEWAY_TIMEOUT
+              : HttpStatusCode.SERVICE_UNAVAILABLE,
+        },
+        headers: emptyHeaders(),
+      }
+    }
   }
 }
 

@@ -15,15 +15,15 @@ export const makeCaseInsensitive = <T extends object>(obj: T): T =>
  * Custom {@link ProxyHandler} that makes access of a property mostly case insensitive
  */
 class CaseInsensitiveProxyHandler<T extends object> implements ProxyHandler<T> {
-  _keys: string[]
-  _lowerCaseKeys: string[]
+  private _keys: string[]
+  private _lowerCaseKeys: string[]
 
   constructor(obj: T) {
     this._keys = Object.keys(obj)
     this._lowerCaseKeys = this._keys.map((k) => k.toLowerCase())
   }
 
-  _getKey(property: string): Optional<keyof T> {
+  private _getKey(property: string): Optional<keyof T> {
     const idx = this._lowerCaseKeys.indexOf(property.toLowerCase())
     return idx >= 0 ? (this._keys.at(idx) as keyof T) : undefined
   }

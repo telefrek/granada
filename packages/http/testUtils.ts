@@ -3,12 +3,7 @@
  */
 
 import { consumeJsonStream } from "@telefrek/core/json.js"
-import {
-  ConsoleLogWriter,
-  DefaultLogger,
-  LogLevel,
-  type Logger,
-} from "@telefrek/core/logging.js"
+import { DefaultLogger, LogLevel, type Logger } from "@telefrek/core/logging.js"
 import { readFileSync } from "fs"
 import { join } from "path"
 import { HttpClientBuilder, type HttpClient } from "./client.js"
@@ -42,8 +37,7 @@ import {
 
 export const TEST_LOGGER: Logger = new DefaultLogger({
   name: "test.logger",
-  level: LogLevel.INFO,
-  writer: new ConsoleLogWriter(),
+  level: LogLevel.DEBUG,
 })
 
 export const ABORTED_RESPONSE: HttpResponse = {
@@ -133,7 +127,7 @@ export function createHttp2Server(certDir: string): HttpServer {
     },
   }
 
-  return new NodeHttp2Server(config, TEST_LOGGER)
+  return new NodeHttp2Server(config)
 }
 
 export function runServerPipeline(
@@ -148,15 +142,17 @@ export function runServerPipeline(
 }
 
 export function createHttp2Client(certDir: string, port: number): HttpClient {
-  return new HttpClientBuilder({
-    name: "TestClient",
-    host: "localhost",
-    port,
-    tls: {
-      certificateAuthority: readFileSync(join(certDir, "cert.pem")),
-    },
-  })
-    .withLogger(TEST_LOGGER)
-    .build()
-    .on("error", (error) => TEST_LOGGER.fatal(`Client Error: ${error}`))
+  return (
+    new HttpClientBuilder({
+      name: "TestClient",
+      host: "localhost",
+      port,
+      tls: {
+        certificateAuthority: readFileSync(join(certDir, "cert.pem")),
+      },
+    })
+      // .withLogger(TEST_LOGGER)
+      .build()
+      .on("error", (error) => TEST_LOGGER.fatal(`Client Error: ${error}`))
+  )
 }

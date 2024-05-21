@@ -31,14 +31,14 @@
   },
   "dependencies": {
     "@opentelemetry/api": "^1.8.0",
-    "@opentelemetry/semantic-conventions": "^1.24.0",
+    "@opentelemetry/semantic-conventions": "^1.24.1",
     "@telefrek/core": "^1.0.0-alpha.42",
     "@telefrek/query": "^1.0.0-alpha.42",
     "pg": "^8.11.5"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^10.9.0",
-    "@types/pg": "^8.11.5"
+    "@types/pg": "^8.11.6"
   },
   "gitHead": "1be6bb3a61aab8ae5361827b54f8428682b9d536"
 }

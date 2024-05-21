@@ -2,14 +2,14 @@
  * Common components used by this package
  */
 
-import type { Optional } from "@telefrek/core/type/utils.js"
+import type { MaybeAwaitable } from "@telefrek/core/index.js"
+import type { AnyArgs, Optional } from "@telefrek/core/type/utils.js"
 import {
   HttpHandler,
   HttpMethod,
   type HttpBody,
   type HttpStatusCode,
 } from "@telefrek/http/index.js"
-import type { MaybeAwaitable } from "@telefrek/core/index.js"
 import type { Router, RoutingParameters } from "../http/routing.js"
 
 /**
@@ -43,6 +43,7 @@ export interface Endpoint {
  */
 export interface RoutableApi {
   router: Router
+  pathPrefix?: string
 }
 
 /**
@@ -143,7 +144,7 @@ export interface RoutableApiOptions {
 export type ParameterMapping = <T = unknown>(
   parameters: Optional<RoutingParameters>,
   body?: T,
-) => unknown[]
+) => AnyArgs
 
 export type ServiceErrorHandler = (error: unknown) => ServiceError
 

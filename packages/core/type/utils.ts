@@ -2,6 +2,8 @@
  * This package contains some useful type manipulations used throughout the framework
  */
 
+import type { MaybeAwaitable } from "../index.js"
+
 /**
  * All of the literal required keys from a type
  */
@@ -83,20 +85,43 @@ export type AliasedType<
   Alias extends string,
 > = Omit<Original, Property> & Record<Alias, Original[Property]>
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type AnyArgs = any[]
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type MaybeAwaitableAny = MaybeAwaitable<any>
+
 /**
  * Type the represents a typed function that takes specific parameters during invocation
  */
-export type Func<Args extends unknown[], Result> = (...args: Args) => Result
+export type Func<Args extends AnyArgs, Result> = (...args: Args) => Result
 
 /**
  * Type to represent a method that takes some arguments and returns nothing
  */
-export type Callback<Args extends unknown[]> = (...args: Args) => void
+export type Callback<Args extends AnyArgs> = (...args: Args) => void
+
+/**
+ * A function that consumes a value
+ */
+export type Consumer<T> = (obj: T) => MaybeAwaitable<void>
+
+/**
+ * Function that transforms a value
+ *
+ * @param current The current value if available
+ */
+export type MergeTransform<T> = (current: Optional<T>) => T
 
 /**
  * A {@link Callback} that takes no arguments
  */
 export type EmptyCallback = () => void
+
+/**
+ * Empty callback that does nothing
+ */
+export const NO_OP_CALLBACK = (): void => {}
 
 /**
  * A value of type {@link T} or undefined

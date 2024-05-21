@@ -125,17 +125,17 @@ const PoolMetrics = {
  * circuit breakers and rate limiting on pool size to grow/shrink with the load
  */
 export abstract class PoolBase<T> implements Pool<T> {
-  _items: T[] = []
-  _signal: Signal = new Signal()
-  _circuit: CircuitBreaker
-  _floatingLimit: number
-  _size: number
-  _maximum: number
-  _scaleInTolerance
-  _hits: number = 0
-  _attributes: Attributes
-  _defaultTimeout: Duration
-  _shutdown: boolean = false
+  private _items: T[] = []
+  private _signal: Signal = new Signal()
+  private _circuit: CircuitBreaker
+  private _floatingLimit: number
+  private _size: number
+  private _maximum: number
+  private _scaleInTolerance
+  private _hits: number = 0
+  private _attributes: Attributes
+  private _defaultTimeout: Duration
+  private _shutdown: boolean = false
 
   constructor(options: PoolOptions) {
     // Set the initial sizing parameters
@@ -319,7 +319,7 @@ export abstract class PoolBase<T> implements Pool<T> {
    *
    * @param item The item to add to the pool
    */
-  _addToPool(item: T): void {
+  private _addToPool(item: T): void {
     // Add the item back to the pool
     this._items.push(item)
 
@@ -332,7 +332,7 @@ export abstract class PoolBase<T> implements Pool<T> {
    *
    * @param item The item to recycle
    */
-  _destroyItem(item: T): void {
+  private _destroyItem(item: T): void {
     try {
       this.recycleItem(item)
     } catch {

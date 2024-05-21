@@ -11,7 +11,7 @@ import type { Optional } from "./type/utils.js"
  * correctly across execution contexts
  */
 export class SynchronizedValue<T> {
-  _value: T
+  private _value: T
 
   constructor(value: T) {
     this._value = value
@@ -35,8 +35,8 @@ type MutexCallback = (value: MaybeAwaitable<boolean>) => void
  * Class representing a simple mutex
  */
 export class Mutex {
-  _locked = false
-  _callbacks: MutexCallback[] = []
+  private _locked = false
+  private _callbacks: MutexCallback[] = []
 
   /**
    * Tries to acquire the {@link Mutex} but will not block if unavailable
@@ -130,8 +130,8 @@ type SignalCallback = (value: MaybeAwaitable<boolean>) => void
  * Class to allow waiting for a signal from another concurrent execution
  */
 export class Signal {
-  _callbacks: SignalCallback[] = []
-  _waiting: number = 0
+  private _callbacks: SignalCallback[] = []
+  private _waiting: number = 0
 
   get waiting(): number {
     return this._waiting
@@ -230,7 +230,7 @@ const MONITOR_SYMBOL: unique symbol = Symbol()
  * Simple implementation of a monitor
  */
 export class Monitor {
-  _mutex: Mutex = new Mutex()
+  private _mutex: Mutex = new Mutex()
 
   /**
    * Wait for the given {@link Monitor} to become available
@@ -272,9 +272,9 @@ export function getMonitor(obj: unknown): Monitor {
  * Represents a semaphore that can be used to control concurrent actions
  */
 export class Semaphore {
-  _concurrency: number
-  _running = 0
-  _callbacks: MutexCallback[] = []
+  private _concurrency: number
+  private _running = 0
+  private _callbacks: MutexCallback[] = []
 
   /**
    * @param concurrency The desired concurrency
@@ -366,7 +366,7 @@ export class Semaphore {
    * NOTE: This is not checked so repeated calling may corrupt the state
    */
   public release() {
-    if (this._callbacks.length > 0 && this._running < this._concurrency) {
+    if (this._callbacks.length > 0 && this._running <= this._concurrency) {
       // Fire the mutex to release another unit of work
       this._callbacks.shift()!(true)
     } else {
@@ -400,14 +400,18 @@ export class Semaphore {
   /**
    * @returns The number of available slots in the semaphore
    */
-  available(): number {
+  get available(): number {
     return this._concurrency - this._running
   }
 
   /**
    * @returns The current concurrency limit
    */
-  limit(): number {
+  get limit(): number {
     return this._concurrency
+  }
+
+  get running(): number {
+    return this._running
   }
 }

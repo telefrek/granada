@@ -3,6 +3,7 @@
  */
 
 import { type MaybeAwaitable } from "@telefrek/core/index.js"
+import type { Optional } from "@telefrek/core/type/utils"
 import { type Readable } from "stream"
 
 /**
@@ -19,7 +20,39 @@ export type QueryParameters = Map<string, string | string[]>
 /**
  * HttpHeaders are collections of key, value pairs where the value can be singular or an array
  */
-export type HttpHeaders = Map<string, string | string[]>
+export interface HttpHeaders {
+  /**
+   * Get the header with the given name
+   * @param name The header name
+   */
+  get(name: string): Optional<string>
+
+  /**
+   * Check if the header with the name exists
+   * @param name The header name
+   */
+  has(name: string): boolean
+
+  /**
+   * Set the name of the header
+   *
+   * @param name The header to set
+   * @param value The value to set
+   */
+  set(name: string, value: string): void
+
+  /**
+   * Delete the header with the given name
+   *
+   * @param name The header to delete
+   */
+  delete(name: string): void
+
+  /**
+   * Gets the raw underlying headers
+   */
+  getRaw(): NodeJS.Dict<string | string[]>
+}
 
 /**
  * Common headers for requests and responses (lowercase)
@@ -240,7 +273,6 @@ export interface HttpBody {
  * An interface defining the behavior of an HTTP Request
  */
 export interface HttpRequest {
-  readonly id: string
   readonly path: HttpPath
   readonly method: HttpMethod
   readonly headers: HttpHeaders

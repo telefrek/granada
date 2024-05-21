@@ -5,11 +5,13 @@
 import type { Span } from "@opentelemetry/api"
 import { EmitterFor, type Emitter } from "@telefrek/core/events.js"
 import type { LifecycleEvents } from "@telefrek/core/lifecycle.js"
-import type { Duration } from "@telefrek/core/time.js"
+import { error } from "@telefrek/core/logging.js"
+import { Duration, Timestamp } from "@telefrek/core/time.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
+import { randomUUID as v4 } from "crypto"
 import { Stream } from "stream"
-import type { HttpError } from "./errors.js"
-import type { HttpRequest, HttpResponse } from "./index.js"
+import { HttpErrorCode, type HttpError } from "./errors.js"
+import { type HttpRequest, type HttpResponse } from "./index.js"
 
 /**
  * Set of states that a {@link HttpOperation} can be in
@@ -49,11 +51,6 @@ export interface HttpOperationEvents extends LifecycleEvents {
    */
   response: (response: HttpResponse) => void
 
-  /**
-   * Event fired on an error during the processing of the operation
-   *
-   * @param error The error that was encountered
-   */
   error: (error: unknown) => void
 }
 
@@ -72,7 +69,13 @@ export interface HttpOperation extends Emitter<HttpOperationEvents> {
   /** The {@link HttpResponse} that was paired with the operation */
   readonly response?: Readonly<HttpResponse>
   /** The optionl {@link Span} for this operation */
-  readonly span?: Span
+  readonly span: Span
+  /** {@link Timestamp} when this was received */
+  readonly started: Timestamp
+  /** The duration for the request */
+  readonly duration: Duration
+
+  readonly id: string
 
   /**
    * Move the operation out of a queued {@link HttpOperationState}
@@ -117,7 +120,7 @@ interface CreateHttpOperationOptions {
   request: HttpRequest
   timeout: Optional<Duration>
   controller?: AbortController
-  span?: Span
+  span: Span
 }
 
 /**
@@ -142,19 +145,34 @@ class DefaultHttpOperation
   implements HttpOperation
 {
   private readonly _request: HttpRequest
+  private readonly _timestamp: Timestamp
+  private readonly _id: string
 
-  private _span: Optional<Span>
+  private _span: Span
   private _state: HttpOperationState
   private _abortController: AbortController
   private _error: Optional<HttpError>
   private _response: Optional<HttpResponse>
   private _timer?: NodeJS.Timeout
+  private _duration?: Duration
+
+  get id(): string {
+    return this._id
+  }
+
+  get started(): Timestamp {
+    return this._timestamp
+  }
+
+  get duration(): Duration {
+    return this._duration ?? this._timestamp.duration
+  }
 
   get signal(): Optional<AbortSignal> {
     return this._abortController.signal
   }
 
-  get span(): Optional<Span> {
+  get span(): Span {
     return this._span
   }
 
@@ -174,24 +192,30 @@ class DefaultHttpOperation
     return this._error
   }
 
+  private set response(response: HttpResponse) {
+    // Only set this once
+    if (this._response === undefined) {
+      this._response = response
+      this.emit("response", response)
+    }
+  }
+
   dequeue(): boolean {
     return this._read()
   }
 
   fail(cause?: HttpError): boolean {
-    this._error = cause
-
-    if (cause) {
-      this.emit("error", cause)
+    // Stop any further processing
+    if (this._abort(cause)) {
+      return true
     }
 
-    // Stop any further processing
-    return this._abort()
+    return false
   }
 
   complete(response: HttpResponse): boolean {
-    if (this._response === undefined) {
-      this._response = response
+    if (this.response === undefined) {
+      this.response = response
 
       return this._write()
     }
@@ -202,6 +226,8 @@ class DefaultHttpOperation
   constructor(options: CreateHttpOperationOptions) {
     super({ captureRejections: true })
 
+    this._id = v4()
+    this._timestamp = Timestamp.now()
     this._request = options.request
     this._state = HttpOperationState.QUEUED
     this._abortController = options.controller ?? new AbortController()
@@ -209,8 +235,14 @@ class DefaultHttpOperation
 
     if (options.timeout) {
       this._timer = setTimeout(() => {
+        // Clear the timeout
+        clearTimeout(this._timer)
+
         // Try to abort the call
-        this._timeout()
+        this.fail({
+          errorCode: HttpErrorCode.TIMEOUT,
+          description: "Operation timed out",
+        })
       }, ~~options.timeout.milliseconds())
     }
   }
@@ -228,9 +260,18 @@ class DefaultHttpOperation
       case HttpOperationState.ABORTED:
       case HttpOperationState.COMPLETED:
       case HttpOperationState.TIMEOUT:
+        // Set completion if not already done
+        this._duration = this._duration ?? this._timestamp.duration
+
+        // Fire the emit event
         this.emit("finished")
-        break
+      // eslint-disable-next-line no-fallthrough
       case HttpOperationState.WRITING:
+        // Clear any pending timeouts
+        clearTimeout(this._timer)
+        this._timer = undefined
+        break
+      case HttpOperationState.READING:
         this.emit("started")
         break
     }
@@ -239,9 +280,6 @@ class DefaultHttpOperation
   private _write(): boolean {
     // Make sure it's valid to switch this to writing
     if (this._check(HttpOperationState.WRITING)) {
-      // Clear any pending timeouts
-      clearTimeout(this._timer)
-
       // Check for a body and hook the consumption events
       if (this._response?.body) {
         const complete = this._complete.bind(this)
@@ -250,6 +288,10 @@ class DefaultHttpOperation
           (err: NodeJS.ErrnoException | null | undefined) => {
             if (!err) {
               complete()
+            } else {
+              error(
+                `[${this._id}]: Failure during write ${this.request.path.original}, ${err}`,
+              )
             }
           },
         )
@@ -290,28 +332,26 @@ class DefaultHttpOperation
   /**
    * Aborts the request if it is valid to do so
    *
+   * @param cause The {@link HttpError} that caused this abort
+   *
    * @returns True if the operation was successful
    */
-  private _abort(): boolean {
-    if (this._check(HttpOperationState.ABORTED)) {
+  private _abort(cause?: HttpError): boolean {
+    // Save the error
+    this._error = cause
+
+    // Calculate the final state
+    const finalState =
+      cause?.errorCode === HttpErrorCode.TIMEOUT
+        ? HttpOperationState.TIMEOUT
+        : HttpOperationState.ABORTED
+
+    // Verify we can move to this state
+    if (this._check(finalState)) {
       // Abort with a message from the root cause or generic message
       this._abortController.abort(
         this._error?.description ?? "Operation was aborted",
       )
-      return true
-    }
-
-    return false
-  }
-
-  /**
-   * Times the request out if it is valid to do so
-   *
-   * @returns True if the operation was successful
-   */
-  private _timeout(): boolean {
-    if (this._check(HttpOperationState.TIMEOUT)) {
-      this._abortController.abort("Operation timed out")
       return true
     }
 
@@ -372,10 +412,15 @@ class DefaultHttpOperation
       case HttpOperationState.WRITING:
         return current === HttpOperationState.PROCESSING
 
-      // These are terminal states and should be reachable by any other
-      // non-terminal state
+      // Terminal states are mostly shortcuts to the end though we shouldn't
+      // allow aborts or timeouts when we are writing the response
       case HttpOperationState.ABORTED:
       case HttpOperationState.TIMEOUT:
+        // Don't allow writing to abort or timeout
+        if (current === HttpOperationState.WRITING) {
+          return false
+        }
+      // eslint-disable-next-line no-fallthrough
       case HttpOperationState.COMPLETED:
         return (
           current !== HttpOperationState.COMPLETED &&

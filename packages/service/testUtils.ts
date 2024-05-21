@@ -2,13 +2,8 @@
  * Service definition and tooling for tests
  */
 
-import { getDebugInfo } from "@telefrek/core/index.js"
-import {
-  ConsoleLogWriter,
-  DefaultLogger,
-  LogLevel,
-  type Logger,
-} from "@telefrek/core/logging.js"
+import { getDebugInfo } from "@telefrek/core"
+import { DefaultLogger, LogLevel, type Logger } from "@telefrek/core/logging.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
 import { HttpClientBuilder, type HttpClient } from "@telefrek/http/client.js"
 import {
@@ -38,8 +33,7 @@ import { SerializationFormat, type ServiceResponse } from "./index.js"
 
 export const TEST_LOGGER: Logger = new DefaultLogger({
   name: "test.logger",
-  level: LogLevel.INFO,
-  writer: new ConsoleLogWriter(),
+  level: LogLevel.DEBUG,
 })
 
 export const ABORTED_RESPONSE: HttpResponse = {
@@ -84,7 +78,6 @@ export function createHttp2Client(certDir: string, port: number): HttpClient {
       certificateAuthority: readFileSync(join(certDir, "cert.pem")),
     },
   })
-    .withLogger(TEST_LOGGER)
     .build()
     .on("error", (error) => TEST_LOGGER.fatal(`Client Error: ${error}`))
 }
@@ -137,13 +130,13 @@ export class TestService {
     template: "/items/:itemId",
     method: HttpMethod.GET,
     mapping: (parameters: Optional<RoutingParameters>, _?: unknown) => {
-      TEST_LOGGER.info(`mapping parameters: ${getDebugInfo(parameters)}`)
       return [parameters?.get("itemId")]
     },
   })
   getItem(itemId: number): Optional<TestItem> {
-    TEST_LOGGER.info(`Received itemId: ${itemId}`)
-    return this.items.get(itemId)
+    const item = this.items.get(itemId)
+    TEST_LOGGER.info(`Got item: ${getDebugInfo(item)} for ${itemId}`)
+    return item
   }
 
   @route({

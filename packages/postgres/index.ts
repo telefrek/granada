@@ -8,12 +8,18 @@ import {
   createSimpleLimiter,
   type Limiter,
 } from "@telefrek/core/backpressure/limits.js"
-import type { FrameworkPriority, MaybeAwaitable } from "@telefrek/core/index.js"
-import { debug } from "@telefrek/core/logging"
+import {
+  DeferredPromise,
+  type FrameworkPriority,
+  type MaybeAwaitable,
+} from "@telefrek/core/index.js"
+import { debug, error, info } from "@telefrek/core/logging"
 import { getGranadaMeter } from "@telefrek/core/observability/metrics.js"
+import { trace } from "@telefrek/core/observability/tracing.js"
 import {
   DefaultMultiLevelPriorityQueue,
   asTaskPriority,
+  createQueueWorker,
   type MultiLevelPriorityQueue,
 } from "@telefrek/core/structures/multiLevelQueue.js"
 import type { Pool } from "@telefrek/core/structures/pool.js"
@@ -41,6 +47,9 @@ export interface PostgresDatabaseOptions {
 
   /** The default amount of time to wait for a task to complete (default is 1 second) */
   defaultTimeoutMilliseconds?: number
+
+  /** The maximum parallel calls to execute (default is 4)*/
+  maxParallelism?: number
 }
 
 const PostgresQueryMetrics = {
@@ -98,6 +107,8 @@ export class DefaultPostgresDatabase implements PostgresDatabase {
   readonly _defaultTimeout: Duration
   readonly _queue: MultiLevelPriorityQueue
   readonly _limit: Limiter
+  readonly _controller: AbortController = new AbortController()
+  readonly _workers: Promise<void>[] = []
 
   constructor(options: PostgresDatabaseOptions) {
     this._pool = options.pool
@@ -109,15 +120,30 @@ export class DefaultPostgresDatabase implements PostgresDatabase {
     this._limit = createSimpleLimiter(vegasBuilder(2).withMax(48).build())
 
     // TODO: Change queue working size based on rate limiting
-    this._queue = new DefaultMultiLevelPriorityQueue(4)
+    this._queue = new DefaultMultiLevelPriorityQueue()
+
+    // Add some workers
+    for (let n = 0; n < 4; ++n) {
+      this._workers.push(
+        createQueueWorker(this._queue, this._controller.signal),
+      )
+    }
   }
 
   async close(): Promise<void> {
+    info(`Postgres: Shutting down queue`)
     // Stop the queue
     await this._queue.shutdown()
 
+    // Abort the controller to stop the workers
+    this._controller.abort("shutting down")
+    await Promise.all(this._workers)
+
+    info(`Postgres: Shutting down pool`)
     // Stop the pool
     await this._pool.shutdown()
+
+    info(`Postgres: Shutdown complete`)
   }
 
   run<T extends RowType, P extends QueryParameters>(
@@ -139,71 +165,84 @@ export class DefaultPostgresDatabase implements PostgresDatabase {
     query: PostgresQuery,
     timeout?: Duration,
   ): Promise<QueryResult<T>> {
-    debug(`Submitting ${query.name}`)
     // TODO: Hook in the monitoring of pool errors
-    const result = await this._queue.queue(
+    const deferred = new DeferredPromise<QueryResult<T>>()
+
+    const execute = this.executeQuery.bind(this)
+    const pool = this._pool
+    const queryTimeout = timeout ?? this._defaultTimeout
+
+    // Queue the work...
+    this._queue.queue(
       {
         priority: asTaskPriority(query.priority ?? 5),
+        timeout: queryTimeout,
+        cancel: () => deferred.reject(new QueryError("timeout")),
       },
-      executeQuery<T>,
-      query,
-      this._pool,
-      timeout ?? this._defaultTimeout,
+      async () => {
+        try {
+          deferred.resolve(await execute(query, pool, queryTimeout))
+        } catch (err) {
+          error(`Rejecting... ${err}`)
+          deferred.reject(err)
+        }
+      },
     )
 
-    return result
+    return deferred
   }
-}
 
-async function executeQuery<T extends RowType>(
-  query: PostgresQuery,
-  pool: Pool<Client>,
-  timeout: Duration,
-): Promise<QueryResult<T>> {
-  const timer = Timer.startNew()
-  debug(`Executing ${query.name}, getting connection...`)
-  const connection = await pool.get(timeout)
+  @trace((query: PostgresQuery) => query.name)
+  private async executeQuery<T extends RowType>(
+    query: PostgresQuery,
+    pool: Pool<Client>,
+    timeout: Duration,
+  ): Promise<QueryResult<T>> {
+    const timer = Timer.startNew()
+    debug(`Executing ${query.name}, getting connection...`)
+    const connection = await pool.get(timeout)
 
-  let error: Optional<unknown>
-  try {
-    // TODO: Update for cursors...
-    // TODO: How do we want to deal with "named queries..." as well as
-    // tracking duplicates
-    debug(`Sending query to downstream`)
-    const results = await connection.item.query({
-      ...query,
-      name: undefined,
-    })
+    let error: Optional<unknown>
+    try {
+      // TODO: Update for cursors...
+      // TODO: How do we want to deal with "named queries..." as well as
+      // tracking duplicates
+      debug(`Sending query to downstream`)
+      const results = await connection.item.query({
+        ...query,
+        name: undefined,
+      })
 
-    const duration = timer.stop()
+      const duration = timer.stop()
 
-    PostgresQueryMetrics.QueryExecutionDuration.record(duration.seconds(), {
-      "query.name": query.name,
-      "query.mode": query.mode,
-    })
-    // Update algorithm...
+      PostgresQueryMetrics.QueryExecutionDuration.record(duration.seconds(), {
+        "query.name": query.name,
+        "query.mode": query.mode,
+      })
+      // Update algorithm...
 
-    // Postgres doesn't care about casing in most places, so we need to
-    // make our results agnostic as well...
-    if (query.mode === ExecutionMode.Normal) {
-      return {
-        mode: query.mode,
-        duration: duration,
-        rows: results.rows.map((r) => makeCaseInsensitive(r as T)),
+      // Postgres doesn't care about casing in most places, so we need to
+      // make our results agnostic as well...
+      if (query.mode === ExecutionMode.Normal) {
+        return {
+          mode: query.mode,
+          duration: duration,
+          rows: results.rows.map((r) => makeCaseInsensitive(r as T)),
+        }
       }
+
+      throw new QueryError("unsupported mode")
+    } catch (err) {
+      PostgresQueryMetrics.QueryErrors.add(1, {
+        "query.name": query.name,
+        "query.mode": query.mode,
+      })
+
+      error = err
+      throw err
+    } finally {
+      connection.release(error)
     }
-
-    throw new QueryError("unsupported mode")
-  } catch (err) {
-    PostgresQueryMetrics.QueryErrors.add(1, {
-      "query.name": query.name,
-      "query.mode": query.mode,
-    })
-
-    error = err
-    throw err
-  } finally {
-    connection.release(error)
   }
 }
 

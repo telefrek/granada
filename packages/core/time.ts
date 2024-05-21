@@ -92,6 +92,13 @@ export class Timestamp {
   }
 
   /**
+   * Get the duration since this timestamp was created
+   */
+  get duration(): Duration {
+    return Timestamp.duration(this, Timestamp.now())
+  }
+
+  /**
    * Calculate the difference between the start and end
    *
    * @param begin The starting {@link Timestamp}

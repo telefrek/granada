@@ -1,8 +1,8 @@
-import { getDebugInfo, type MaybeAwaitable } from "@telefrek/core/index.js"
+import { type MaybeAwaitable } from "@telefrek/core/index.js"
 import { consumeJsonStream } from "@telefrek/core/json.js"
 import { info } from "@telefrek/core/logging.js"
 import { consumeStream } from "@telefrek/core/streams.js"
-import type { Optional } from "@telefrek/core/type/utils.js"
+import type { AnyArgs, Optional } from "@telefrek/core/type/utils.js"
 import {
   HttpStatusCode,
   type HttpHandler,
@@ -13,6 +13,7 @@ import type { HttpOperationSource } from "@telefrek/http/operations.js"
 import {
   createPipeline,
   type HttpPipelineConfiguration,
+  type HttpPipelineOptions,
 } from "@telefrek/http/pipeline.js"
 import { USE_ROUTER } from "@telefrek/http/pipeline/routing.js"
 import {
@@ -55,20 +56,21 @@ export class ServicePipelineBuilder {
 
   withApi(api: unknown): ServicePipelineBuilder {
     if (isRoutableApi(api)) {
-      if (!this._config.requestTransforms) {
-        this._config.requestTransforms = []
+      if (!this._config.transforms) {
+        this._config.transforms = []
       }
 
-      this._config.requestTransforms.push(USE_ROUTER(api.router))
+      this._config.transforms.push(USE_ROUTER(api.router, api.pathPrefix))
     }
 
     return this
   }
 
-  run(port: number): MaybeAwaitable<void> {
+  run(port: number, options?: HttpPipelineOptions): MaybeAwaitable<void> {
     createPipeline(this._config).add(
       this._server as HttpOperationSource,
       NOT_FOUND_HANDLER,
+      options,
     )
     return this._server.listen(port)
   }
@@ -81,21 +83,13 @@ export class ServicePipelineBuilder {
  * @param pathPrefix The optional prefix to add to path endpoints
  * @returns The {@link Router} for the {@link Service}
  */
-export const serviceToRouter = (
-  service: Service,
-  pathPrefix?: string,
-): Router => {
+export const serviceToRouter = (service: Service): Router => {
   const router = createRouter()
 
   // Add all the endpoints
   for (const endpoint of service.endpoints) {
-    info(`${service} adding ${pathPrefix ?? ""}${endpoint.pathTemplate}...`)
-    router.addHandler(
-      `${pathPrefix ?? ""}${endpoint.pathTemplate}`,
-      endpoint.handler,
-      endpoint.method,
-    )
-    info(getDebugInfo(router))
+    info(`${service} adding ${endpoint.pathTemplate}...`)
+    router.addHandler(endpoint.pathTemplate, endpoint.handler, endpoint.method)
   }
 
   // Return the router
@@ -107,8 +101,9 @@ export function buildHandler<T>(
   serviceRoute: ServiceRouteInfo<T>,
 ): HttpHandler {
   const format = serviceRoute.options.format ?? SerializationFormat.JSON
+  info("Building handler...")
   return async (request: HttpRequest): Promise<HttpResponse> => {
-    let args: Optional<unknown[]>
+    let args: AnyArgs = []
     let body: Optional<unknown>
 
     if (request.body) {
@@ -131,9 +126,7 @@ export function buildHandler<T>(
     let response: Optional<ServiceResponse<T>>
 
     try {
-      response = await (args
-        ? serviceRoute.method.call(service, ...args!)
-        : serviceRoute.method.call(service))
+      response = await serviceRoute.method.call(service, ...args)
     } catch (err) {
       response = serviceRoute.options.errorHandler
         ? serviceRoute.options.errorHandler(err)

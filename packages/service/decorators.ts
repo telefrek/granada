@@ -38,11 +38,13 @@ export function routableApi(options: RoutableApiOptions) {
     // Return the new class cast as a RoutableApi that can be passed into a pipeline
     return class extends target implements RoutableApi {
       router: Router
-      prefix: Optional<string>
+      pathPrefix: Optional<string>
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       constructor(...args: any[]) {
         super(...args)
+
+        this.pathPrefix = options.pathPrefix
 
         // Hide our extra properties
         Object.defineProperty(this, "router", { enumerable: false })
@@ -64,7 +66,7 @@ export function routableApi(options: RoutableApiOptions) {
             })
           }
 
-          this.router = serviceToRouter(service, options.pathPrefix)
+          this.router = serviceToRouter(service)
         } else this.router = createRouter()
       }
     }

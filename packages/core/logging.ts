@@ -19,6 +19,12 @@ let DEFAULT_LOG_LEVEL: LogLevel = LogLevel.INFO
 
 export function setDefaultLogLevel(level: LogLevel): void {
   DEFAULT_LOG_LEVEL = level
+
+  setGlobalLogLevel(level)
+}
+
+export function getDefaultLogLevel(): LogLevel {
+  return DEFAULT_LOG_LEVEL
 }
 
 /**
@@ -65,7 +71,23 @@ export const NoopLogWriter: LogWriter = {
   log(_data: LogData): void {},
 }
 
-let DEFAULT_WRITER: LogWriter = NoopLogWriter
+/**
+ * Simple {@link LogWriter} that outputs to the console
+ */
+export class ConsoleLogWriter implements LogWriter {
+  private _formatter: LogFormatter
+
+  constructor(formatter?: LogFormatter) {
+    this._formatter = formatter ?? SimpleLogFormatter
+  }
+
+  log(data: LogData): void {
+    // eslint-disable-next-line no-console
+    console.log(this._formatter(data))
+  }
+}
+
+let DEFAULT_WRITER: LogWriter = new ConsoleLogWriter()
 
 /**
  * Sets the default log writer for preparing the infra
@@ -150,22 +172,6 @@ export interface LoggerOptions {
   name?: string
   /** Optional {@link LogWriter} with default of {@link NoopLogWriter} */
   writer?: LogWriter
-}
-
-/**
- * Simple {@link LogWriter} that outputs to the console
- */
-export class ConsoleLogWriter implements LogWriter {
-  private _formatter: LogFormatter
-
-  constructor(formatter?: LogFormatter) {
-    this._formatter = formatter ?? SimpleLogFormatter
-  }
-
-  log(data: LogData): void {
-    // eslint-disable-next-line no-console
-    console.log(this._formatter(data))
-  }
 }
 
 /**
@@ -381,5 +387,6 @@ export function fatal(message: string, context?: unknown) {
 
 let GLOBAL_LOGGER: Logger = new DefaultLogger({
   name: "global",
-  writer: NoopLogWriter,
+  writer: DEFAULT_WRITER,
+  level: DEFAULT_LOG_LEVEL,
 })

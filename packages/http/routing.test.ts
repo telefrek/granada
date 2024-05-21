@@ -53,10 +53,10 @@ describe("verify router", () => {
     verifyInfo(router.lookup(request("/valid")))
 
     verifyInfo(router.lookup(request("/")))
-    const info = router.lookup(request("/path/ends/with/v123"))
-    verifyInfo(info)
-    expect(info?.parameters?.size).toBe(1)
-    expect(info?.parameters?.get("variable")).toBe("v123")
+    const routeInfo = router.lookup(request("/path/ends/with/v123"))
+    verifyInfo(routeInfo)
+    expect(routeInfo?.parameters?.size).toBe(1)
+    expect(routeInfo?.parameters?.get("variable")).toBe("v123")
   })
 
   test("A router should accept a top level terminal", () => {
@@ -78,6 +78,30 @@ describe("verify router", () => {
 
     expect(router.lookup(request("/bar/baz"))).toBeUndefined()
     expect(router.lookup(request("/bar"))).not.toBeUndefined()
+  })
+
+  test("A router in the middle should be consulted for matches before exploring more", () => {
+    const router1 = createRouter()
+    const router2 = createRouter()
+    const handler: HttpHandler = (_) => Promise.reject("invalid")
+
+    router2.addHandler("/some/path", handler, HttpMethod.GET)
+    router1.addRouter("/", router2)
+    router1.addHandler("/some/other/path", handler, HttpMethod.GET)
+    router1.addHandler("/some/path", handler, HttpMethod.DELETE)
+
+    expect(
+      router1.lookup(request("/some/path", HttpMethod.DELETE)),
+    ).not.toBeUndefined()
+    expect(
+      router1.lookup(request("/some/path", HttpMethod.GET)),
+    ).not.toBeUndefined()
+    expect(
+      router1.lookup(request("/some/other/path", HttpMethod.GET)),
+    ).not.toBeUndefined()
+    expect(
+      router1.lookup(request("/some/path", HttpMethod.PUT)),
+    ).toBeUndefined()
   })
 
   test("A router should work regardless of order of insertion or location in the tree", () => {

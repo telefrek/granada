@@ -5,20 +5,19 @@
 import { urlToHttpOptions } from "url"
 import {
   CommonHttpHeaders,
+  HttpHeaders,
   HttpMethod,
   HttpRequestHeaders,
   HttpStatusCode,
   type HttpBody,
-  type HttpHeaders,
   type HttpPath,
   type HttpQuery,
   type HttpRequest,
   type HttpResponse,
 } from "./index.js"
 
-import { randomUUID as v4 } from "crypto"
-
 import { streamJson } from "@telefrek/core/json.js"
+import type { Optional } from "@telefrek/core/type/utils"
 import { GRANADA_VERSION } from "@telefrek/core/version.js"
 import { assert } from "console"
 import { type IncomingHttpHeaders, type OutgoingHttpHeaders } from "http"
@@ -34,6 +33,20 @@ export function noContents(): HttpResponse {
   return {
     status: {
       code: HttpStatusCode.NO_CONTENT,
+    },
+    headers: emptyHeaders(),
+  }
+}
+
+/**
+ * Creates a new forbidden {@link HttpResponse}
+ *
+ * @returns A new {@link HttpResponse}
+ */
+export function forbidden(): HttpResponse {
+  return {
+    status: {
+      code: HttpStatusCode.FORBIDDEN,
     },
     headers: emptyHeaders(),
   }
@@ -192,7 +205,7 @@ export interface CreateRequestOptions {
   /** The method override (default is GET) */
   method?: HttpMethod
   /** Additional headers to include */
-  customHeaders?: HttpHeaders
+  customHeaders?: Map<string, string>
   /** An optional body to include */
   body?: HttpBody
 }
@@ -205,17 +218,17 @@ export const GRANADA_USER_AGENT = `Granada_v${GRANADA_VERSION}`
  * @param options The {@link CreateRequestOptions} to use
  * @returns A new {@link HttpRequest}
  */
-export function createRequest(options: CreateRequestOptions): HttpRequest {
+export function createRequest(options?: CreateRequestOptions): HttpRequest {
   // Create a URL and ensure valid
-  const url = new URL(decodeURI(options.path ?? "/"), "http://localhost")
+  const url = new URL(decodeURI(options?.path ?? "/"), "http://localhost")
   assert(url !== undefined, "URL should be valid")
 
   const headers = emptyHeaders()
 
   // Add default values if not explicitly specified
-  if (!options.disableDefaultHeaders) {
+  if (!options?.disableDefaultHeaders) {
     // Set our accepted encodings
-    headers.set(HttpRequestHeaders.AcceptEncoding, ["br", "deflate", "gzip"])
+    headers.set(HttpRequestHeaders.AcceptEncoding, "br,deflate,gzip")
     headers.set(HttpRequestHeaders.AcceptCharset, "utf-8")
     headers.set(HttpRequestHeaders.Host, url.host)
     headers.set(HttpRequestHeaders.UserAgent, GRANADA_USER_AGENT)
@@ -223,7 +236,7 @@ export function createRequest(options: CreateRequestOptions): HttpRequest {
   }
 
   // Set any custom headers that were provided
-  if (options.customHeaders) {
+  if (options?.customHeaders) {
     for (const entry of options.customHeaders.entries()) {
       headers.set(entry[0], entry[1])
     }
@@ -231,19 +244,58 @@ export function createRequest(options: CreateRequestOptions): HttpRequest {
 
   return {
     ...parsePath(urlToHttpOptions(url).path ?? "/"),
-    id: v4(),
-    method: options.method ?? HttpMethod.GET,
+    method: options?.method ?? HttpMethod.GET,
     headers,
-    body: options.body,
+    body: options?.body,
+  }
+}
+
+/**
+ * Custom class to build {@link HttpHeaders} from the given {@link NodeJS.Dict}
+ */
+export class IndexedHeaders implements HttpHeaders {
+  private readonly _headers: NodeJS.Dict<string | string[]>
+
+  constructor(headers: NodeJS.Dict<string | string[]>) {
+    this._headers = headers
+  }
+
+  private _format(value?: string | string[] | number): Optional<string> {
+    return value
+      ? Array.isArray(value)
+        ? value.join(",")
+        : String(value)
+      : undefined
+  }
+
+  get(name: string): Optional<string> {
+    return this._format(this._headers[name])
+  }
+
+  has(name: string): boolean {
+    return this._headers[name] !== undefined
+  }
+
+  set(name: string, value: string | string[]): void {
+    this._headers[name] = value
+  }
+
+  delete(name: string): void {
+    delete this._headers[name]
+  }
+
+  getRaw(): NodeJS.Dict<string | string[]> {
+    return this._headers
   }
 }
 
 /**
  * Create an empty set of {@link HttpHeaders}
+ *
  * @returns An empty set of {@link HttpHeaders}
  */
 export function emptyHeaders(): HttpHeaders {
-  return new Map()
+  return new IndexedHeaders({})
 }
 
 /**
@@ -268,15 +320,7 @@ export const DefaultHttpMethodStatus = {
 export function extractHeaders(
   incomingHttpHeaders: IncomingHttpHeaders,
 ): HttpHeaders {
-  const headers = emptyHeaders()
-
-  for (const name of Object.keys(incomingHttpHeaders)) {
-    if (incomingHttpHeaders[name] !== undefined) {
-      headers.set(name, incomingHttpHeaders[name]!)
-    }
-  }
-
-  return headers
+  return new IndexedHeaders(incomingHttpHeaders)
 }
 
 /**
@@ -285,13 +329,8 @@ export function extractHeaders(
  * @param headers The {@link HttpHeaders} to inject
  * @param outgoingHeaders The {@link  OutgoingHttpHeaders} to write to
  */
-export function injectHeaders(
-  headers: HttpHeaders,
-  outgoingHeaders: OutgoingHttpHeaders,
-): void {
-  for (const header of headers) {
-    outgoingHeaders[header[0]] = header[1]
-  }
+export function injectHeaders(headers: HttpHeaders): OutgoingHttpHeaders {
+  return headers.getRaw()
 }
 
 /**

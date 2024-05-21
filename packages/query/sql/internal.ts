@@ -91,8 +91,8 @@ export class DefaultSQLNodeBuilder<
   A extends keyof D["tables"] = never,
 > implements SQLNodeBuilderContext<D, Q, R, P, A>
 {
-  _context?: SQLQueryNode<SQLNodeType>
-  _tableAlias: TableAlias
+  private _context?: SQLQueryNode<SQLNodeType>
+  private _tableAlias: TableAlias
 
   // Only all the context to transit to the next node in the chain
   get context(): Optional<SQLQueryNode<SQLNodeType>> {
@@ -981,7 +981,7 @@ class InternalWhereClauseBuilder<
     )
   }
 
-  _columnFilter(
+  private _columnFilter(
     column: string,
     op: ColumnFilteringOperation,
     value: unknown,
@@ -1058,7 +1058,7 @@ class InternalWhereClauseBuilder<
     )
   }
 
-  _containmentFilter<T extends ContainmentObjectType>(
+  private _containmentFilter<T extends ContainmentObjectType>(
     column: string,
     op: ColumnValueContainsOperation,
     columnType: T,

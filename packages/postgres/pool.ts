@@ -2,8 +2,8 @@
  * Postgres pooling
  */
 
-import { DeferredPromise } from "@telefrek/core"
-import { debug, error } from "@telefrek/core/logging"
+import { DeferredPromise } from "@telefrek/core/index.js"
+import { debug, error, info } from "@telefrek/core/logging.js"
 import { PoolBase, type PoolOptions } from "@telefrek/core/structures/pool.js"
 import pg from "pg"
 
@@ -43,7 +43,7 @@ export interface PostgresPoolOptions extends PoolOptions {
  * Default implementation of a {@link PoolBase} for postgres
  */
 export class PostgresConnectionPool extends PoolBase<pg.Client> {
-  _clientConfig: pg.ClientConfig
+  private _clientConfig: pg.ClientConfig
 
   constructor(options: PostgresPoolOptions) {
     super(options)
@@ -68,6 +68,7 @@ export class PostgresConnectionPool extends PoolBase<pg.Client> {
       if (err) {
         error(`Failure during client.end ${err}`, err)
       }
+      info(`Postgres Client closed`)
     })
   }
 

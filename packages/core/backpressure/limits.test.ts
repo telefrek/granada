@@ -1,7 +1,7 @@
 import { randomInt } from "crypto"
 import { delay } from "../time.js"
 import { fixedLimit, vegasBuilder } from "./algorithms.js"
-import { LOG10, createSimpleLimiter } from "./limits.js"
+import { LOG10, createSimpleLimiter, type LimitedOperation } from "./limits.js"
 
 describe("Utility functions should perform as expected", () => {
   test("The LOG10 function should work for cached and uncached values", () => {
@@ -141,5 +141,43 @@ describe("Limits should function correctly per their design", () => {
 
     // This should match the last change
     expect(maxLimit).toEqual(12) // Based on defaults it shouldn't make it past here
+  })
+
+  it("Should work with async acquire modes and dynamic updates", async () => {
+    const algorithm = vegasBuilder(2).build()
+    const limiter = createSimpleLimiter(algorithm, 2) // Set the initial to be true
+
+    expect(limiter.limit).toBe(2)
+
+    const promises: Promise<unknown>[] = []
+
+    // The first two should not be blocked
+    const first = await limiter.acquire()
+    const second = await limiter.acquire()
+
+    for (let n = 0; n < 10; ++n) {
+      promises.push(
+        (limiter.acquire() as Promise<LimitedOperation>).then((o) => {
+          o.success()
+        }),
+      )
+    }
+
+    let resolved = false
+
+    const finish = Promise.all(promises).then((_) => (resolved = true))
+
+    expect(resolved).toBeFalsy()
+
+    await delay(10)
+    expect(resolved).toBeFalsy()
+
+    first.success()
+
+    await delay(50)
+    expect(resolved).toBeTruthy()
+
+    second.ignore()
+    await finish
   })
 })

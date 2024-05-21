@@ -4,13 +4,8 @@
 
 import { getDebugInfo, type MaybeAwaitable } from "@telefrek/core/index.js"
 import { consumeJsonStream } from "@telefrek/core/json.js"
-import { ConsoleLogWriter, LogLevel } from "@telefrek/core/logging.js"
 import type { HttpClient } from "@telefrek/http/client.js"
 import { HttpMethod, HttpStatusCode } from "@telefrek/http/index.js"
-import {
-  setPipelineLogLevel,
-  setPipelineWriter,
-} from "@telefrek/http/pipeline.js"
 import type { HttpServer } from "@telefrek/http/server.js"
 import {
   TEST_LOGGER,
@@ -29,8 +24,6 @@ describe("Services should work for basic use cases", () => {
   let promise: MaybeAwaitable<void>
 
   beforeAll(async () => {
-    setPipelineWriter(new ConsoleLogWriter())
-    setPipelineLogLevel(LogLevel.INFO)
     const port = 20000 + ~~(Math.random() * 10000)
     const certDir = join(
       import.meta.dirname ?? dirname(fileURLToPath(import.meta.url)),

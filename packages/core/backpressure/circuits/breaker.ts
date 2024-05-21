@@ -147,13 +147,13 @@ export function createBreaker(
  * marshalling calls and tracking success/failure thresholds
  */
 class DefaultCircuitBreaker implements CircuitBreaker {
-  _state: BreakerState
-  _failureCount: number
-  _failureThreshold: number
-  _retryAfterMs: number
-  _openedAt?: number
-  _timer?: NodeJS.Timeout
-  _thisArg: unknown
+  private _state: BreakerState
+  private _failureCount: number
+  private _failureThreshold: number
+  private _retryAfterMs: number
+  private _openedAt?: number
+  private _timer?: NodeJS.Timeout
+  private _thisArg: unknown
 
   constructor(thisArg: unknown, options?: CircuitBreakerOptions) {
     this._state = BreakerState.CLOSED
@@ -236,7 +236,7 @@ class DefaultCircuitBreaker implements CircuitBreaker {
     )
   }
 
-  _checkState(): void {
+  private _checkState(): void {
     // If we are open, don't let the call through
     if (this._state === BreakerState.OPEN) {
       const openMs = Date.now() - (this._openedAt ?? Date.now())
@@ -249,7 +249,7 @@ class DefaultCircuitBreaker implements CircuitBreaker {
     }
   }
 
-  _updateFailure(): void {
+  private _updateFailure(): void {
     this._failureCount++
 
     // Check if we need to stop things
@@ -274,7 +274,7 @@ class DefaultCircuitBreaker implements CircuitBreaker {
     }
   }
 
-  _updateSuccess(): void {
+  private _updateSuccess(): void {
     // Reset the failure count
     this._failureCount = 0
 

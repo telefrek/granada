@@ -56,7 +56,7 @@ describe("Circular buffers should behave as infinite lists with fixed memory", (
   })
 
   it("should map state correctly for async operations", async () => {
-    const buffer = new CircularArrayBuffer<number>({ highWaterMark: 32 })
+    let buffer = new CircularArrayBuffer<number>({ highWaterMark: 32 })
 
     expect(buffer.size).toBe(0)
     expect(buffer.available).toBe(32)
@@ -96,6 +96,16 @@ describe("Circular buffers should behave as infinite lists with fixed memory", (
     expect(buffer.size).toBe(0)
     expect(buffer.available).toBe(32)
     expect(buffer.closed).toBeFalsy()
+
+    buffer = new CircularArrayBuffer({ highWaterMark: 2 })
+    expect(
+      await buffer.addRange([1, 2, 3, 4, 5], 5, Duration.ofMilli(10)),
+    ).toBe(0)
+
+    buffer.add(1)
+    buffer.add(2)
+
+    expect(await buffer.addRange([3, 4], 1, Duration.ofMilli(5))).toBe(0)
   }, 2_000)
 
   it("Should allow iteration", async () => {
