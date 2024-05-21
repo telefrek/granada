@@ -170,21 +170,24 @@ export class NodeHttp2Server extends HttpServerBase {
         {
           root: true,
           kind: SpanKind.SERVER,
-          attributes: {
-            SEMATTRS_NET_HOST_IP: socket?.localAddress,
-            SEMATTRS_NET_HOST_PORT: socket?.localPort,
-            SEMATTRS_NET_PEER_IP: socket?.remoteAddress,
-            SEMATTRS_NET_PEER_PORT: socket?.remotePort,
-            SEMATTRS_HTTP_CLIENT_IP: socket?.remoteAddress,
-            SEMATTRS_HTTP_HOST: req.headers["host"],
-            SEMATTRS_HTTP_METHOD: req.headers[":method"],
-            SEMATTRS_HTTP_SCHEME: req.headers[":scheme"],
-            SEMATTRS_HTTP_FLAVOR: req.httpVersion,
-            SEMATTRS_HTTP_ROUTE: req.url,
-          },
         },
         ROOT_CONTEXT, // Ignore anything else above this, http call is entry point
       )
+
+      if (span.isRecording()) {
+        span.setAttributes({
+          SEMATTRS_NET_HOST_IP: socket?.localAddress,
+          SEMATTRS_NET_HOST_PORT: socket?.localPort,
+          SEMATTRS_NET_PEER_IP: socket?.remoteAddress,
+          SEMATTRS_NET_PEER_PORT: socket?.remotePort,
+          SEMATTRS_HTTP_CLIENT_IP: socket?.remoteAddress,
+          SEMATTRS_HTTP_HOST: req.headers["host"],
+          SEMATTRS_HTTP_METHOD: req.headers[":method"],
+          SEMATTRS_HTTP_SCHEME: req.headers[":scheme"],
+          SEMATTRS_HTTP_FLAVOR: req.httpVersion,
+          SEMATTRS_HTTP_ROUTE: req.url,
+        })
+      }
 
       // Hook the timings and status
       finished(resp, () => {
