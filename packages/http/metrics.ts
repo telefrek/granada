@@ -99,6 +99,13 @@ export const HttpRequestPipelineMetrics = {
       valueType: ValueType.INT,
     },
   ),
+  PipelineContextFailureCounter: getGranadaMeter().createCounter(
+    "pipeline_context_failures",
+    {
+      description: "The number of context failures detected",
+      valueType: ValueType.INT,
+    },
+  ),
   PipelineWatermarkGauge: getGranadaMeter().createObservableGauge(
     "pipeline_watermarks",
     { description: "The watermarks for each stage", valueType: ValueType.INT },

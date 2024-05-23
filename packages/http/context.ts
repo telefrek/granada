@@ -8,6 +8,7 @@ import type { TaskCompletionEvents } from "@telefrek/core/tasks"
 import type { Optional } from "@telefrek/core/type/utils.js"
 import { AsyncLocalStorage } from "async_hooks"
 import type { HttpHandler, HttpResponse } from "./index.js"
+import { HttpRequestPipelineMetrics } from "./metrics.js"
 import { HttpOperationState, type HttpOperation } from "./operations.js"
 
 export const HTTP_OPERATION_CONTEXT_STORE: AsyncLocalStorage<HttpOperationContext> =
@@ -63,12 +64,15 @@ export class DefaultHttpOperationContext
     this.operation = operation
 
     this.operation.on("finished", () => {
-      this.emit(
-        "completed",
-        this.operation.duration,
-        this.operation.state === HttpOperationState.COMPLETED &&
-          (this.operation.response?.status.code ?? 500) < 500,
-      )
+      const failed =
+        this.operation.state !== HttpOperationState.COMPLETED ||
+        (this.response?.status.code ?? 500) >= 500
+
+      if (failed) {
+        HttpRequestPipelineMetrics.PipelineContextFailureCounter.add(1)
+      }
+
+      this.emit("completed", this.operation.duration, !failed)
     })
   }
   [key: string | symbol]: unknown
