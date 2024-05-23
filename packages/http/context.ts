@@ -46,6 +46,7 @@ export interface HttpOperationContext extends Emitter<TaskCompletionEvents> {
   response?: HttpResponse
   handler?: HttpHandler
   priority?: FrameworkPriority
+  concurrency?: number
 
   [key: string | symbol]: unknown
 }
@@ -58,6 +59,7 @@ export class DefaultHttpOperationContext
   response: Optional<HttpResponse>
   handler: Optional<HttpHandler>
   priority: Optional<FrameworkPriority>
+  concurrency?: number
 
   constructor(operation: HttpOperation) {
     super()
@@ -67,6 +69,12 @@ export class DefaultHttpOperationContext
       const failed =
         this.operation.state !== HttpOperationState.COMPLETED ||
         (this.response?.status.code ?? 500) >= 500
+
+      if (this.concurrency) {
+        HttpRequestPipelineMetrics.PipelineContextConcurrencyHistogram.record(
+          this.concurrency,
+        )
+      }
 
       if (failed) {
         HttpRequestPipelineMetrics.PipelineContextFailureCounter.add(1)

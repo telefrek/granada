@@ -83,6 +83,9 @@ export class DynamicConcurrencyTransform<
     callback()
     this._running++
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(chunk as any).concurrency = this._limiter.limit
+
     // If this doesn't fire then we will never release...
     chunk.on("completed", (_, success) => {
       this._running--

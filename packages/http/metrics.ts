@@ -106,6 +106,16 @@ export const HttpRequestPipelineMetrics = {
       valueType: ValueType.INT,
     },
   ),
+  PipelineContextConcurrencyHistogram: getGranadaMeter().createHistogram(
+    "pipeline_context_concurrency_values",
+    {
+      description: "The level of concurrency for an operation context",
+      valueType: ValueType.INT,
+      advice: {
+        explicitBucketBoundaries: [1, 2, 4, 8, 12, 16, 20, 24, 32, 48],
+      },
+    },
+  ),
   PipelineWatermarkGauge: getGranadaMeter().createObservableGauge(
     "pipeline_watermarks",
     { description: "The watermarks for each stage", valueType: ValueType.INT },
