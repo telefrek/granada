@@ -1,6 +1,6 @@
 import { Semaphore } from "../concurrency.js"
 import type { MaybeAwaitable } from "../index.js"
-import { Timestamp } from "../time.js"
+import { Timestamp, type Duration } from "../time.js"
 import { type Optional } from "../type/utils.js"
 import { LimitAlgorithm, LimitedOperation, Limiter } from "./limits.js"
 
@@ -45,6 +45,9 @@ abstract class AbstractLimiter implements Limiter {
   abstract tryAcquire(): Optional<LimitedOperation>
 
   abstract acquire(): MaybeAwaitable<LimitedOperation>
+  abstract acquire(
+    timeout: Duration,
+  ): MaybeAwaitable<Optional<LimitedOperation>>
 
   /**
    * Handler for the {@link LimitAlgorithm} `changed` event
@@ -153,12 +156,19 @@ class SimpleLimiter extends AbstractLimiter {
     return
   }
 
-  override async acquire(): Promise<LimitedOperation> {
-    await this._semaphore.acquire()
-    return new this.SimpleLimitedOperation(
-      this._semaphore,
-      this.createOperation(),
-    )
+  override acquire(): Promise<LimitedOperation>
+  override acquire(timeout: Duration): Promise<Optional<LimitedOperation>>
+  override async acquire(
+    timeout?: Duration,
+  ): Promise<Optional<LimitedOperation>> {
+    if (this._semaphore.acquire(timeout)) {
+      return new this.SimpleLimitedOperation(
+        this._semaphore,
+        this.createOperation(),
+      )
+    }
+
+    return
   }
 
   protected override onChange(newLimit: number): void {

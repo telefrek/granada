@@ -84,6 +84,13 @@ export interface Limiter {
   acquire(): MaybeAwaitable<LimitedOperation>
 
   /**
+   * Tries to acquire a {@link LimitedOperation} before the timeout
+   *
+   * @param timeout The maximum amount of time to wait
+   */
+  acquire(timeout: Duration): MaybeAwaitable<Optional<LimitedOperation>>
+
+  /**
    * Retrieve the current limit
    */
   readonly limit: number

@@ -1,4 +1,5 @@
 import { EventEmitter } from "events"
+import type { AnyArgs } from "./type/utils.js"
 
 /**
  * Helper for interfaces that extends Event Emitters
@@ -29,9 +30,7 @@ interface EventEmitterOptions {
 }
 
 type EventKeys<E> = {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [Key in keyof E]: E[Key] extends (...args: any[]) => void ? Key : never
+  [Key in keyof E]: E[Key] extends (...args: AnyArgs) => void ? Key : never
 }[keyof E]
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type EventFunc<E> = E extends (...args: any[]) => void ? Parameters<E> : never
+type EventFunc<E> = E extends (...args: AnyArgs) => void ? Parameters<E> : never

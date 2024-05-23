@@ -52,7 +52,8 @@ interface HttpServerEvents extends LifecycleEvents, HttpOperationSourceEvents {
 /**
  * The interface representing an HTTP Server
  */
-export interface HttpServer extends Emitter<HttpServerEvents> {
+export interface HttpServer
+  extends Emitter<HttpServerEvents & HttpOperationSourceEvents> {
   /**
    * The identifier for the server
    */
@@ -92,7 +93,7 @@ export interface HttpServerConfig {
 }
 
 export abstract class HttpServerBase
-  extends EmitterFor<HttpServerEvents>
+  extends EmitterFor<HttpServerEvents & HttpOperationSourceEvents>
   implements HttpServer
 {
   protected readonly _config: HttpServerConfig

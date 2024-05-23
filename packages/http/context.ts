@@ -3,6 +3,8 @@
  */
 
 import type { FrameworkPriority } from "@telefrek/core"
+import { EmitterFor, type Emitter } from "@telefrek/core/events"
+import type { TaskCompletionEvents } from "@telefrek/core/tasks"
 import type { Optional } from "@telefrek/core/type/utils.js"
 import { AsyncLocalStorage } from "async_hooks"
 import type { HttpHandler, HttpResponse } from "./index.js"
@@ -38,12 +40,37 @@ export function setOperationContextKey<T>(
 /**
  * Context for the current {@link HttpOperation} as it moves through a {@link HttpPipeline}
  */
-export interface HttpOperationContext {
+export interface HttpOperationContext extends Emitter<TaskCompletionEvents> {
   operation: HttpOperation
   response?: HttpResponse
   handler?: HttpHandler
   priority?: FrameworkPriority
 
+  [key: string | symbol]: unknown
+}
+
+export class DefaultHttpOperationContext
+  extends EmitterFor<TaskCompletionEvents>
+  implements HttpOperationContext
+{
+  operation: HttpOperation
+  response: Optional<HttpResponse>
+  handler: Optional<HttpHandler>
+  priority: Optional<FrameworkPriority>
+
+  constructor(operation: HttpOperation) {
+    super()
+    this.operation = operation
+
+    this.operation.on("finished", () => {
+      this.emit(
+        "completed",
+        this.operation.duration,
+        this.operation.state === HttpOperationState.COMPLETED &&
+          (this.operation.response?.status.code ?? 500) < 500,
+      )
+    })
+  }
   [key: string | symbol]: unknown
 }
 

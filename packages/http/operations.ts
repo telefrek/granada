@@ -111,10 +111,7 @@ export interface HttpOperationSourceEvents extends LifecycleEvents {
  * Custom type for objects that create {@link HttpOperation} via events
  */
 export interface HttpOperationSource
-  extends Emitter<HttpOperationSourceEvents> {
-  /** The identifier for the operation source */
-  id: string
-}
+  extends Emitter<HttpOperationSourceEvents> {}
 
 interface CreateHttpOperationOptions {
   request: HttpRequest

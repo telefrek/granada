@@ -8,6 +8,7 @@ import { MaybeAwaitable } from "@telefrek/core/index.js"
 import { LifecycleEvents } from "@telefrek/core/lifecycle.js"
 import { DefaultLogger, LogLevel, type Logger } from "@telefrek/core/logging.js"
 import { Tracing, TracingContext } from "@telefrek/core/observability/tracing"
+import { DynamicConcurrencyTransform } from "@telefrek/core/pipelines/transforms"
 import {
   StreamConcurrencyMode,
   createNamedTransform,
@@ -22,6 +23,7 @@ import { on } from "events"
 import { Readable, Writable, type Transform } from "stream"
 import { finished } from "stream/promises"
 import {
+  DefaultHttpOperationContext,
   HTTP_OPERATION_CONTEXT_STORE,
   isTerminal,
   type HttpOperationContext,
@@ -119,8 +121,8 @@ export interface HttpPipeline extends Emitter<HttpPipelineEvents> {
    *
    * @returns True if the {@link HttpOperationSource} was successfully added
    */
-  add(
-    source: HttpOperationSource,
+  add<T extends HttpOperationSource>(
+    source: T,
     handler: HttpHandler,
     options?: HttpPipelineOptions,
   ): boolean
@@ -570,21 +572,29 @@ class DefaultHttpPipeline
     }
 
     // Add the handler stage
-    const handlerTransform = createNamedTransform(
-      this._createHandlerTransform(handler),
-      {
-        name: "handler",
-        mode: StreamConcurrencyMode.FixedConcurrency,
-        maxConcurrency: options.maxConcurrency,
-        writableHighWaterMark: 1, // Don't let work backlog here
-        onBackpressure: () => {
-          HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
-            stage: "handler",
-            name: "handler",
-          })
+    // const handlerTransform = createNamedTransform(
+    //   this._createHandlerTransform(handler),
+    //   {
+    //     name: "handler",
+    //     mode: StreamConcurrencyMode.FixedConcurrency,
+    //     maxConcurrency: options.maxConcurrency,
+    //     writableHighWaterMark: 1, // Don't let work backlog here
+    //     onBackpressure: () => {
+    //       HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
+    //         stage: "handler",
+    //         name: "handler",
+    //       })
+    //     },
+    //   },
+    // )
+    const handlerTransform =
+      new DynamicConcurrencyTransform<HttpOperationContext>(
+        this._createHandlerTransform(handler),
+        {
+          maxConcurrency: options.maxConcurrency,
+          highWaterMark: options.highWaterMark,
         },
-      },
-    )
+      )
 
     monitorTransform(handlerTransform)
 
@@ -654,11 +664,10 @@ class DefaultHttpPipeline
     })
 
     const context = createNamedTransform<unknown, HttpOperationContext>(
-      (chunk) => {
-        return {
-          operation: Array.isArray(chunk) ? chunk[0] : chunk,
-        }
-      },
+      (chunk) =>
+        new DefaultHttpOperationContext(
+          Array.isArray(chunk) ? chunk[0] : chunk,
+        ),
       {
         mode: StreamConcurrencyMode.Parallel,
         name: "context.builder",
@@ -786,7 +795,6 @@ class DefaultHttpPipeline
     const ret = this._sources.delete(source)
 
     if (details) {
-      PIPELINE_LOGGER.info(`Removing source: ${source.id}`)
       this._clearing++
 
       // Push a null
@@ -797,7 +805,6 @@ class DefaultHttpPipeline
         writable: true,
       })
 
-      PIPELINE_LOGGER.info(`Finished source: ${source.id}`)
       this._clearing--
       this._signal.notify()
     }
@@ -814,7 +821,6 @@ class DefaultHttpPipeline
 
     // Clear the sources
     for (const source of this._sources.keys()) {
-      PIPELINE_LOGGER.info(`Removing source: ${source.id}`)
       await this.remove(source)
     }
 
