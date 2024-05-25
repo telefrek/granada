@@ -89,6 +89,71 @@ export function fixedLimit(limit: number): LimitAlgorithm {
   return new FixedLimitAlgorithm(limit)
 }
 
+export interface AdaptiveLimitSettings {
+  initialLimit: number
+  windowSize: number
+  min?: number
+  max?: number
+  failureRate?: number
+}
+
+/**
+ * Adaptive limit algorithm that attempts to limit failures
+ */
+class AdaptiveLimitAlgorithm extends AbstractLimitAlgorithm {
+  private _currentLimit: number
+  private _failure: number = 0
+  private _window: number = 0
+  private readonly _failureRate: number
+  private readonly _min: number
+  private readonly _max: number
+  private readonly _MASK: number
+
+  constructor(settings: AdaptiveLimitSettings) {
+    super(settings.initialLimit)
+
+    this._min = settings.min ?? 1
+    this._max = settings.max ?? settings.initialLimit
+    this._currentLimit = this.getLimit()
+
+    // Find the size of the buffer that will hold this amount of data
+    const bufferSize = 1 << (31 - Math.clz32(Math.max(2, settings.windowSize)))
+
+    // Keep the failure rate below specified
+    this._failureRate =
+      bufferSize * Math.min(0.99, settings.failureRate ?? 0.05)
+
+    // Get the bitmask for doing fast wrap around without division
+    this._MASK = bufferSize - 1
+  }
+
+  protected override _update(
+    _duration: Duration,
+    _inFlight: number,
+    dropped: boolean,
+  ): number {
+    this._failure += dropped ? 1 : 0
+    this._window += 1
+    this._window &= this._MASK
+
+    if (this._window === 0) {
+      // Check if want to explore
+      // TODO: Take into account the durations...
+      if (this._failure >= this._failureRate && this._limit > this._min) {
+        this._currentLimit--
+      } else if (this._failure < this._failureRate && this._limit < this._max) {
+        this._currentLimit++
+      }
+    }
+
+    return this._limit
+  }
+}
+
+export function adaptiveLimit(settings: AdaptiveLimitSettings): LimitAlgorithm {
+  return new AdaptiveLimitAlgorithm(settings)
+}
+
 /**
  * Creates a new {@link VegasLimitBuilder} for building the Vegas {@link LimitAlgorithm}
  *

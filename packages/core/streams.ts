@@ -20,6 +20,7 @@ import { Duration } from "./time.js"
 import {
   type Consumer,
   type EmptyCallback,
+  type Func,
   type Optional,
 } from "./type/utils.js"
 
@@ -129,7 +130,8 @@ type RESTRICTED_TRANSFORM_OPTIONS =
   | "objectMode" // This is always true
 
 export interface PrioritizationOptions {
-  tasktimeoutMs: number
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tasktimeoutMs: Func<any, number>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   prioritize: PriorityTransform<any>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -466,7 +468,7 @@ class FixedPriorityNamedTransform<T, U> extends AbstractNamedTransform<T, U> {
   private _queue: MultiLevelPriorityQueue
   private _semaphore: Semaphore
   private finishCallback?: StreamCallback
-  private _timeout: Duration
+  private _timeout: (obj: T) => number
   private _cancel: Consumer<T>
   private _signal: Signal = new Signal() // Need to fire this on read/cancel to keep down hwm
 
@@ -492,7 +494,7 @@ class FixedPriorityNamedTransform<T, U> extends AbstractNamedTransform<T, U> {
       options?.maxConcurrency ?? Math.max(1, this.writableHighWaterMark >> 1)
     this._semaphore = new Semaphore(maxConcurrency)
 
-    this._timeout = Duration.ofMilli(priority.tasktimeoutMs)
+    this._timeout = priority.tasktimeoutMs
 
     this.on("data", () => {
       // Release the current
@@ -552,7 +554,7 @@ class FixedPriorityNamedTransform<T, U> extends AbstractNamedTransform<T, U> {
     this._queue.queue(
       {
         priority: asTaskPriority(priority),
-        timeout: this._timeout,
+        timeout: Duration.ofMilli(this._timeout(chunk)),
         cancel: () => {
           // Notify anyone waiting there is new space
           this._signal.notify()

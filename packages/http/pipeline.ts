@@ -571,30 +571,22 @@ class DefaultHttpPipeline
       }
     }
 
-    // Add the handler stage
-    // const handlerTransform = createNamedTransform(
-    //   this._createHandlerTransform(handler),
-    //   {
-    //     name: "handler",
-    //     mode: StreamConcurrencyMode.FixedConcurrency,
-    //     maxConcurrency: options.maxConcurrency,
-    //     writableHighWaterMark: 1, // Don't let work backlog here
-    //     onBackpressure: () => {
-    //       HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
-    //         stage: "handler",
-    //         name: "handler",
-    //       })
-    //     },
-    //   },
-    // )
     const handlerTransform =
       new DynamicConcurrencyTransform<HttpOperationContext>(
         this._createHandlerTransform(handler),
         {
           maxConcurrency: options.maxConcurrency,
           highWaterMark: options.highWaterMark,
+          algorithm: "vegas",
         },
       )
+
+    handlerTransform.on("backpressure", () => {
+      HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
+        stage: "handler",
+        name: "handler",
+      })
+    })
 
     monitorTransform(handlerTransform)
 

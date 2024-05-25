@@ -34,7 +34,7 @@ describe("Named Transform streams should generate the same datasets with all con
         cancellation: (_) => {
           ++cancelled
         },
-        tasktimeoutMs: 25,
+        tasktimeoutMs: (_) => 25,
       },
     }
 
@@ -75,7 +75,7 @@ describe("Named Transform streams should generate the same datasets with all con
         cancellation: (_) => {
           ++cancelled
         },
-        tasktimeoutMs: 25,
+        tasktimeoutMs: (_) => 25,
       },
     }
 
@@ -111,7 +111,7 @@ describe("Named Transform streams should generate the same datasets with all con
         cancellation: (_) => {
           ++cancelled
         },
-        tasktimeoutMs: 25, // This setting will generate some cancellations due to backpressure, ensure it works
+        tasktimeoutMs: (_) => 25, // This setting will generate some cancellations due to backpressure, ensure it works
       },
     }
 

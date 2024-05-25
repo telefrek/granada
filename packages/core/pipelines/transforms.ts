@@ -3,7 +3,7 @@
  */
 
 import { Transform, type TransformCallback } from "stream"
-import { vegasBuilder } from "../backpressure/algorithms.js"
+import { adaptiveLimit, vegasBuilder } from "../backpressure/algorithms.js"
 import {
   createSimpleLimiter,
   type LimitedOperation,
@@ -11,7 +11,7 @@ import {
 } from "../backpressure/limits.js"
 import { Semaphore } from "../concurrency.js"
 import type { Emitter } from "../events.js"
-import type { MaybeAwaitable } from "../index.js"
+import { type MaybeAwaitable } from "../index.js"
 import type { StreamCallback } from "../streams.js"
 import type { TaskCompletionEvents } from "../tasks.js"
 import { Duration } from "../time.js"
@@ -20,6 +20,7 @@ import type { Optional } from "../type/utils.js"
 export interface ConcurrentTransformConfig {
   highWaterMark?: number
   maxConcurrency?: number
+  algorithm: "vegas" | "adapative"
 }
 
 export interface ConcurrentTransformEvents {
@@ -54,10 +55,17 @@ export class DynamicConcurrencyTransform<
     })
 
     const maxConcurrency = options?.maxConcurrency ?? this.readableHighWaterMark
+    const limit = Math.max(1, maxConcurrency >> 1)
 
     this._limiter = createSimpleLimiter(
-      vegasBuilder(maxConcurrency).withMax(maxConcurrency).build(),
-      maxConcurrency,
+      options?.algorithm === "adapative"
+        ? adaptiveLimit({
+            max: maxConcurrency,
+            initialLimit: limit,
+            windowSize: 8192,
+          })
+        : vegasBuilder(limit).withMax(maxConcurrency).build(),
+      limit,
     )
 
     this._running = 0

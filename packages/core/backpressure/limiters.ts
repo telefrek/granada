@@ -161,7 +161,7 @@ class SimpleLimiter extends AbstractLimiter {
   override async acquire(
     timeout?: Duration,
   ): Promise<Optional<LimitedOperation>> {
-    if (this._semaphore.acquire(timeout)) {
+    if (await this._semaphore.acquire(timeout)) {
       return new this.SimpleLimitedOperation(
         this._semaphore,
         this.createOperation(),

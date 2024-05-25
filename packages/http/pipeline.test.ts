@@ -320,7 +320,7 @@ describe("Pipeline components should behave as designed", () => {
           completed++
         } else {
           expect(op.state).toBe(HttpOperationState.TIMEOUT)
-          expect(op.duration.milliseconds()).toBeLessThan(75) // Should be less than the delay in the queue _ task
+          expect(op.duration.milliseconds()).toBeLessThan(75) // Should be less than the delay in the queue  task
           timeout++
         }
       }

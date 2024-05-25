@@ -2,8 +2,11 @@
  * Extensions for creating sql queries
  */
 
+import { getDebugInfo } from "@telefrek/core/index.js"
+import { info } from "@telefrek/core/logging.js"
 import type {
   AliasedType,
+  AnyArgs,
   ArrayItemType,
   ArrayProperty,
   MatchingProperty,
@@ -28,6 +31,14 @@ import type {
   SQLDataTable,
   STAR,
 } from "./types.js"
+
+export function query(template: TemplateStringsArray, ...args: AnyArgs) {
+  info(`template: ${getDebugInfo(template)}, args: ${args}`)
+
+  return {
+    foo: "bar",
+  }
+}
 
 /**
  * A modiefied {@link SQLDataStore} with a new key and table definition

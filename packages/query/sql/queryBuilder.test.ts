@@ -1,3 +1,4 @@
+import { info } from "console"
 import {
   ExecutionMode,
   QueryType,
@@ -12,8 +13,19 @@ import {
   InMemoryQueryExecutor,
   type InMemoryRelationalDataStore,
 } from "./memory/builder.js"
-import { useDataStore } from "./queryBuilder.js"
+import { query, useDataStore } from "./queryBuilder.js"
 import { Category, type TestDatabaseType } from "./testUtils.js"
+
+describe("hack", () => {
+  it("Should hack", () => {
+    const f = () => {
+      const res = query`SELECT * FROM table`
+      info(`Got res: ${res}`)
+    }
+
+    f()
+  })
+})
 
 describe("Relational query builder should support basic select functionality", () => {
   const STORE: InMemoryRelationalDataStore<TestDatabaseType> = {
