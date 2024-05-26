@@ -11,6 +11,7 @@ import { Transform, type TransformCallback } from "stream"
 import { Semaphore } from "../concurrency.js"
 import type { Emitter } from "../events.js"
 import { type MaybeAwaitable } from "../index.js"
+import { info } from "../logging.js"
 import { getGranadaMeter } from "../observability/metrics.js"
 import type { StreamCallback } from "../streams.js"
 import type { TaskCompletionEvents } from "../tasks.js"
@@ -59,11 +60,6 @@ const DynamicMetrics = {
   }),
 } as const
 
-interface Tracking {
-  created: Timestamp
-  backpressure: boolean
-}
-
 export class DynamicConcurrencyTransform<
   T extends Emitter<TaskCompletionEvents>,
 > extends Transform {
@@ -75,7 +71,7 @@ export class DynamicConcurrencyTransform<
   // private _running: number
   private _timeout: NodeJS.Timeout
   private _observer: ObservableCallback<Attributes>
-  private _tracking: Tracking[] = []
+  private _tracking: Timestamp[] = []
 
   get limit(): number {
     return this._semaphore.limit
@@ -95,18 +91,21 @@ export class DynamicConcurrencyTransform<
     })
 
     const maxConcurrency = options?.maxConcurrency ?? this.readableHighWaterMark
-    this._semaphore = new Semaphore(1)
+    this._semaphore = new Semaphore(maxConcurrency)
     this._val = 1
 
     // Continue going up and down every 15 seconds
     this._timeout = setInterval(() => {
-      if (this._semaphore.limit === maxConcurrency) {
+      if (this._semaphore.limit >= maxConcurrency) {
         this._val = -1
-      } else if (this._semaphore.limit === 1) {
+      }
+
+      if (this._semaphore.limit === 1) {
         this._val = 1
       }
 
       this._semaphore.resize(this._semaphore.limit + this._val)
+      info(`new size: ${this._semaphore.limit}`)
     }, 15_000)
 
     this._observer = (observer) => {
@@ -120,12 +119,12 @@ export class DynamicConcurrencyTransform<
 
     this.on("data", (_) => {
       this._semaphore.release()
+      this._checkFinal()
+
       const tracking = this._tracking.shift()
       if (tracking) {
-        DynamicMetrics.ReadTime.record(tracking.created.duration.seconds())
-        DynamicMetrics.Backpressure.add(tracking.backpressure ? 1 : 0)
+        DynamicMetrics.ReadTime.record(tracking.duration.seconds())
       }
-      this._checkFinal()
     })
   }
 
@@ -140,16 +139,18 @@ export class DynamicConcurrencyTransform<
       }
     }
 
+    callback()
+
     try {
       const started = Timestamp.now()
       const result = await this.transform(chunk)
       DynamicMetrics.TransformTime.record(started.duration.seconds())
 
       if (result !== undefined) {
-        this._tracking.push({
-          created: Timestamp.now(),
-          backpressure: this.push(result),
-        })
+        this._tracking.push(Timestamp.now())
+        if (!this.push(result)) {
+          DynamicMetrics.Backpressure.add(1)
+        }
       }
     } catch (err) {
       // All we can do is emit the error
