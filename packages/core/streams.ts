@@ -86,6 +86,70 @@ const STREAM_LOGGER = new DefaultLogger({
   name: "stream",
 })
 
+export interface ParallelWritableOptions {
+  maxConcurrency?: number
+}
+
+const DEFAULT_WAIT = Duration.ofMilli(250)
+
+export class ParallelWritable<T> extends Writable {
+  private _semaphore: Semaphore
+  private _onFinal: Optional<StreamCallback>
+  private _consume: Consumer<T>
+
+  constructor(consumer: Consumer<T>, options?: ParallelWritableOptions) {
+    super({
+      objectMode: true,
+      autoDestroy: true,
+      emitClose: true,
+      highWaterMark: options?.maxConcurrency,
+      final: (cb) => {
+        this._onFinal = cb
+        this._checkFinal()
+      },
+    })
+
+    this._consume = consumer
+    this._semaphore = new Semaphore(
+      options?.maxConcurrency ?? this.writableHighWaterMark,
+    )
+  }
+
+  private _checkFinal(): void {
+    if (this._onFinal && this._semaphore.running === 0) {
+      this._onFinal()
+      this._onFinal = undefined
+    }
+  }
+
+  override async _write(
+    chunk: T,
+    _encoding: BufferEncoding,
+    callback: StreamCallback,
+  ): Promise<void> {
+    while (!(await this._semaphore.acquire(DEFAULT_WAIT))) {
+      if (this.errored) {
+        return callback()
+      }
+    }
+
+    callback()
+    try {
+      await this._consume(chunk)
+    } catch (err) {
+      this.emit(
+        "error",
+        err instanceof Error
+          ? err
+          : new Error("uncaught exception in writer", { cause: err }),
+      )
+    } finally {
+      this._checkFinal()
+      this._semaphore.release()
+    }
+  }
+}
+
 /**
  * Pipes the source to the destination while handling errors
  *

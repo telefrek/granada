@@ -10,6 +10,7 @@ import { DefaultLogger, LogLevel, type Logger } from "@telefrek/core/logging.js"
 import { Tracing, TracingContext } from "@telefrek/core/observability/tracing"
 import { DynamicConcurrencyTransform } from "@telefrek/core/pipelines/transforms"
 import {
+  ParallelWritable,
   StreamConcurrencyMode,
   createNamedTransform,
   drain,
@@ -596,9 +597,16 @@ class DefaultHttpPipeline
       if (middleware.modifyResponse) {
         const middlewareTransform = createNamedTransform(
           (ctx: HttpOperationContext) => {
+            HttpRequestPipelineMetrics.PipelineStageArrivalTime.record(
+              ctx.operation.started.duration.seconds(),
+              { stage: "middleware.after" },
+            )
             return HTTP_OPERATION_CONTEXT_STORE.run(ctx, async () => {
               try {
                 if (ctx.response) {
+                  HttpRequestPipelineMetrics.PipelineStageCounter.add(1, {
+                    stage: middleware.name,
+                  })
                   await middleware.modifyResponse!(
                     ctx.operation.request,
                     ctx.response,
@@ -616,7 +624,7 @@ class DefaultHttpPipeline
             mode: StreamConcurrencyMode.Parallel,
             onBackpressure: () => {
               HttpRequestPipelineMetrics.PipelineStageBackpressure.add(1, {
-                stage: "middleware.before",
+                stage: "middleware.after",
                 name: middleware.name,
               })
             },
@@ -679,43 +687,24 @@ class DefaultHttpPipeline
   private _buildConsumer(): Writable {
     // const check = this._checkState.bind(this)
 
-    return new Writable({
-      objectMode: true,
-      emitClose: true,
-      autoDestroy: true,
-      destroy(error, callback) {
-        if (error) {
-          PIPELINE_LOGGER.error(`Error during pipeline destroy: ${error}`)
-        }
-
-        PIPELINE_LOGGER.info(`Pipeline stream ended`)
-        callback()
-      },
-      writev(chunks, callback) {
-        // Pull chunks in bulk to finish them
-        for (const chunk of chunks) {
-          const ctx = chunk.chunk as HttpOperationContext
-          HttpRequestPipelineMetrics.PipelineStageCounter.add(1, {
-            stage: "complete",
+    return new ParallelWritable<HttpOperationContext>((ctx) => {
+      HttpRequestPipelineMetrics.PipelineStageCounter.add(1, {
+        stage: "complete",
+      })
+      HttpRequestPipelineMetrics.PipelineStageArrivalTime.record(
+        ctx.operation.started.duration.seconds(),
+        { stage: "complete" },
+      )
+      if (!isTerminal(ctx)) {
+        if (ctx.response) {
+          ctx.operation.complete(ctx.response)
+        } else {
+          ctx.operation.fail({
+            errorCode: HttpErrorCode.UNKNOWN,
+            description: "no response generated",
           })
-          HttpRequestPipelineMetrics.PipelineStageArrivalTime.record(
-            ctx.operation.started.duration.seconds(),
-            { stage: "complete" },
-          )
-          if (!isTerminal(ctx)) {
-            if (ctx.response) {
-              ctx.operation.complete(ctx.response)
-            } else {
-              ctx.operation.fail({
-                errorCode: HttpErrorCode.UNKNOWN,
-                description: "no response generated",
-              })
-            }
-          }
         }
-
-        callback()
-      },
+      }
     }).on("error", (err) => {
       PIPELINE_LOGGER.error(`Error during pipeline write: ${err}`, err)
     })
