@@ -1,6 +1,6 @@
 {
   "name": "@telefrek/postgres",
-  "version": "1.0.0-alpha.53",
+  "version": "1.0.0-alpha.54",
   "description": "This package handles abstractions around postgres and interactions with a database",
   "author": "nathan@telefrek.com",
   "license": "MIT",
@@ -32,8 +32,8 @@
   "dependencies": {
     "@opentelemetry/api": "^1.8.0",
     "@opentelemetry/semantic-conventions": "^1.24.1",
-    "@telefrek/core": "^1.0.0-alpha.53",
-    "@telefrek/query": "^1.0.0-alpha.53",
+    "@telefrek/core": "^1.0.0-alpha.54",
+    "@telefrek/query": "^1.0.0-alpha.54",
     "pg": "^8.11.5"
   },
   "devDependencies": {
