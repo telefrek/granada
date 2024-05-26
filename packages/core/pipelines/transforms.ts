@@ -119,6 +119,7 @@ export class DynamicConcurrencyTransform<
     this.transform = transform
 
     this.on("data", (_) => {
+      this._semaphore.release()
       const tracking = this._tracking.shift()
       if (tracking) {
         DynamicMetrics.ReadTime.record(tracking.created.duration.seconds())
