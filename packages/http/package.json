@@ -1,6 +1,6 @@
 {
   "name": "@telefrek/http",
-  "version": "1.0.0-alpha.52",
+  "version": "1.0.0-alpha.53",
   "description": "This package standardizes how HTTP clients and servers interact at a low level",
   "author": "nathan@telefrek.com",
   "license": "MIT",
@@ -30,7 +30,7 @@
     "lint": "npx eslint . --fix --ignore-pattern \"dist\""
   },
   "dependencies": {
-    "@telefrek/core": "^1.0.0-alpha.52"
+    "@telefrek/core": "^1.0.0-alpha.53"
   },
   "gitHead": "1be6bb3a61aab8ae5361827b54f8428682b9d536"
 }
