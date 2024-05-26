@@ -34,8 +34,8 @@ const DynamicMetrics = {
     description: "number of backpressure events",
     valueType: ValueType.INT,
   }),
-  Concurrency: getGranadaMeter().createObservableGauge("dynamic_concurrency", {
-    description: "The current concurrency value",
+  Stats: getGranadaMeter().createObservableGauge("dynamic_stats", {
+    description: "The current dynamic stats value",
     valueType: ValueType.INT,
   }),
   TransformTime: getGranadaMeter().createHistogram("dynamic_transform", {
@@ -54,7 +54,8 @@ const DynamicMetrics = {
     unit: "seconds",
     advice: {
       explicitBucketBoundaries: [
-        0.0005, 0.001, 0.002, 0.005, 0.01, 0.015, 0.025, 0.05, 0.075, 0.1,
+        0.0005, 0.001, 0.0015, 0.002, 0.0025, 0.005, 0.0075, 0.01, 0.0125,
+        0.015, 0.02, 0.025, 0.05, 0.075, 0.1, 0.25,
       ],
     },
   }),
@@ -106,13 +107,15 @@ export class DynamicConcurrencyTransform<
 
       this._semaphore.resize(this._semaphore.limit + this._val)
       info(`new size: ${this._semaphore.limit}`)
-    }, 15_000)
+    }, 30_000)
 
     this._observer = (observer) => {
-      observer.observe(this._semaphore.limit)
+      observer.observe(this._semaphore.limit, { stat: "concurrency" })
+      observer.observe(this.readableLength, { stat: "rLen" })
+      observer.observe(this.writableLength, { stat: "wLen" })
     }
 
-    DynamicMetrics.Concurrency.addCallback(this._observer.bind(this))
+    DynamicMetrics.Stats.addCallback(this._observer.bind(this))
 
     // this._running = 0
     this.transform = transform
@@ -173,7 +176,7 @@ export class DynamicConcurrencyTransform<
       this._finalCallback()
       this._finalCallback = undefined
       clearInterval(this._timeout)
-      DynamicMetrics.Concurrency.removeCallback(this._observer.bind(this))
+      DynamicMetrics.Stats.removeCallback(this._observer.bind(this))
     }
   }
 }
