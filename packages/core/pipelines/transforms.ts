@@ -11,6 +11,7 @@ import { Transform, type TransformCallback } from "stream"
 import { Semaphore } from "../concurrency.js"
 import type { Emitter } from "../events.js"
 import { type MaybeAwaitable } from "../index.js"
+import { info } from "../logging.js"
 import { getGranadaMeter } from "../observability/metrics.js"
 import type { StreamCallback } from "../streams.js"
 import type { TaskCompletionEvents } from "../tasks.js"
@@ -120,6 +121,7 @@ class DynamicController {
           this._state === ControllerState.Exploring ||
           Math.abs(diff) > trigger
         ) {
+          info(`Exploring ${diff} (${this._semaphore.limit})`)
           if (this._state === ControllerState.Stable) {
             // Bias towards down unless we hit a wall...
             this._direction = Direction.Down
@@ -218,6 +220,7 @@ export class DynamicConcurrencyTransform<
     this.on("data", (_) => {
       this._semaphore.release()
       this._checkFinal()
+      this._controller.inc()
 
       const tracking = this._tracking.shift()
       if (tracking) {
