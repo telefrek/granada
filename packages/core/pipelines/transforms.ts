@@ -117,20 +117,23 @@ class DynamicController {
         const trigger = this._variance * this._last
         this._hits++
 
+        // TODO: Direction shifts when exploring need to be biased towards
+        // staying/shrinking below some threshold....
         if (
           this._state === ControllerState.Exploring ||
           Math.abs(diff) > trigger
         ) {
-          info(`Exploring ${diff} (${this._semaphore.limit})`)
+          info(
+            `Exploring ${diff} [${this._variance * this._last}] (${this._semaphore.limit})`,
+          )
           if (this._state === ControllerState.Stable) {
             // Bias towards down unless we hit a wall...
+            this._state = ControllerState.Exploring
             this._direction = Direction.Down
             this._hits = 0
-          } else if (diff < 0) {
-            this._direction = this._direction ^ 0xfffffffe
+          } else if (Math.abs(diff) > trigger) {
+            this._direction = this._direction & 0xfffffffe
           }
-
-          this._state = ControllerState.Exploring
 
           adjustment =
             this._direction + this._semaphore.limit < this._range.min ||
@@ -145,7 +148,7 @@ class DynamicController {
           }
         } else if (this._state !== ControllerState.Stable && this._hits >= 5) {
           this._state = ControllerState.Stable
-        } else if (this._hits > 50) {
+        } else if (this._hits > 16) {
           this._state = ControllerState.Exploring
           this._hits = 0
         }
