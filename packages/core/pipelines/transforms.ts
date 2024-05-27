@@ -112,8 +112,13 @@ class DynamicController {
       this._state = ControllerState.Exploring
 
       check = (throughput: number) => {
+        // Don't bother zero throughput
+        if (throughput === 0) {
+          return 0
+        }
+
         let adjustment = 0
-        const diff = this._last - throughput
+        const diff = throughput - this._last
         const trigger = this._variance * this._last
         this._hits++
 
@@ -131,8 +136,9 @@ class DynamicController {
             this._state = ControllerState.Exploring
             this._direction = Direction.Down
             this._hits = 0
-          } else if (Math.abs(diff) > trigger) {
-            this._direction = this._direction & 0xfffffffe
+          } else if (diff < 0 && Math.abs(diff) > this._last * 0.025) {
+            // went down more than a little, switch directions
+            this._direction = this._direction ^ 0xfffffffe
           }
 
           adjustment =
