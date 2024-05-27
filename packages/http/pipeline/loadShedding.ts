@@ -23,12 +23,7 @@ export function createLoadSheddingTransform(
     cancellation: (context: HttpOperationContext) =>
       context.operation.fail({ errorCode: HttpErrorCode.TIMEOUT }),
     prioritize: (context: HttpOperationContext) => context.priority ?? 5,
-    tasktimeoutMs: (context: HttpOperationContext) =>
-      Math.max(
-        1,
-        options.thresholdMs -
-          ~~context.operation.started.duration.milliseconds(),
-      ),
+    tasktimeoutMs: (_: HttpOperationContext) => options.thresholdMs,
     maxOutstandingRequests: options.maxOutstandingRequests,
   }
 }
