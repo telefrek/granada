@@ -11,7 +11,6 @@ import { Transform, type TransformCallback } from "stream"
 import { Semaphore } from "../concurrency.js"
 import type { Emitter } from "../events.js"
 import { type MaybeAwaitable } from "../index.js"
-import { info } from "../logging.js"
 import { getGranadaMeter } from "../observability/metrics.js"
 import type { StreamCallback } from "../streams.js"
 import type { TaskCompletionEvents } from "../tasks.js"
@@ -44,7 +43,8 @@ const DynamicMetrics = {
     unit: "seconds",
     advice: {
       explicitBucketBoundaries: [
-        0.0005, 0.001, 0.002, 0.005, 0.01, 0.015, 0.025, 0.05, 0.075, 0.1,
+        0.0005, 0.001, 0.0015, 0.002, 0.0025, 0.005, 0.0075, 0.01, 0.0125,
+        0.015, 0.02, 0.025, 0.05, 0.075, 0.1, 0.25,
       ],
     },
   }),
@@ -61,16 +61,122 @@ const DynamicMetrics = {
   }),
 } as const
 
+interface Range {
+  min: number
+  max: number
+}
+
+enum ControllerState {
+  Exploring,
+  Stable,
+  Initializing,
+}
+
+enum Direction {
+  Up = 1,
+  Down = -1,
+}
+
+class DynamicController {
+  private readonly _semaphore: Semaphore
+  private readonly _range: Range
+  private readonly _interval: NodeJS.Timeout
+  private readonly _variance: number = 0.05
+
+  private _state: ControllerState = ControllerState.Initializing
+  private _cnt: number = 0
+  private _last: number = 0
+  private _hits: number = 0
+  private _direction: Direction = Direction.Up
+
+  get state(): ControllerState {
+    return this._state
+  }
+
+  get semaphore(): Semaphore {
+    return this._semaphore
+  }
+
+  constructor(range: Range, refreshTime: Duration = Duration.ofSeconds(15)) {
+    this._range = range
+    this._semaphore = new Semaphore(range.min)
+
+    let check = (last: number): number => {
+      this._last = last
+      return 0
+    }
+
+    // Wait a bit to kick in with logic
+    setTimeout(() => {
+      this._state = ControllerState.Exploring
+
+      check = (throughput: number) => {
+        let adjustment = 0
+        const diff = this._last - throughput
+        const trigger = this._variance * this._last
+        this._hits++
+
+        if (
+          this._state === ControllerState.Exploring ||
+          Math.abs(diff) > trigger
+        ) {
+          if (this._state === ControllerState.Stable) {
+            // Bias towards down unless we hit a wall...
+            this._direction = Direction.Down
+            this._hits = 0
+          } else if (diff < 0) {
+            this._direction = this._direction ^ 0xfffffffe
+          }
+
+          this._state = ControllerState.Exploring
+
+          adjustment =
+            this._direction + this._semaphore.limit < this._range.min ||
+            this._direction + this._semaphore.limit > this._range.max
+              ? 0
+              : this._direction
+
+          if (adjustment === 0) {
+            // Switch directions...
+            this._direction = this._direction ^ 0xfffffffe
+            adjustment = this._direction
+          }
+        } else if (this._state !== ControllerState.Stable && this._hits >= 5) {
+          this._state = ControllerState.Stable
+        } else if (this._hits > 50) {
+          this._state = ControllerState.Exploring
+          this._hits = 0
+        }
+
+        this._last = throughput
+        return adjustment
+      }
+    }, 60_000)
+
+    this._interval = setInterval(() => {
+      const current = this._cnt
+      this._cnt = 0
+
+      this._semaphore.resize(this._semaphore.limit + check(current))
+    }, ~~refreshTime.milliseconds())
+  }
+
+  inc(val: number = 1): void {
+    this._cnt += val
+  }
+
+  close(): void {
+    clearInterval(this._interval)
+  }
+}
+
 export class DynamicConcurrencyTransform<
   T extends Emitter<TaskCompletionEvents>,
 > extends Transform {
   private _finalCallback?: StreamCallback
   private transform: BasicTransform<T>
-  // private _limiter: Limiter
+  private _controller: DynamicController
   private _semaphore: Semaphore
-  private _val: number
-  // private _running: number
-  private _timeout: NodeJS.Timeout
   private _observer: ObservableCallback<Attributes>
   private _tracking: Timestamp[] = []
 
@@ -92,22 +198,11 @@ export class DynamicConcurrencyTransform<
     })
 
     const maxConcurrency = options?.maxConcurrency ?? this.readableHighWaterMark
-    this._semaphore = new Semaphore(maxConcurrency)
-    this._val = 1
-
-    // Continue going up and down every 15 seconds
-    this._timeout = setInterval(() => {
-      if (this._semaphore.limit >= maxConcurrency) {
-        this._val = -1
-      }
-
-      if (this._semaphore.limit === 1) {
-        this._val = 1
-      }
-
-      this._semaphore.resize(this._semaphore.limit + this._val)
-      info(`new size: ${this._semaphore.limit}`)
-    }, 30_000)
+    this._controller = new DynamicController({
+      min: 2,
+      max: maxConcurrency,
+    })
+    this._semaphore = this._controller.semaphore
 
     this._observer = (observer) => {
       observer.observe(this._semaphore.limit, { stat: "concurrency" })
@@ -175,7 +270,7 @@ export class DynamicConcurrencyTransform<
     if (this._finalCallback && this._semaphore.running === 0) {
       this._finalCallback()
       this._finalCallback = undefined
-      clearInterval(this._timeout)
+      this._controller.close()
       DynamicMetrics.Stats.removeCallback(this._observer.bind(this))
     }
   }
