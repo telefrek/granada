@@ -21,6 +21,7 @@ import {
 } from "./index.js"
 import {
   createHttpOperation,
+  type HttpOperationSource,
   type HttpOperationSourceEvents,
 } from "./operations.js"
 import { createPipeline, type HttpPipeline } from "./pipeline.js"
@@ -150,7 +151,7 @@ export class HttpClientBuilder<
     client.once("finished", () => {
       transport.close()
     })
-    if (this._pipeline.add(client, handler)) {
+    if (this._pipeline.add(client as HttpOperationSource, handler)) {
       return client
     }
 
