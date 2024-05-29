@@ -210,6 +210,11 @@ export class DynamicConcurrencyTransform<
         this._finalCallback = callback
         this._checkFinal()
       },
+      destroy: (_, callback) => {
+        this._controller.close()
+        DynamicMetrics.Stats.removeCallback(this._observer.bind(this))
+        return callback()
+      },
     })
 
     const maxConcurrency = options?.maxConcurrency ?? this.readableHighWaterMark
