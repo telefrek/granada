@@ -363,7 +363,7 @@ describe("Pipelines should support clients and servers end to end", () => {
     server = createHttp2Server(certDir)
 
     pipeline = createPipeline(config)
-    if (!pipeline.add(server, NOT_FOUND_HANDLER, {})) {
+    if (!pipeline.add(server as HttpOperationSource, NOT_FOUND_HANDLER, {})) {
       TEST_LOGGER.error(`Failed to start pipeline`)
     } else {
       TEST_LOGGER.info(`Started pipeline`)
