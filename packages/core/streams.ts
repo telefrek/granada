@@ -310,6 +310,8 @@ abstract class AbstractNamedTransform<T, U>
     super({
       ...options,
       objectMode: true,
+      emitClose: true,
+      autoDestroy: true,
     })
     this._applyTransform = transform
     this.name = options?.name ?? v4()

@@ -2,8 +2,8 @@
  * Set of classes that are used for testing only
  */
 
-import { consumeJsonStream } from "@telefrek/core/json.js"
 import { DefaultLogger, LogLevel, type Logger } from "@telefrek/core/logging.js"
+import { consumeStream } from "@telefrek/core/streams.js"
 import { readFileSync } from "fs"
 import { join } from "path"
 import { HttpClientBuilder, type HttpClient } from "./client.js"
@@ -73,9 +73,7 @@ export function createTestRouter(): Router {
 
     const parameters = getRoutingParameters()
     const itemId = parameters?.get("itemId")
-    const body = req.body
-      ? await consumeJsonStream(req.body.contents)
-      : undefined
+    const body = req.body ? await consumeStream(req.body.contents) : undefined
 
     if (itemId) {
       switch (req.method) {

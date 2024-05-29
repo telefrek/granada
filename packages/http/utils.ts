@@ -202,6 +202,8 @@ export interface CreateRequestOptions {
   disableDefaultHeaders?: boolean
   /** The request path (default is '/') */
   path?: string
+  /** The host with scheme (default is http://localhost) */
+  host?: string
   /** The method override (default is GET) */
   method?: HttpMethod
   /** Additional headers to include */
@@ -220,7 +222,10 @@ export const GRANADA_USER_AGENT = `Granada_v${GRANADA_VERSION}`
  */
 export function createRequest(options?: CreateRequestOptions): HttpRequest {
   // Create a URL and ensure valid
-  const url = new URL(decodeURI(options?.path ?? "/"), "http://localhost")
+  const url = new URL(
+    decodeURI(options?.path ?? "/"),
+    options?.host ?? "http://localhost",
+  )
   assert(url !== undefined, "URL should be valid")
 
   const headers = emptyHeaders()
@@ -232,7 +237,6 @@ export function createRequest(options?: CreateRequestOptions): HttpRequest {
     headers.set(HttpRequestHeaders.AcceptCharset, "utf-8")
     headers.set(HttpRequestHeaders.Host, url.host)
     headers.set(HttpRequestHeaders.UserAgent, GRANADA_USER_AGENT)
-    //headers.set(HttpRequestHeaders.Connection, "keep-alive")
   }
 
   // Set any custom headers that were provided
@@ -240,6 +244,14 @@ export function createRequest(options?: CreateRequestOptions): HttpRequest {
     for (const entry of options.customHeaders.entries()) {
       headers.set(entry[0], entry[1])
     }
+  }
+
+  // Set the content type if known
+  if (options?.body?.mediaType) {
+    headers.set(
+      CommonHttpHeaders.ContentType,
+      options.body.mediaType.toString(),
+    )
   }
 
   return {
@@ -284,7 +296,7 @@ export class IndexedHeaders implements HttpHeaders {
     delete this._headers[name]
   }
 
-  getRaw(): NodeJS.Dict<string | string[]> {
+  get raw(): NodeJS.Dict<string | string[]> {
     return this._headers
   }
 }
@@ -330,7 +342,7 @@ export function extractHeaders(
  * @param outgoingHeaders The {@link  OutgoingHttpHeaders} to write to
  */
 export function injectHeaders(headers: HttpHeaders): OutgoingHttpHeaders {
-  return headers.getRaw()
+  return headers.raw
 }
 
 /**

@@ -2,12 +2,11 @@
  * Service definition and tooling for tests
  */
 
-import { getDebugInfo } from "@telefrek/core"
+import { getDebugInfo, type MaybeAwaitable } from "@telefrek/core"
 import { DefaultLogger, LogLevel, type Logger } from "@telefrek/core/logging.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
 import { HttpClientBuilder, type HttpClient } from "@telefrek/http/client.js"
 import {
-  HttpMethod,
   HttpStatusCode,
   type HttpHandler,
   type HttpResponse,
@@ -18,7 +17,6 @@ import {
   type HttpPipeline,
   type HttpPipelineOptions,
 } from "@telefrek/http/pipeline.js"
-import type { RoutingParameters } from "@telefrek/http/routing.js"
 import type { HttpServer, HttpServerConfig } from "@telefrek/http/server.js"
 import { NodeHttp2Server } from "@telefrek/http/server/http2.js"
 import {
@@ -28,8 +26,8 @@ import {
 import { emptyHeaders } from "@telefrek/http/utils.js"
 import { readFileSync } from "fs"
 import { join } from "path"
-import { routableApi, route } from "./decorators.js"
-import { SerializationFormat, type ServiceResponse } from "./index.js"
+import { HttpClientApi, HttpServerApi, bindApi } from "./api.js"
+import { type ServiceError } from "./index.js"
 
 export const TEST_LOGGER: Logger = new DefaultLogger({
   name: "test.logger",
@@ -69,17 +67,22 @@ export function runServerPipeline(
   return pipeline
 }
 
+let CLIENT: Optional<HttpClient>
+
 export function createHttp2Client(certDir: string, port: number): HttpClient {
-  return new HttpClientBuilder({
-    name: "TestClient",
-    host: "localhost",
-    port,
-    tls: {
-      certificateAuthority: readFileSync(join(certDir, "cert.pem")),
-    },
-  })
-    .build()
-    .on("error", (error) => TEST_LOGGER.fatal(`Client Error: ${error}`))
+  return (
+    CLIENT ??
+    (CLIENT = new HttpClientBuilder({
+      name: "TestClient",
+      host: "localhost",
+      port,
+      tls: {
+        certificateAuthority: readFileSync(join(certDir, "cert.pem")),
+      },
+    })
+      .build()
+      .on("error", (error) => TEST_LOGGER.fatal(`Client Error: ${error}`)))
+  )
 }
 
 export interface TestItem {
@@ -92,28 +95,61 @@ export interface ItemData {
   name: string
 }
 
-let CURRENT_ID: number = 1
+export interface TestService {
+  createItem(create: ItemData): MaybeAwaitable<TestItem>
+  getItem(itemId: number): MaybeAwaitable<Optional<TestItem>>
+  // updateItem(update: TestItem): ServiceResponse<TestItem>
+}
 
-@routableApi({
+export function getTestClient(provider: () => HttpClient): TestService {
+  return bindApi<TestService>(provider, {
+    getItem: HttpClientApi.httpGet("/test/items/:itemId", (id) => {
+      return {
+        itemId: id,
+      }
+    }),
+    createItem: HttpClientApi.httpPost("/test/items", (item) => {
+      return {
+        body: item,
+      }
+    }),
+  })
+}
+
+@HttpClientApi.enable(() => CLIENT!)
+export class TestClient2 implements TestService {
+  @HttpClientApi.post("/test/items", (data) => {
+    return { body: data }
+  })
+  createItem(_: ItemData): MaybeAwaitable<TestItem> {
+    throw new Error("Method not implemented.")
+  }
+  @HttpClientApi.get("/test/items/:itemId", (id) => {
+    return { itemId: id }
+  })
+  getItem(_: number): MaybeAwaitable<Optional<TestItem>> {
+    throw new Error("Method not implemented.")
+  }
+}
+
+let CURRENT_ID: number = 2
+
+function makeServiceResponse<T>(error: ServiceError) {
+  return error as T
+}
+
+@HttpServerApi.enable({
   pathPrefix: "/test",
 })
-export class TestService {
-  private items: Map<number, TestItem> = new Map()
+export class TestServiceServer implements TestService {
+  private items: Map<number, TestItem> = new Map([
+    [1, { id: 1, createdAt: Date.now(), name: "foo" }],
+  ])
 
-  @route({
-    template: "/items",
-    method: HttpMethod.POST,
-    mapping: <ItemData>(
-      _parameters: Optional<RoutingParameters>,
-      body?: ItemData,
-    ) => {
-      return [body]
-    },
-    format: SerializationFormat.JSON,
-  })
-  createItem(create: ItemData): ServiceResponse<TestItem> {
+  @HttpServerApi.post("/items", (details) => [details.body! as ItemData])
+  createItem(create: ItemData): MaybeAwaitable<TestItem> {
     if (create === undefined) {
-      return { code: 400, message: "Missing body" }
+      return makeServiceResponse({ code: 400, message: "Missing body" })
     }
 
     const item: TestItem = {
@@ -126,40 +162,24 @@ export class TestService {
     return item
   }
 
-  @route({
-    template: "/items/:itemId",
-    method: HttpMethod.GET,
-    mapping: (parameters: Optional<RoutingParameters>, _?: unknown) => {
-      return [parameters?.get("itemId")]
-    },
-  })
-  getItem(itemId: number): Optional<TestItem> {
+  @HttpServerApi.get("/items/:itemId", (details) => [details.itemId as number])
+  getItem(itemId: number): MaybeAwaitable<Optional<TestItem>> {
     const item = this.items.get(itemId)
     TEST_LOGGER.info(`Got item: ${getDebugInfo(item)} for ${itemId}`)
     return item
   }
 
-  @route({
-    template: "/items/:itemId",
-    method: HttpMethod.PATCH,
-    mapping: <ItemData>(
-      parameters: Optional<RoutingParameters>,
-      body?: ItemData,
-    ) => {
-      return [parameters?.get("itemId"), body]
-    },
-  })
-  updateItem(itemId: number, update: ItemData): ServiceResponse<TestItem> {
+  updateItem(update: TestItem): MaybeAwaitable<TestItem> {
     if (update === undefined) {
-      return { code: 400, message: "Missing body" }
+      return makeServiceResponse({ code: 400, message: "Missing body" })
     }
 
-    const item = this.items.get(itemId)
+    const item = this.items.get(update.id)
     if (item) {
       item.name = update.name
       return item
     }
 
-    return { code: 404, message: "Item does not exist" }
+    return makeServiceResponse({ code: 404, message: "Item does not exist" })
   }
 }

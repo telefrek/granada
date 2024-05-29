@@ -2,6 +2,7 @@
  * Common content pipeline operations
  */
 
+import { streamToJson } from "@telefrek/core/json.js"
 import { pipe } from "@telefrek/core/streams.js"
 import {
   createBrotliCompress,
@@ -21,14 +22,26 @@ import {
 import { getMediaType } from "../media.js"
 import type { HttpPipelineMiddleware } from "../pipeline.js"
 
-export const RESPONSE_PARSING_MIDDLEWARE: HttpPipelineMiddleware = {
-  name: "responseParsing",
-  modifyResponse(_request, response) {
-    parseResponseBody(response)
-  },
+export function createClientContentMiddleware(): HttpPipelineMiddleware {
+  return {
+    name: "clientContentParsing",
+    modifyRequest(request) {
+      if (request.body?.mediaType) {
+        request.headers.set(
+          CommonHttpHeaders.ContentType,
+          request.body.mediaType.toString(),
+        )
+      }
+
+      return undefined
+    },
+    modifyResponse(_, response) {
+      parseResponseBody(response)
+    },
+  }
 }
 
-export const createServerConpressionMiddleware: (
+export const createServerContentMiddleware: (
   classifier?: (mediaType?: MediaType) => string,
 ) => HttpPipelineMiddleware = (
   classifier = (_) => {
@@ -36,7 +49,18 @@ export const createServerConpressionMiddleware: (
   },
 ) => {
   return {
-    name: "serverCompression",
+    name: "serverContentParsing",
+    modifyRequest(request) {
+      const mediaType = getMediaType(request.headers)
+      if (mediaType && request.body) {
+        request.body.mediaType = mediaType
+        if (mediaType.type === "application" && "json" === mediaType.subType) {
+          request.body.contents = streamToJson(request.body.contents)
+        }
+      }
+
+      return undefined
+    },
     modifyResponse(request, response) {
       if (response.body) {
         if (request.headers.has(HttpRequestHeaders.AcceptEncoding)) {

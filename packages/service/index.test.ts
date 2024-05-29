@@ -2,26 +2,28 @@
  * Testing the service infra
  */
 
-import { getDebugInfo, type MaybeAwaitable } from "@telefrek/core/index.js"
-import { consumeJsonStream } from "@telefrek/core/json.js"
+import { type MaybeAwaitable } from "@telefrek/core/index.js"
 import type { HttpClient } from "@telefrek/http/client.js"
-import { HttpMethod, HttpStatusCode } from "@telefrek/http/index.js"
 import type { HttpServer } from "@telefrek/http/server.js"
-import {
-  TEST_LOGGER,
-  createHttp2Client,
-  createHttp2Server,
-} from "@telefrek/http/testUtils.js"
-import { createRequest, jsonBody } from "@telefrek/http/utils.js"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
-import { TestService, type TestItem } from "./testUtils.js"
+import { isServiceError } from "./index.js"
+import {
+  TestClient2,
+  TestServiceServer,
+  createHttp2Client,
+  createHttp2Server,
+  getTestClient,
+  type TestService,
+} from "./testUtils.js"
 import { ServicePipelineBuilder } from "./util.js"
 
 describe("Services should work for basic use cases", () => {
   let server: HttpServer
   let client: HttpClient
   let promise: MaybeAwaitable<void>
+  let api: TestService
+  let api2: TestService
 
   beforeAll(async () => {
     const port = 20000 + ~~(Math.random() * 10000)
@@ -33,8 +35,11 @@ describe("Services should work for basic use cases", () => {
     server = createHttp2Server(certDir)
     client = createHttp2Client(certDir, port)
 
+    api = getTestClient(() => client)
+    api2 = new TestClient2()
+
     promise = new ServicePipelineBuilder(server)
-      .withApi(new TestService())
+      .withApi(new TestServiceServer())
       .run(port)
   })
 
@@ -53,31 +58,25 @@ describe("Services should work for basic use cases", () => {
   })
 
   it("Should be able to contact the service", async () => {
-    let response = await client.submit(
-      createRequest({
-        path: "/test/items",
-        method: HttpMethod.POST,
-        body: jsonBody({ name: "foo" }),
-      }),
-    )
+    let response = await api.getItem(1)
+    expect(response).not.toBeUndefined()
+    expect(isServiceError(response)).toBeFalsy()
+    if (response) {
+      expect(response.id).toBe(1)
+      expect(response.name).toBe("foo")
+    }
 
-    // Expect a response with no content
-    expect(response.status.code).toBe(HttpStatusCode.CREATED)
-    expect(response.body).not.toBeUndefined()
-    const body = await consumeJsonStream<TestItem>(response.body!.contents)
-    expect(body).not.toBeUndefined()
+    response = await api.getItem(2)
+    expect(response).toBeUndefined()
 
-    TEST_LOGGER.info(`Got item: ${getDebugInfo(body)}`)
+    response = await api.createItem({ name: "bar" })
+    expect(response).not.toBeUndefined()
+    if (response) {
+      expect(response.id).toBe(2)
+      expect(response.name).toBe("bar")
+    }
 
-    response = await client.submit(
-      createRequest({
-        path: `/test/items/${(body as TestItem).id}`,
-      }),
-    )
-
-    expect(response.status.code).toBe(HttpStatusCode.OK)
-    expect(response.body).not.toBeUndefined()
-    const item = await consumeJsonStream<TestItem>(response.body!.contents)
-    expect(item).toStrictEqual(body)
-  })
+    response = await api2.getItem(2)
+    expect(response).not.toBeUndefined()
+  }, 600_000)
 })

@@ -9,13 +9,13 @@ import {
   type HttpResponse,
 } from "../index.js"
 import { type HttpPipelineConfiguration } from "../pipeline.js"
-import { createServerConpressionMiddleware } from "../pipeline/contents.js"
+import { createServerContentMiddleware } from "../pipeline/contents.js"
 import { emptyHeaders } from "../utils.js"
 
 export const DEFAULT_SERVER_PIPELINE_CONFIGURATION: HttpPipelineConfiguration =
   {
     transforms: [],
-    middleware: [createServerConpressionMiddleware()],
+    middleware: [createServerContentMiddleware()],
   }
 
 export const NOT_FOUND_HANDLER: HttpHandler = async (

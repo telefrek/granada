@@ -161,7 +161,7 @@ export class HttpClientBuilder<
 /**
  * Base class for extending Http Client behaviors
  */
-class DefaultHttpClient
+export class DefaultHttpClient
   extends EmitterFor<HttpClientEvents>
   implements HttpClient
 {

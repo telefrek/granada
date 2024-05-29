@@ -51,7 +51,7 @@ export interface HttpHeaders {
   /**
    * Gets the raw underlying headers
    */
-  getRaw(): NodeJS.Dict<string | string[]>
+  readonly raw: NodeJS.Dict<string | string[]>
 }
 
 /**

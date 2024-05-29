@@ -82,6 +82,7 @@ class DynamicController {
   private readonly _semaphore: Semaphore
   private readonly _range: Range
   private readonly _interval: NodeJS.Timeout
+  private readonly _startup: NodeJS.Timeout
   private readonly _variance: number = 0.05
 
   private _state: ControllerState = ControllerState.Initializing
@@ -108,7 +109,7 @@ class DynamicController {
     }
 
     // Wait a bit to kick in with logic
-    setTimeout(() => {
+    this._startup = setTimeout(() => {
       this._state = ControllerState.Exploring
 
       check = (throughput: number) => {
@@ -178,6 +179,7 @@ class DynamicController {
 
   close(): void {
     clearInterval(this._interval)
+    clearTimeout(this._startup)
   }
 }
 
@@ -202,6 +204,8 @@ export class DynamicConcurrencyTransform<
     super({
       ...options,
       objectMode: true,
+      autoDestroy: true,
+      emitClose: true,
       final: (callback: StreamCallback) => {
         this._finalCallback = callback
         this._checkFinal()

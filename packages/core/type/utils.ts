@@ -5,6 +5,27 @@
 import type { MaybeAwaitable } from "../index.js"
 
 /**
+ * Provides a type of the string split into components
+ */
+export type Split<
+  T extends string,
+  Splitter extends string = ":",
+> = T extends `${infer Prefix}${Splitter}${infer Rest}`
+  ? [...Split<Prefix, Splitter>, ...Split<Rest, Splitter>]
+  : T extends `${infer Prefix}${Splitter}`
+    ? [...Split<Prefix, Splitter>]
+    : T extends `${Splitter}${infer Rest}`
+      ? [...Split<Rest, Splitter>]
+      : T extends ""
+        ? []
+        : [T]
+
+/**
+ * Describes a constructor
+ */
+export type Constructor = new (...args: AnyArgs) => object
+
+/**
  * All of the literal required keys from a type
  */
 export type RequiredLiteralKeys<T> = {
@@ -105,6 +126,11 @@ export type Callback<Args extends AnyArgs> = (...args: Args) => void
  * A function that consumes a value
  */
 export type Consumer<T> = (obj: T) => MaybeAwaitable<void>
+
+/**
+ * A function that provides a value
+ */
+export type Provider<T> = () => MaybeAwaitable<T>
 
 /**
  * Function that transforms a value

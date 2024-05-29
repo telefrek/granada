@@ -1,14 +1,5 @@
 import { type MaybeAwaitable } from "@telefrek/core/index.js"
-import { consumeJsonStream } from "@telefrek/core/json.js"
 import { info } from "@telefrek/core/logging.js"
-import { consumeStream } from "@telefrek/core/streams.js"
-import type { AnyArgs, Optional } from "@telefrek/core/type/utils.js"
-import {
-  HttpStatusCode,
-  type HttpHandler,
-  type HttpRequest,
-  type HttpResponse,
-} from "@telefrek/http/index.js"
 import type { HttpOperationSource } from "@telefrek/http/operations.js"
 import {
   createPipeline,
@@ -16,31 +7,13 @@ import {
   type HttpPipelineOptions,
 } from "@telefrek/http/pipeline.js"
 import { USE_ROUTER } from "@telefrek/http/pipeline/routing.js"
-import {
-  createRouter,
-  getRoutingParameters,
-  type Router,
-} from "@telefrek/http/routing.js"
+import { createRouter, type Router } from "@telefrek/http/routing.js"
 import type { HttpServer } from "@telefrek/http/server.js"
 import {
   DEFAULT_SERVER_PIPELINE_CONFIGURATION,
   NOT_FOUND_HANDLER,
 } from "@telefrek/http/server/pipeline.js"
-import {
-  DefaultHttpMethodStatus,
-  emptyHeaders,
-  jsonContents,
-  noContents,
-  textContents,
-} from "@telefrek/http/utils.js"
-import {
-  SerializationFormat,
-  isRoutableApi,
-  isServiceError,
-  type Service,
-  type ServiceResponse,
-  type ServiceRouteInfo,
-} from "./index.js"
+import { isRoutableApi, type Service } from "./index.js"
 
 export class ServicePipelineBuilder {
   private _config: HttpPipelineConfiguration
@@ -94,74 +67,4 @@ export const serviceToRouter = (service: Service): Router => {
 
   // Return the router
   return router
-}
-
-export function buildHandler<T>(
-  service: unknown,
-  serviceRoute: ServiceRouteInfo<T>,
-): HttpHandler {
-  const format = serviceRoute.options.format ?? SerializationFormat.JSON
-  info("Building handler...")
-  return async (request: HttpRequest): Promise<HttpResponse> => {
-    let args: AnyArgs = []
-    let body: Optional<unknown>
-
-    if (request.body) {
-      info(
-        `Consuming body type: ${request.body.mediaType?.toString() ?? "unknown"} as ${format}`,
-      )
-
-      body =
-        format === SerializationFormat.JSON
-          ? await consumeJsonStream(request.body.contents)
-          : await consumeStream(request.body.contents)
-    }
-
-    if (serviceRoute.options.mapping) {
-      args = serviceRoute.options.mapping(getRoutingParameters(), body)
-    } else if (body) {
-      args = [body]
-    }
-
-    let response: Optional<ServiceResponse<T>>
-
-    try {
-      response = await serviceRoute.method.call(service, ...args)
-    } catch (err) {
-      response = serviceRoute.options.errorHandler
-        ? serviceRoute.options.errorHandler(err)
-        : {
-            code: HttpStatusCode.INTERNAL_SERVER_ERROR,
-          }
-    }
-
-    if (isServiceError(response)) {
-      return {
-        status: {
-          code: response.code,
-          message: response.message,
-        },
-        body: response.body,
-        headers: emptyHeaders(),
-      }
-    } else {
-      // Start with the default status code or route definition
-      const code =
-        serviceRoute.options.statusCode ??
-        DefaultHttpMethodStatus[request.method]
-
-      // If no contents, return NO_CONTENT
-      if (response === undefined || response === null) {
-        return noContents()
-      } else {
-        // TODO: Add other content types...
-        switch (serviceRoute.options.format ?? SerializationFormat.JSON) {
-          case SerializationFormat.JSON:
-            return jsonContents(response, code)
-          default:
-            return textContents(String(response), code)
-        }
-      }
-    }
-  }
 }

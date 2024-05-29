@@ -109,7 +109,9 @@ export function isServiceError(response: unknown): response is ServiceError {
 export type ServiceResponseType = any | any[]
 
 /** A type that is either an object or {@link ServiceError} */
-export type ServiceResponse<T extends ServiceResponseType> = T | ServiceError
+export type ServiceResponse<T extends ServiceResponseType> = MaybeAwaitable<
+  T | ServiceError
+>
 
 /** Custom type definition for a method that is routable */
 export type RoutableMethod<T> = (
