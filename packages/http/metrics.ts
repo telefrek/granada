@@ -4,7 +4,10 @@
 
 import { ValueType } from "@opentelemetry/api"
 import { getGranadaMeter } from "@telefrek/core/observability/metrics.js"
-import { isNamedTransform, type NamedTransform } from "@telefrek/core/streams"
+import {
+  isNamedTransform,
+  type NamedTransform,
+} from "@telefrek/core/streams.js"
 import type { Transform } from "stream"
 
 /**

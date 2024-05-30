@@ -2,10 +2,10 @@
  * Exercise the pipelines!
  */
 
-import { EmitterFor } from "@telefrek/core/events"
+import { EmitterFor } from "@telefrek/core/events.js"
 import { type MaybeAwaitable } from "@telefrek/core/index.js"
 import { consumeJsonStream } from "@telefrek/core/json.js"
-import { getTracer } from "@telefrek/core/observability/tracing"
+import { getTracer } from "@telefrek/core/observability/tracing.js"
 import { consumeString, drain } from "@telefrek/core/streams.js"
 import { Duration, delay } from "@telefrek/core/time.js"
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "fs"

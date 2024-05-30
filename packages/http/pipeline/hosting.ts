@@ -7,7 +7,7 @@
  */
 
 import { fatal, type LoggerOptions } from "@telefrek/core/logging.js"
-import type { Optional } from "@telefrek/core/type/utils"
+import type { Optional } from "@telefrek/core/type/utils.js"
 import { existsSync } from "fs"
 import { join, resolve } from "path"
 import { HttpMethod, type HttpHandler } from "../index.js"

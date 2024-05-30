@@ -17,7 +17,7 @@ import {
 } from "./index.js"
 
 import { streamJson } from "@telefrek/core/json.js"
-import type { Optional } from "@telefrek/core/type/utils"
+import type { Optional } from "@telefrek/core/type/utils.js"
 import { GRANADA_VERSION } from "@telefrek/core/version.js"
 import { assert } from "console"
 import { type IncomingHttpHeaders, type OutgoingHttpHeaders } from "http"

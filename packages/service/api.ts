@@ -1,5 +1,5 @@
 import { consumeJsonStream } from "@telefrek/core/json.js"
-import { consumeStream } from "@telefrek/core/streams"
+import { consumeStream } from "@telefrek/core/streams.js"
 import type {
   AnyArgs,
   Constructor,

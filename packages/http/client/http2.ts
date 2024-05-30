@@ -3,7 +3,7 @@
  */
 
 import { DeferredPromise, type MaybeAwaitable } from "@telefrek/core/index.js"
-import { info } from "@telefrek/core/logging"
+import { info } from "@telefrek/core/logging.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
 import type { IncomingHttpHeaders } from "http"
 import {

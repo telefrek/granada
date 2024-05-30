@@ -13,7 +13,7 @@ import {
   type FrameworkPriority,
   type MaybeAwaitable,
 } from "@telefrek/core/index.js"
-import { debug, error, info } from "@telefrek/core/logging"
+import { debug, error, info } from "@telefrek/core/logging.js"
 import { getGranadaMeter } from "@telefrek/core/observability/metrics.js"
 import { trace } from "@telefrek/core/observability/tracing.js"
 import {

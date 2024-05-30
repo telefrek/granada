@@ -18,7 +18,7 @@ import { extractHeaders, injectHeaders, parsePath } from "../utils.js"
 import { ROOT_CONTEXT, SpanKind } from "@opentelemetry/api"
 import type { Logger } from "@telefrek/core/logging.js"
 import { getTracer } from "@telefrek/core/observability/tracing.js"
-import { pipe } from "@telefrek/core/streams"
+import { pipe } from "@telefrek/core/streams.js"
 import {
   Http2Server,
   Http2ServerRequest,

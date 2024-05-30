@@ -2,9 +2,9 @@
  * Testing HttpOperation expectations
  */
 
-import { getTracer } from "@telefrek/core/observability/tracing"
-import { drain } from "@telefrek/core/streams"
-import { Duration, delay } from "@telefrek/core/time"
+import { getTracer } from "@telefrek/core/observability/tracing.js"
+import { drain } from "@telefrek/core/streams.js"
+import { Duration, delay } from "@telefrek/core/time.js"
 import { HttpErrorCode } from "./errors.js"
 import { HttpOperationState, createHttpOperation } from "./operations.js"
 import { createRequest, jsonBody, jsonContents, noContents } from "./utils.js"

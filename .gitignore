@@ -6,6 +6,9 @@
 **/traces
 **/.npmrc
 
+# Ignore tempates used locally
+**/_template
+
 # Don't store local build cache results
 **/*.tsbuildinfo
 

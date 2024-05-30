@@ -2,9 +2,9 @@
  * Handling context tracking for an operation
  */
 
-import type { FrameworkPriority } from "@telefrek/core"
-import { EmitterFor, type Emitter } from "@telefrek/core/events"
-import type { TaskCompletionEvents } from "@telefrek/core/tasks"
+import { EmitterFor, type Emitter } from "@telefrek/core/events.js"
+import type { FrameworkPriority } from "@telefrek/core/index.js"
+import type { TaskCompletionEvents } from "@telefrek/core/tasks.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
 import { AsyncLocalStorage } from "async_hooks"
 import type { HttpHandler, HttpResponse } from "./index.js"

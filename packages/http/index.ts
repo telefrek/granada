@@ -3,7 +3,7 @@
  */
 
 import { type MaybeAwaitable } from "@telefrek/core/index.js"
-import type { Optional } from "@telefrek/core/type/utils"
+import type { Optional } from "@telefrek/core/type/utils.js"
 import { type Readable } from "stream"
 
 /**

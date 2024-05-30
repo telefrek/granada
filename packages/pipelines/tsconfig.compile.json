@@ -30,11 +30,22 @@
     "strictFunctionTypes": true,
     "strictNullChecks": true,
     "target": "ESNext",
-    "baseUrl": "./"
+    "baseUrl": "./",
+    "paths": {
+      "@telefrek/core": ["./packages/core"],
+      "@telefrek/core/*": ["./packages/core/*"]
+    }
   },
-  "exclude": ["node_modules", "dist", "**/*.d.ts"],
   "ts-node": {
     "esm": true
   },
-  "include": ["./**/*.ts"]
+  "include": ["./**/*.ts"],
+  "exclude": [
+    "node_modules",
+    "./dist/**/*",
+    "./**/*.test.ts",
+    "./**/*.integration.ts",
+    "./testUtils.ts"
+  ],
+  "references": [{ "path": "../core" }]
 }

@@ -2,7 +2,7 @@
  * Service definition and tooling for tests
  */
 
-import { getDebugInfo, type MaybeAwaitable } from "@telefrek/core"
+import { getDebugInfo, type MaybeAwaitable } from "@telefrek/core/index.js"
 import { DefaultLogger, LogLevel, type Logger } from "@telefrek/core/logging.js"
 import type { Optional } from "@telefrek/core/type/utils.js"
 import { HttpClientBuilder, type HttpClient } from "@telefrek/http/client.js"

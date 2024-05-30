@@ -7,8 +7,11 @@ import { Emitter, EmitterFor } from "@telefrek/core/events.js"
 import { MaybeAwaitable } from "@telefrek/core/index.js"
 import { LifecycleEvents } from "@telefrek/core/lifecycle.js"
 import { DefaultLogger, LogLevel, type Logger } from "@telefrek/core/logging.js"
-import { Tracing, TracingContext } from "@telefrek/core/observability/tracing"
-import { DynamicConcurrencyTransform } from "@telefrek/core/pipelines/transforms"
+import {
+  Tracing,
+  TracingContext,
+} from "@telefrek/core/observability/tracing.js"
+import { DynamicConcurrencyTransform } from "@telefrek/core/pipelines/transforms.js"
 import {
   ParallelWritable,
   StreamConcurrencyMode,

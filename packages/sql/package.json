@@ -1,0 +1,37 @@
+{
+  "name": "@telefrek/sql",
+  "version": "1.0.0-alpha.61",
+  "description": "This package has utilities for managing SQL queries, types and other operations",
+  "author": "nathan@telefrek.com",
+  "license": "MIT",
+  "keywords": [
+    "granada",
+    "framework",
+    "sql",
+    "query"
+  ],
+  "type": "module",
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "dist/**/*.json"
+  ],
+  "types": "./dist/index.d.ts",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./*": "./dist/*.js",
+    "./*.js": "./dist/*.js"
+  },
+  "scripts": {
+    "clean": "rm -rf ./dist",
+    "upgrade": "npx npm-check-updates -u && npm install --legacy-peer-deps",
+    "build": "tsc",
+    "compile": "tsc -p tsconfig.compile.json",
+    "lint": "npx eslint . --fix --ignore-pattern \"dist\""
+  },
+  "dependencies": {
+    "@telefrek/core": "^1.0.0-alpha.61"
+  },
+  "gitHead": "1be6bb3a61aab8ae5361827b54f8428682b9d536"
+}
