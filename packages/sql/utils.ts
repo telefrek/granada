@@ -2,6 +2,8 @@
  * Utilities that are helpful when working with SQL
  */
 
+import type { ColumnAggregateOperation } from "./ast.js"
+
 /**
  * Support up to 32 parameters
  */
@@ -78,6 +80,15 @@ export type Decrement<N extends number> = [
   ...number[],
 ][N]
 
+/**
+ * Utility for getting the type of aggregate
+ */
+export type AggregateType<
+  Operation extends ColumnAggregateOperation,
+  ColumnType,
+> = Operation extends "SUM" | "COUNT" | "AVERAGE" ? number : ColumnType
+
+// TODO: Don't consume the whole things at once...
 /**
  * Tokenizes the query into it's individual elements which should be processable
  * from left to right to generate a valid query structure.
