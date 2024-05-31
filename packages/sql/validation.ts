@@ -5,6 +5,8 @@
 import type {
   ColumnAssignment,
   ColumnReference,
+  DeleteClause,
+  SQLQuery,
   StringValueType,
   TableColumnReference,
   TableReference,
@@ -14,32 +16,54 @@ import type {
 
 // NOTE: Assume all keywords are uppercase or all lowercase or this fails...
 
-export type ExtractSQLQuery<Query extends string> =
-  | ExtractUpdateClause<Query>
-  | ExtractDeleteClause<Query>
+export type ExtractSQLQuery<Query extends string> = SQLQuery<
+  never,
+  ExtractBaseQuery<Query>
+>
+
+type ExtractBaseQuery<T> = ExtractDeleteClause<T> | ExtractUpdateClause<T>
 
 type ExtractDeleteClause<T> =
   T extends `DELETE ${infer Table} WHERE ${infer Where} RETURNING ${infer Returning}`
-    ? { type: "DeleteClause"; table: Table; where: Where; returning: Returning }
+    ? DeleteClause<
+        TableReference<Table>,
+        ExtractWhereClause<Where>,
+        ExtractReturning<Table, Returning>
+      >
     : T extends `delete ${infer Table} where ${infer Where} returning ${infer Returning}`
-      ? {
-          type: "DeleteClause"
-          table: Table
-          where: Where
-          returning: Returning
-        }
+      ? DeleteClause<
+          TableReference<Table>,
+          ExtractWhereClause<Where>,
+          ExtractReturning<Table, Returning>
+        >
       : T extends `DELETE ${infer Table} RETURNING ${infer Returning}`
-        ? { type: "DeleteClause"; table: Table; returning: Returning }
+        ? DeleteClause<
+            TableReference<Table>,
+            never,
+            ExtractReturning<Table, Returning>
+          >
         : T extends `delete ${infer Table} returning ${infer Returning}`
-          ? { type: "DeleteClause"; table: Table; returning: Returning }
+          ? DeleteClause<
+              TableReference<Table>,
+              never,
+              ExtractReturning<Table, Returning>
+            >
           : T extends `DELETE ${infer Table} WHERE ${infer Where}`
-            ? { type: "DeleteClause"; table: Table; where: Where }
+            ? DeleteClause<
+                TableReference<Table>,
+                ExtractWhereClause<Where>,
+                never
+              >
             : T extends `delete ${infer Table} where ${infer Where}`
-              ? { type: "DeleteClause"; table: Table; where: Where }
+              ? DeleteClause<
+                  TableReference<Table>,
+                  ExtractWhereClause<Where>,
+                  never
+                >
               : T extends `DELETE ${infer Table}`
-                ? { type: "DeleteClause"; table: Table }
+                ? DeleteClause<TableReference<Table>, never, never>
                 : T extends `delete ${infer Table}`
-                  ? { type: "DeleteClause"; table: Table }
+                  ? DeleteClause<TableReference<Table>, never, never>
                   : never
 
 type ExtractUpdateClause<T> =

@@ -396,6 +396,6 @@ export type SQLQuery<
     | CombinedQueryClause<any> = SelectClause<any>,
 > = {
   type: "SQLQuery"
-  with: With
+  with?: With
   query: Query
 }
