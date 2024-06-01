@@ -2,8 +2,6 @@
  * Objects that help with parsing SQL into AST or queries
  */
 
-import type { TokenizeQuery } from "./utils.js"
-
 export type SQLQueryKeywords =
   | "AS"
   | "BY"
@@ -35,10 +33,6 @@ export type SQLQueryKeywords =
   | "WHERE"
   | "WITH"
 
-export function query<Query extends string>(query: ValidQuery<Query>): Query {
-  return query
-}
-
 /**
  * Loose steps in my head at this point...
  *
@@ -54,28 +48,3 @@ export function query<Query extends string>(query: ValidQuery<Query>): Query {
  * This should also allow us to pass/create a typed query that we can pass
  * through to whatever driver we setup for executing (in memory, database, etc.)
  */
-
-type ValidQuery<Query extends string> =
-  TokenizeQuery<Query> extends [infer FirstToken, ...infer Rest]
-    ?
-        | InsertQuery<FirstToken, Rest, Query>
-        | DeleteQuery<FirstToken, Rest, Query>
-    : never
-
-type InsertQuery<First, Tokens, Query extends string> =
-  Uppercase<First & string> extends "INSERT"
-    ? Tokens extends [infer Next, ...infer _]
-      ? Uppercase<Next & string> extends "INTO"
-        ? Query
-        : never
-      : never
-    : never
-
-type DeleteQuery<First, Tokens, Query extends string> =
-  Uppercase<First & string> extends "DELETE"
-    ? Tokens extends [infer Next, ...infer _]
-      ? Uppercase<Next & string> extends "FROM"
-        ? Query
-        : never
-      : never
-    : never

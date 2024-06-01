@@ -2,49 +2,11 @@
  * Utilities that are helpful when working with SQL
  */
 
-import type { ColumnAggregateOperation } from "./ast.js"
-
 /**
- * Support up to 32 parameters
+ * I'm not trying to support ANY number, if you're going more than 64 deep for
+ * some reason, you should probably be stopped lol
  */
-type Increment<N extends number> = [
-  1,
-  2,
-  3,
-  4,
-  5,
-  6,
-  7,
-  8,
-  9,
-  10,
-  11,
-  12,
-  13,
-  14,
-  15,
-  16,
-  17,
-  18,
-  19,
-  20,
-  21,
-  22,
-  23,
-  24,
-  25,
-  26,
-  27,
-  28,
-  29,
-  30,
-  31,
-  32,
-  ...number[],
-][N]
-
-export type Decrement<N extends number> = [
-  number,
+type Increment = [
   0,
   1,
   2,
@@ -77,77 +39,132 @@ export type Decrement<N extends number> = [
   29,
   30,
   31,
-  ...number[],
-][N]
+  32,
+  33,
+  34,
+  35,
+  36,
+  37,
+  38,
+  39,
+  40,
+  41,
+  42,
+  43,
+  44,
+  45,
+  46,
+  47,
+  48,
+  49,
+  50,
+  51,
+  52,
+  53,
+  54,
+  55,
+  56,
+  57,
+  58,
+  59,
+  60,
+  61,
+  62,
+  63,
+]
+
+type Decrement = [
+  -1,
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15,
+  16,
+  17,
+  18,
+  19,
+  20,
+  21,
+  22,
+  23,
+  24,
+  25,
+  26,
+  27,
+  28,
+  29,
+  30,
+  31,
+  32,
+  33,
+  34,
+  35,
+  36,
+  37,
+  38,
+  39,
+  40,
+  41,
+  42,
+  43,
+  44,
+  45,
+  46,
+  47,
+  48,
+  49,
+  50,
+  51,
+  52,
+  53,
+  54,
+  55,
+  56,
+  57,
+  58,
+  59,
+  60,
+  61,
+  62,
+  63,
+]
+
+type Next = Increment extends [number, ...infer N] ? N : never
+type Prev = Decrement extends [...infer N] ? N : never
 
 /**
- * Utility for getting the type of aggregate
+ * Get the next value or undefined if >= 63
  */
-export type AggregateType<
-  Operation extends ColumnAggregateOperation,
-  ColumnType,
-> = Operation extends "SUM" | "COUNT" | "AVERAGE" ? number : ColumnType
-
-// TODO: Don't consume the whole things at once...
-/**
- * Tokenizes the query into it's individual elements which should be processable
- * from left to right to generate a valid query structure.
- */
-export type TokenizeQuery<T extends string> =
-  T extends `${infer Prefix},${infer Rest}`
-    ? [...TokenizeQuery<Prefix>, ...TokenizeQuery<Rest>]
-    : T extends `${infer Prefix}\n${infer Rest}`
-      ? [...TokenizeQuery<Prefix>, ...TokenizeQuery<Rest>]
-      : T extends `${infer Prefix} ${infer Rest}`
-        ? [...TokenizeQuery<Prefix>, ...TokenizeQuery<Rest>]
-        : T extends `${infer Prefix}(${infer Rest}`
-          ? [...TokenizeQuery<Prefix>, "(", ...TokenizeQuery<Rest>]
-          : T extends `${infer Prefix})${infer Rest}`
-            ? [...TokenizeQuery<Prefix>, ")", ...TokenizeQuery<Rest>]
-            : T extends `${infer Prefix})`
-              ? [...TokenizeQuery<Prefix>, ")"]
-              : T extends `(${infer Rest}`
-                ? ["(", ...TokenizeQuery<Rest>]
-                : T extends `,${infer Rest}`
-                  ? [...TokenizeQuery<Rest>]
-                  : T extends `${infer Prefix},`
-                    ? [...TokenizeQuery<Prefix>]
-                    : T extends `\n${infer Rest}`
-                      ? [...TokenizeQuery<Rest>]
-                      : T extends `${infer Prefix}\n`
-                        ? [...TokenizeQuery<Prefix>]
-                        : T extends ` ${infer Rest}`
-                          ? [...TokenizeQuery<Rest>]
-                          : T extends `${infer Prefix} `
-                            ? [...TokenizeQuery<Prefix>]
-                            : T extends "\n"
-                              ? []
-                              : T extends " "
-                                ? []
-                                : T extends ","
-                                  ? []
-                                  : T extends ""
-                                    ? []
-                                    : [T]
+export type Inc<T> = T extends keyof Next ? Next[T] : never
 
 /**
- * Rebuild the query as a parameterized query to get the types
+ * Get the previous value or undefined if <= 63
  */
-export type Parameterize<T extends ReadonlyArray<string>> =
-  IncrementalParameters<T>
+export type Dec<T> = T extends keyof Prev ? Prev[T] : never
 
 /**
- * Join the strings using an increasing parameter
+ * Perform a comparison between two values
  */
-export type IncrementalParameters<
-  T extends readonly string[],
-  P extends number = 0,
-> = T extends [infer Head]
-  ? `${Head & string}`
-  : T extends [infer Head, ...infer Tail]
-    ? Tail extends readonly string[]
-      ? `${Head & string}$${P}${IncrementalParameters<Tail, Increment<P>>}`
-      : Tail extends string
-        ? `${Head & string}$${P}${Tail & string}`
-        : `${Head & string}`
-    : ""
+export type Compare<L, R, LN = Dec<L>, RN = Dec<R>> = LN extends undefined
+  ? never
+  : RN extends undefined
+    ? never
+    : LN extends RN
+      ? 0
+      : LN extends -1
+        ? -1
+        : RN extends -1
+          ? 1
+          : Compare<Dec<L>, Dec<R>>

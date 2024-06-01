@@ -1,229 +1,135 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Set of utilities to validate a query against a schema
  */
 
 import type {
-  ColumnAssignment,
-  ColumnReference,
   DeleteClause,
+  InsertClause,
+  NamedQuery,
   SQLQuery,
-  StringValueType,
-  TableColumnReference,
-  TableReference,
-  UnboundColumnReference,
+  SelectClause,
   UpdateClause,
 } from "./ast.js"
+import type { Dec, Inc } from "./utils.js"
 
-// NOTE: Assume all keywords are uppercase or all lowercase or this fails...
+// type t = ParseSQLQuery<`WITH foo AS (SELECT id, name FROM bar),
+//     baz AS (SELECT * FROM foo)
+//     SELECT * FROM foo`>
 
-export type ExtractSQLQuery<Query extends string> = SQLQuery<
-  never,
-  ExtractBaseQuery<Query>
->
+// type t2 = ParseSQLQuery<`DELETE FROM foo WHERE id=:param`>
 
-type ExtractBaseQuery<T> = ExtractDeleteClause<T> | ExtractUpdateClause<T>
+export type ParseSQLQuery<Query> =
+  NextToken<Query> extends ["WITH", infer _, infer Rest]
+    ? ExtractWith<Rest> extends [infer W, infer S]
+      ? SQLQuery<ParseWith<W>, ExtractQueryClause<Trim<S>>>
+      : never
+    : SQLQuery<never, ExtractQueryClause<Trim<Query>>>
 
-type ExtractDeleteClause<T> =
-  T extends `DELETE ${infer Table} WHERE ${infer Where} RETURNING ${infer Returning}`
-    ? DeleteClause<
-        TableReference<Table>,
-        ExtractWhereClause<Where>,
-        ExtractReturning<Table, Returning>
-      >
-    : T extends `delete ${infer Table} where ${infer Where} returning ${infer Returning}`
-      ? DeleteClause<
-          TableReference<Table>,
-          ExtractWhereClause<Where>,
-          ExtractReturning<Table, Returning>
-        >
-      : T extends `DELETE ${infer Table} RETURNING ${infer Returning}`
-        ? DeleteClause<
-            TableReference<Table>,
-            never,
-            ExtractReturning<Table, Returning>
-          >
-        : T extends `delete ${infer Table} returning ${infer Returning}`
-          ? DeleteClause<
-              TableReference<Table>,
-              never,
-              ExtractReturning<Table, Returning>
-            >
-          : T extends `DELETE ${infer Table} WHERE ${infer Where}`
-            ? DeleteClause<
-                TableReference<Table>,
-                ExtractWhereClause<Where>,
-                never
-              >
-            : T extends `delete ${infer Table} where ${infer Where}`
-              ? DeleteClause<
-                  TableReference<Table>,
-                  ExtractWhereClause<Where>,
-                  never
-                >
-              : T extends `DELETE ${infer Table}`
-                ? DeleteClause<TableReference<Table>, never, never>
-                : T extends `delete ${infer Table}`
-                  ? DeleteClause<TableReference<Table>, never, never>
-                  : never
+type ParseWith<T> = ParseWithClauses<JoinWith<SplitWith<T>>>
 
-type ExtractUpdateClause<T> =
-  T extends `UPDATE ${infer Table} SET ${infer Fields} WHERE ${infer Where} RETURNING ${infer Returning}`
-    ? UpdateClause<
-        TableReference<Table>,
-        ExtractColumnAssignment<Fields>,
-        ExtractWhereClause<Where>,
-        ExtractReturning<Table, Returning>
-      >
-    : T extends `update ${infer Table} set ${infer Fields} where ${infer Where} returning ${infer Returning}`
-      ? UpdateClause<
-          TableReference<Table>,
-          ExtractColumnAssignment<Fields>,
-          ExtractWhereClause<Where>,
-          ExtractReturning<Table, Returning>
-        >
-      : T extends `UPDATE ${infer Table} SET ${infer Fields} WHERE ${infer Where}`
-        ? UpdateClause<
-            TableReference<Table>,
-            ExtractColumnAssignment<Fields>,
-            ExtractWhereClause<Where>,
-            never
-          >
-        : T extends `update ${infer Table} set ${infer Fields} where ${infer Where}`
-          ? UpdateClause<
-              TableReference<Table>,
-              ExtractColumnAssignment<Fields>,
-              ExtractWhereClause<Where>,
-              never
-            >
-          : T extends `UPDATE ${infer Table} SET ${infer Fields} RETURNING ${infer Returning}`
-            ? UpdateClause<
-                TableReference<Table>,
-                ExtractColumnAssignment<Fields>,
-                never,
-                ExtractReturning<Table, Returning>
-              >
-            : T extends `update ${infer Table} set ${infer Fields} returning ${infer Returning}`
-              ? UpdateClause<
-                  TableReference<Table>,
-                  ExtractColumnAssignment<Fields>,
-                  never,
-                  ExtractReturning<Table, Returning>
-                >
-              : T extends `UPDATE ${infer Table} SET ${infer Fields}`
-                ? UpdateClause<
-                    TableReference<Table>,
-                    ExtractColumnAssignment<Fields>,
-                    never,
-                    never
-                  >
-                : T extends `update ${infer Table} set ${infer Fields}`
-                  ? UpdateClause<
-                      TableReference<Table>,
-                      ExtractColumnAssignment<Fields>,
-                      never,
-                      never
-                    >
-                  : never
+type ParseWithClauses<T> = T extends [infer First, ...infer Rest]
+  ? [ExtractNamedQuery<First>, ...ParseWithClauses<Rest>]
+  : T extends [infer Last]
+    ? [ExtractNamedQuery<Last>]
+    : []
 
-type ExtractColumnAssignment<T> = T extends `${infer Field}=${infer Value}`
-  ? [
-      ColumnAssignment<
-        ColumnReference<UnboundColumnReference<Field & string>, Field & string>,
-        StringValueType<Value>
-      >,
-    ]
+type ExtractNamedQuery<T> = T extends `${infer Table} AS (${infer Q})`
+  ? Table extends `, ${infer Name}`
+    ? NamedQuery<ExtractQueryClause<Trim<Q>>, Name>
+    : NamedQuery<ExtractQueryClause<Trim<Q>>, Table>
   : never
 
-type ExtractReturning<Table, T> = T extends string
-  ? [TableColumnReference<Table & string, T>]
-  : never
+type ExtractQueryClause<T> = T extends `SELECT ${infer _}`
+  ? SelectClause<any>
+  : T extends `INSERT ${infer _}`
+    ? InsertClause<any>
+    : T extends `UPDATE ${infer _}`
+      ? UpdateClause<any>
+      : T extends `DELETE ${infer _}`
+        ? DeleteClause<any>
+        : never
 
-type ExtractWhereClause<T> = T extends string ? StringValueType<T> : never
+type SplitWith<T> = T extends `${infer Left},${infer Right}`
+  ? [...SplitWith<Left>, ",", ...SplitWith<Right>]
+  : T extends `${infer Left}(${infer Right}`
+    ? [...SplitWith<Left>, "(", ...SplitWith<Right>]
+    : T extends `${infer Left})${infer Right}`
+      ? [...SplitWith<Left>, ")", ...SplitWith<Right>]
+      : T extends ""
+        ? []
+        : [Trim<T>]
+
+type JoinWith<T, N = 0, S = ""> = T extends ["(", ...infer Rest]
+  ? [...JoinWith<Rest, Inc<N>, `${S & string} (`>]
+  : T extends [")", ...infer Rest]
+    ? Dec<N> extends 0
+      ? [Trim<`${S & string} )`>, ...JoinWith<Rest>]
+      : JoinWith<Rest, Dec<N>, `${S & string} )`>
+    : T extends [infer Next, ...infer Rest]
+      ? JoinWith<Rest, N, `${S & string} ${Next & string}`>
+      : T extends [infer Last]
+        ? [Trim<`${S & string} ${Last & string}`>]
+        : S extends ""
+          ? []
+          : [Trim<`${S & string}`>]
 
 /**
- * Set of keywords we use for detecting syntax
+ * Split the query into [WithClause, Remainder]
  */
-export type SQLQueryKeywords =
-  | "AS"
-  | "as"
-  | "BY"
-  | "by"
-  | "COLUMNS"
-  | "columns"
-  | "DELETE"
-  | "delete"
-  | "EXCEPT"
-  | "except"
-  | "FROM"
-  | "from"
-  | "GROUP"
-  | "group"
-  | "HAVING"
-  | "having"
-  | "IN"
-  | "in"
-  | "INNER"
-  | "inner"
-  | "INTO"
-  | "into"
-  | "INSERT"
-  | "insert"
-  | "INTERSECT"
-  | "intersect"
-  | "JOIN"
-  | "join"
-  | "LEFT"
-  | "left"
-  | "LIMIT"
-  | "limit"
-  | "MERGE"
-  | "merge"
-  | "MINUS"
-  | "minus"
-  | "NOT"
-  | "not"
-  | "OFFSET"
-  | "offset"
-  | "ORDER"
-  | "order"
-  | "OUTER"
-  | "outer"
-  | "RIGHT"
-  | "right"
-  | "SELECT"
-  | "select"
-  | "UNION"
-  | "union"
-  | "UPDATE"
-  | "update"
-  | "VALUES"
-  | "values"
-  | "WHERE"
-  | "where"
-  | "WITH"
-  | "with"
+type ExtractWith<Query, N = 0, S = ""> =
+  NextToken<Query> extends ["(", "(", infer Rest]
+    ? ExtractWith<Rest, Inc<N>, `${S & string} (`>
+    : NextToken<Query> extends [")", ")", infer Rest]
+      ? ExtractWith<Rest, Dec<N>, `${S & string} )`>
+      : NextToken<Query> extends ["SELECT", infer _, infer Rest]
+        ? N extends 0
+          ? [`${S & string}`, `SELECT ${Rest & string}`]
+          : ExtractWith<Rest, N, `${S & string}${_ & string}`>
+        : NextToken<Query> extends ["UPDATE", infer _, infer Rest]
+          ? N extends 0
+            ? [`${S & string}`, `UPDATE ${Rest & string}`]
+            : ExtractWith<Rest, N, `${S & string}${_ & string}`>
+          : NextToken<Query> extends ["INSERT", infer _, infer Rest]
+            ? N extends 0
+              ? [`${S & string}`, `INSERT ${Rest & string}`]
+              : ExtractWith<Rest, N, `${S & string}${_ & string}`>
+            : NextToken<Query> extends ["DELETE", infer _, infer Rest]
+              ? N extends 0
+                ? [`${S & string}`, `DELETE ${Rest & string}`]
+                : ExtractWith<Rest, N, `${S & string} ${_ & string}`>
+              : NextToken<Query> extends [infer _, infer Token, infer Rest]
+                ? ExtractWith<Rest, N, `${S & string} ${Token & string}`>
+                : never
 
 /**
- * Trim the leading whitespace characters
+ * Trim the leading/trailing whitespace characters
  */
 type Trim<T> = T extends ` ${infer Rest}`
   ? Trim<Rest>
   : T extends `\n${infer Rest}`
     ? Trim<Rest>
-    : T
+    : T extends `${infer Rest} `
+      ? Trim<Rest>
+      : T extends `${infer Rest}\n`
+        ? Trim<Rest>
+        : T
 
 /**
- * Split the current remainder into the next two tokens
+ * Get the next token from the string in both it's uppercase and original form
+ * as well as the remainder
  */
-type Split<T> =
-  Trim<T> extends `${infer Left} ${infer Right}`
-    ? [Left, Right]
-    : Trim<T> extends `${infer Left}\n${infer Right}`
-      ? [Left, Right]
-      : Trim<T> extends `${infer Left},${infer Right}`
-        ? [Left, Right]
-        : Trim<T> extends `${infer Left})`
-          ? [Left, ")"]
-          : Trim<T> extends `(${infer Right}`
-            ? ["(", Right]
-            : [Trim<T>, ""]
+type NextToken<T> =
+  Trim<T> extends `${infer Token} ${infer Remainder}`
+    ? [Uppercase<Token & string>, Token, Remainder]
+    : Trim<T> extends `${infer Token}\n${infer Remainder}`
+      ? [Uppercase<Token & string>, Token, Remainder]
+      : Trim<T> extends `${infer Token},${infer Remainder}`
+        ? [Uppercase<Token & string>, Token, Remainder]
+        : Trim<T> extends `${infer Token})`
+          ? [Uppercase<Token & string>, Token, ")"]
+          : Trim<T> extends `(${infer Remainder}`
+            ? ["(", "(", Remainder]
+            : Trim<T> extends `)${infer Remainder}`
+              ? [")", ")", Remainder]
+              : [Uppercase<Trim<T> & string>, Trim<T>, ""]
