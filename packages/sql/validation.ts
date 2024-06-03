@@ -19,6 +19,9 @@ import type { Dec, Inc } from "./utils.js"
 
 // type t2 = ParseSQLQuery<`DELETE FROM foo WHERE id=:param`>
 
+/**
+ * Parse a SQLQuery type from the given query string
+ */
 export type ParseSQLQuery<Query> =
   NextToken<Query> extends ["WITH", infer _, infer Rest]
     ? ExtractWith<Rest> extends [infer W, infer S]
@@ -26,20 +29,31 @@ export type ParseSQLQuery<Query> =
       : never
     : SQLQuery<never, ExtractQueryClause<Trim<Query>>>
 
+/**
+ * Simple type that chains a few things together
+ */
 type ParseWith<T> = ParseWithClauses<JoinWith<SplitWith<T>>>
 
+/**
+ * Parse the set of with clauses since there may be multple
+ */
 type ParseWithClauses<T> = T extends [infer First, ...infer Rest]
-  ? [ExtractNamedQuery<First>, ...ParseWithClauses<Rest>]
+  ? [ParseNamedQuery<First>, ...ParseWithClauses<Rest>]
   : T extends [infer Last]
-    ? [ExtractNamedQuery<Last>]
+    ? [ParseNamedQuery<Last>]
     : []
 
-type ExtractNamedQuery<T> = T extends `${infer Table} AS (${infer Q})`
+/**
+ * Parse out a named query into the AST
+ */
+type ParseNamedQuery<T> = T extends `${infer Table} AS (${infer Q})`
   ? Table extends `, ${infer Name}`
     ? NamedQuery<ExtractQueryClause<Trim<Q>>, Name>
     : NamedQuery<ExtractQueryClause<Trim<Q>>, Table>
   : never
 
+// Figure out the type of query we are parsing
+// TODO : Need to check for combined (UNION, INTERSECT, etc)
 type ExtractQueryClause<T> = T extends `SELECT ${infer _}`
   ? SelectClause<any>
   : T extends `INSERT ${infer _}`
@@ -50,6 +64,9 @@ type ExtractQueryClause<T> = T extends `SELECT ${infer _}`
         ? DeleteClause<any>
         : never
 
+/**
+ * To get the nested sets correctly, we have to split by [(),] characters
+ */
 type SplitWith<T> = T extends `${infer Left},${infer Right}`
   ? [...SplitWith<Left>, ",", ...SplitWith<Right>]
   : T extends `${infer Left}(${infer Right}`
@@ -60,6 +77,12 @@ type SplitWith<T> = T extends `${infer Left},${infer Right}`
         ? []
         : [Trim<T>]
 
+/**
+ * After splitting, we join everything back together based on depth of
+ * parenthesis so we can get each of the {Alias} AS {QUERY} segments
+ *
+ * TODO: Remove the danging comma here seems easier maybe?
+ */
 type JoinWith<T, N = 0, S = ""> = T extends ["(", ...infer Rest]
   ? [...JoinWith<Rest, Inc<N>, `${S & string} (`>]
   : T extends [")", ...infer Rest]
