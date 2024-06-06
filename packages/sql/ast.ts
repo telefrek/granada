@@ -12,10 +12,10 @@ export type ValueTypes =
   | NumberValueType
   | BigIntValueType
   | BufferValueType
-  | NullValueType
   | StringValueType
   | JsonValueType
   | ArrayValueType
+  | NullValueType
   | ParameterValueType
   | ColumnReference<any>
 
@@ -101,8 +101,28 @@ export type FilteringOperation =
   | "<="
   | ">="
   | "!="
+  | "<>"
   | "LIKE"
   | "ILIKE"
+
+/**
+ * Operation to modify a value
+ */
+export type ArithmeticOperation =
+  | "+"
+  | "-"
+  | "*"
+  | "/"
+  | "%"
+  | "&"
+  | "|"
+  | "^"
+  | "+="
+  | "-="
+  | "*="
+  | "/="
+  | "%="
+  | "&="
 
 /**
  * Structure of a subquery
@@ -110,18 +130,6 @@ export type FilteringOperation =
 export type SubQuery<Query extends SQLQuery<any> = SQLQuery<any>> = {
   type: "SubQuery"
   query: Query
-}
-
-/**
- * The IN filter definition
- */
-export type SubqueryFilter<
-  Left extends ColumnReference<any> = ColumnReference<any>,
-  Right extends SubQuery<any> = SubQuery<any>,
-> = {
-  type: "SubqueryFilter"
-  left: Left
-  right: Right
 }
 
 /**
@@ -138,10 +146,26 @@ export type ColumnFilter<
   right: Right
 }
 
+export type SubQueryFilterOperation = "IN" | "ANY" | "ALL" | "EXISTS" | "SOME"
+
+/**
+ * The IN filter definition
+ */
+export type SubqueryFilter<
+  Column extends ColumnReference<any> = ColumnReference<any>,
+  Subquery extends SubQuery<any> = SubQuery<any>,
+  Op extends SubQueryFilterOperation = SubQueryFilterOperation,
+> = {
+  type: "SubqueryFilter"
+  column: Column
+  query: Subquery
+  op: Op
+}
+
 /**
  * Types for building logical trees
  */
-export type LogicalOperation = "AND" | "OR" | "NOT" | "!" | "&&" | "||"
+export type LogicalOperation = "AND" | "OR" | "NOT"
 
 /**
  * A logical tree structure for processing groups of filters
@@ -193,7 +217,7 @@ export type ColumnReference<
   Reference extends
     | UnboundColumnReference
     | TableColumnReference = UnboundColumnReference,
-  Alias extends string = string,
+  Alias extends string = Reference["column"],
 > = {
   type: "ColumnReference"
   reference: Reference
@@ -259,24 +283,51 @@ export type SelectedColumn = ColumnAggregate<any> | ColumnReference<any>
  * Structure for a select clause
  */
 export type SelectClause<
-  Columns extends SelectedColumn[] = SelectedColumn[],
+  Columns extends SelectedColumn[] | "*" = "*",
   From extends TableReference<any> | NamedQuery<any> = TableReference<any>,
-  Joins extends JoinClause<any>[] = JoinClause<any>[],
-  Where extends LogicalExpression = LogicalExpression,
-  Having extends LogicalExpression = LogicalExpression,
-  GroupBy extends ColumnReference<any>[] = ColumnReference<any>[],
-  Offset extends number = number,
-  Limit extends number = number,
 > = {
   type: "SelectClause"
   columns: Columns
   from: From
-  joins: Joins
-  where: Where
-  having: Having
-  groupBy: GroupBy
+}
+
+export type LimitClause<
+  Offset extends number = number,
+  Limit extends number = number,
+> = {
   offset: Offset
   limit: Limit
+}
+
+/**
+ * Required structure for where clause
+ */
+export type WhereClause<Where extends LogicalExpression = LogicalExpression> = {
+  where: Where
+}
+
+export type GroupByClause<
+  GroupBy extends ColumnReference<any>[] = ColumnReference<any>[],
+> = {
+  groupBy: GroupBy
+}
+
+// TODO: Add asc/desc
+export type OrderingClause<
+  OrderBy extends ColumnReference<any>[] = ColumnReference<any>[],
+> = {
+  orderBy: OrderBy
+}
+
+export type HavingClause<Having extends LogicalExpression = LogicalExpression> =
+  {
+    having: Having
+  }
+
+export type SelectJoinClause<
+  Joins extends JoinClause<any>[] = JoinClause<any>[],
+> = {
+  joins: Joins
 }
 
 /**
@@ -341,12 +392,7 @@ export type InsertClause<
  * A named query
  */
 export type NamedQuery<
-  Query extends
-    | SelectClause<any>
-    | UpdateClause<any>
-    | DeleteClause<any>
-    | InsertClause<any>
-    | CombinedQueryClause<any> = SelectClause<any>,
+  Query extends SQLQuery<any> = SQLQuery<any>,
   Alias extends string = string,
 > = {
   type: "NamedQuery"
@@ -383,11 +429,14 @@ export type CombinedQueryClause<
   additions: Additions
 }
 
+export type WithClause<With extends NamedQuery<any>[] = NamedQuery<any>[]> = {
+  with: With
+}
+
 /**
  * Structure for a generic SQL Query
  */
 export type SQLQuery<
-  With extends NamedQuery<any>[] = NamedQuery<any>[],
   Query extends
     | SelectClause<any>
     | UpdateClause<any>
@@ -396,6 +445,5 @@ export type SQLQuery<
     | CombinedQueryClause<any> = SelectClause<any>,
 > = {
   type: "SQLQuery"
-  with?: With
   query: Query
 }
