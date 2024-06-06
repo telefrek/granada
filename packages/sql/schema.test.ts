@@ -2,30 +2,41 @@
  * Set of tests that are used for verifying schema results
  */
 
-import { SQLColumn, type ColumnTypeDefinition } from "./schema.js"
+import { createSchemaBuilder } from "./schema.js"
 import { SQLBuiltinTypes } from "./types.js"
+import type { ValidateQueryString } from "./validation.js"
 
 describe("SQL Schema types should work as expected", () => {
   it("Should allow for simple column definitions", () => {
-    const c1: ColumnTypeDefinition<SQLBuiltinTypes.BIGINT> = {
-      type: SQLBuiltinTypes.BIGINT,
-      nullable: false,
-      autoIncrement: true,
+    const b = createSchemaBuilder()
+      .createTable("bar")
+      .addColumn("id", SQLBuiltinTypes.INT)
+      .addColumn("name", SQLBuiltinTypes.TEXT)
+      .addTable("id")
+      .build()
+
+    expect(b).not.toBeUndefined()
+
+    type vt = ValidateQueryString<
+      typeof b,
+      `with foo AS (SELECT id, name aS bname FROM bar WHERE id < 4),
+    baz AS (SELECT * FROM foo)
+    SELECT * FROM baz`
+    >
+    const v: vt = {
+      tables: {
+        bar: {
+          columns: {
+            id: { type: SQLBuiltinTypes.INT },
+            name: { type: SQLBuiltinTypes.TEXT },
+          },
+          key: { column: "id" },
+        },
+        foo: {},
+        baz: {},
+      },
     }
 
-    const c2 = SQLColumn(SQLBuiltinTypes.BIGINT, {
-      autoIncrement: true,
-    })
-
-    // The two column definitions should be identical
-    expect(c1).toStrictEqual(c2)
-
-    const c3: ColumnTypeDefinition<SQLBuiltinTypes.CLOB> = {
-      type: SQLBuiltinTypes.CLOB,
-      nullable: true,
-    }
-
-    const c4 = SQLColumn(SQLBuiltinTypes.CLOB, { nullable: true })
-    expect(c3).toStrictEqual(c4)
+    expect(v).not.toBeUndefined()
   })
 })

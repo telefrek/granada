@@ -342,20 +342,22 @@ export type ColumnAssignment<
   value: Value
 }
 
+export type ReturningClause<
+  Returning extends TableColumnReference<any>[] = TableColumnReference<any>[],
+> = {
+  returning: Returning
+}
+
 /**
  * Structure for an update clause
  */
 export type UpdateClause<
   Table extends TableReference<any> = TableReference<any>,
   Columns extends ColumnAssignment<any>[] = ColumnAssignment<any>[],
-  Where extends LogicalExpression = LogicalExpression,
-  Returning extends TableColumnReference<any>[] = TableColumnReference<any>[],
 > = {
   type: "UpdateClause"
   columns: Columns
   table: Table
-  where: Where
-  returning: Returning
 }
 
 /**
@@ -363,13 +365,9 @@ export type UpdateClause<
  */
 export type DeleteClause<
   Table extends TableReference<any> = TableReference<any>,
-  Where extends LogicalExpression = LogicalExpression,
-  Returning extends TableColumnReference<any>[] = TableColumnReference<any>[],
 > = {
   type: "DeleteClause"
   table: Table
-  where: Where
-  returning: Returning
 }
 
 /**
@@ -379,13 +377,11 @@ export type InsertClause<
   Table extends TableReference<any> = TableReference<any>,
   Columns extends ColumnReference<any>[] = ColumnReference<any>[],
   Values extends ValueTypes[] | SelectClause<any> = ValueTypes[],
-  Returning extends TableColumnReference<any>[] = TableColumnReference<any>[],
 > = {
   type: "InsertClause"
   table: Table
   columns: Columns
   values: Values
-  returning: Returning
 }
 
 /**
@@ -433,17 +429,17 @@ export type WithClause<With extends NamedQuery<any>[] = NamedQuery<any>[]> = {
   with: With
 }
 
+export type QueryClause =
+  | SelectClause<any>
+  | UpdateClause<any>
+  | DeleteClause<any>
+  | InsertClause<any>
+  | CombinedQueryClause<any>
+
 /**
  * Structure for a generic SQL Query
  */
-export type SQLQuery<
-  Query extends
-    | SelectClause<any>
-    | UpdateClause<any>
-    | DeleteClause<any>
-    | InsertClause<any>
-    | CombinedQueryClause<any> = SelectClause<any>,
-> = {
+export type SQLQuery<Query extends QueryClause = SelectClause<any>> = {
   type: "SQLQuery"
   query: Query
 }

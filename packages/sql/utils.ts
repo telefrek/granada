@@ -3,11 +3,43 @@
  */
 
 /**
- * I'm not trying to support ANY number, if you're going more than 64 deep for
+ * Get the next value or undefined if >= 63
+ */
+export type Inc<T> = T extends keyof Increment ? Increment[T] : never
+
+/**
+ * Get the previous value or undefined if <= 63
+ */
+export type Dec<T> = T extends keyof Decrement ? Decrement[T] : never
+
+export type StrLen<
+  T extends string,
+  N = 0,
+> = T extends `${infer _}${infer Rest}` ? StrLen<Rest, Inc<N>> : N
+
+/**
+ * Perform a comparison between two values
+ */
+export type Compare<L, R> = L extends -1
+  ? never
+  : R extends -1
+    ? never
+    : L extends R
+      ? 0
+      : L extends 0
+        ? -1
+        : R extends 0
+          ? 1
+          : Compare<Dec<L>, Dec<R>>
+
+type _<T> = T
+export type Flatten<T> = _<{ [K in keyof T]: T[K] }>
+
+/**
+ * I'm not trying to support ANY number, if you're going more than 128 deep for
  * some reason, you should probably be stopped lol
  */
 type Increment = [
-  0,
   1,
   2,
   3,
@@ -71,6 +103,71 @@ type Increment = [
   61,
   62,
   63,
+  64,
+  65,
+  66,
+  67,
+  68,
+  69,
+  70,
+  71,
+  72,
+  73,
+  74,
+  75,
+  76,
+  77,
+  78,
+  79,
+  80,
+  81,
+  82,
+  83,
+  84,
+  85,
+  86,
+  87,
+  88,
+  89,
+  90,
+  91,
+  92,
+  93,
+  94,
+  95,
+  96,
+  97,
+  98,
+  99,
+  100,
+  101,
+  102,
+  103,
+  104,
+  105,
+  106,
+  107,
+  108,
+  109,
+  110,
+  111,
+  112,
+  113,
+  114,
+  115,
+  116,
+  117,
+  118,
+  119,
+  120,
+  121,
+  122,
+  123,
+  124,
+  125,
+  126,
+  127,
+  128,
 ]
 
 type Decrement = [
@@ -139,32 +236,68 @@ type Decrement = [
   61,
   62,
   63,
+  64,
+  65,
+  66,
+  67,
+  68,
+  69,
+  70,
+  71,
+  72,
+  73,
+  74,
+  75,
+  76,
+  77,
+  78,
+  79,
+  80,
+  81,
+  82,
+  83,
+  84,
+  85,
+  86,
+  87,
+  88,
+  89,
+  90,
+  91,
+  92,
+  93,
+  94,
+  95,
+  96,
+  97,
+  98,
+  99,
+  100,
+  101,
+  102,
+  103,
+  104,
+  105,
+  106,
+  107,
+  108,
+  109,
+  110,
+  111,
+  112,
+  113,
+  114,
+  115,
+  116,
+  117,
+  118,
+  119,
+  120,
+  121,
+  122,
+  123,
+  124,
+  125,
+  126,
+  127,
 ]
-
-type Next = Increment extends [number, ...infer N] ? N : never
-type Prev = Decrement extends [...infer N] ? N : never
-
-/**
- * Get the next value or undefined if >= 63
- */
-export type Inc<T> = T extends keyof Next ? Next[T] : never
-
-/**
- * Get the previous value or undefined if <= 63
- */
-export type Dec<T> = T extends keyof Prev ? Prev[T] : never
-
-/**
- * Perform a comparison between two values
- */
-export type Compare<L, R, LN = Dec<L>, RN = Dec<R>> = LN extends undefined
-  ? never
-  : RN extends undefined
-    ? never
-    : LN extends RN
-      ? 0
-      : LN extends -1
-        ? -1
-        : RN extends -1
-          ? 1
-          : Compare<Dec<L>, Dec<R>>
