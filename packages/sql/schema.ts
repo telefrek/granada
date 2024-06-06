@@ -19,14 +19,25 @@ export type SQLColumnSchema = {
   [key: string]: ColumnTypeDefinition<any>
 }
 
-export type SQLTableSchema<
+/**
+ * Basic table definition with columns
+ */
+export type SQLTableSchema<Schema extends SQLColumnSchema = SQLColumnSchema> = {
+  columns: Schema
+}
+
+// TODO: Need to add table options
+
+/**
+ * A table key
+ */
+export type TableKey<
   Schema extends SQLColumnSchema = SQLColumnSchema,
   PK extends
     | PrimaryKey<keyof Schema>
     | CompositePrimaryKey<(keyof Schema)[]> = PrimaryKey<keyof Schema>,
 > = {
-  columns: Schema
-  key: PK
+  primaryKey: PK
 }
 
 export type SQLDatabaseTables = {

@@ -2,6 +2,8 @@
  * Utilities that are helpful when working with SQL
  */
 
+export type Invalid<S> = S | void | never
+
 /**
  * Get the next value or undefined if >= 63
  */

@@ -23,6 +23,7 @@ describe("SQL Schema types should work as expected", () => {
     baz AS (SELECT * FROM foo)
     SELECT * FROM baz`
     >
+
     const v: vt = {
       tables: {
         bar: {
@@ -32,9 +33,14 @@ describe("SQL Schema types should work as expected", () => {
           },
           key: { column: "id" },
         },
-        foo: {},
-        baz: {},
+        foo: {
+          columns: {},
+        },
+        baz: {
+          columns: {},
+        },
       },
+      relations: [],
     }
 
     expect(v).not.toBeUndefined()

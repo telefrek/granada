@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/ban-types */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Validation should parse a query against a schema and validate the objects
@@ -17,43 +18,46 @@ import type {
   WithClause,
 } from "./ast.js"
 import type { ParseSQLQuery } from "./parser.js"
-import { type SQLDatabaseSchema } from "./schema.js"
-import type { Flatten } from "./utils.js"
+import { type SQLDatabaseSchema, type SQLTableSchema } from "./schema.js"
+import type { Flatten, Invalid } from "./utils.js"
 
 export type ValidateQueryString<
-  Schema extends SQLDatabaseSchema<any>,
+  Schema extends SQLDatabaseSchema<any, any>,
   Query extends string,
 > = ValidateQuery<Schema, ParseSQLQuery<Query>>
 
 export type ValidateQuery<
-  Schema extends SQLDatabaseSchema<any>,
+  Schema extends SQLDatabaseSchema<any, any>,
   Query extends SQLQuery<any>,
 > = AddProjections<ExtractProjections<SplitTables<Query>>, Schema>
 
-type AddProjections<T, S extends SQLDatabaseSchema<any>> = T extends [
+type AddProjection<
+  P extends ProjectedQuery<any>,
+  S extends SQLDatabaseSchema<any, any>,
+> =
+  S extends SQLDatabaseSchema<infer TableSchema, infer Relations>
+    ? P extends ProjectedQuery<infer Table, infer _Columns, infer Reference>
+      ? Reference["table"] extends keyof TableSchema
+        ? SQLDatabaseSchema<
+            Flatten<TableSchema & { [key in Table]: SQLTableSchema<{}> }>,
+            Relations
+          >
+        : Invalid<`${Reference["table"]} does not exist in schema`>
+      : never
+    : never
+
+type AddProjections<T, S extends SQLDatabaseSchema<any, any>> = T extends [
   infer Projection,
   ...infer Rest,
 ]
   ? Rest extends never[]
-    ? Projection extends ProjectedQuery<
-        infer Table,
-        infer _Columns,
-        infer _Reference
-      >
-      ? { tables: Flatten<S["tables"] & { [key in Table]: object }> }
-      : "1"
-    : Projection extends ProjectedQuery<
-          infer Table,
-          infer _Columns,
-          infer _Reference
-        >
-      ? AddProjections<
-          Rest,
-          {
-            tables: Flatten<S["tables"] & { [key in Table]: object }>
-            relations: S["relations"]
-          }
-        >
+    ? Projection extends ProjectedQuery<any, any>
+      ? AddProjection<Projection, S>
+      : Projection
+    : Projection extends ProjectedQuery<any>
+      ? AddProjection<Projection, S> extends SQLDatabaseSchema<any, any>
+        ? AddProjections<Rest, AddProjection<Projection, S>>
+        : AddProjection<Projection, S>
       : Projection
   : "3"
 
