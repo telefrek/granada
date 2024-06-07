@@ -24,12 +24,16 @@ import type { Flatten, Invalid } from "./utils.js"
 export type ValidateQueryString<
   Schema extends SQLDatabaseSchema<any, any>,
   Query extends string,
-> = ValidateQuery<Schema, ParseSQLQuery<Query>>
+> = VerifyProjections<
+  ExtractProjections<SplitTables<ParseSQLQuery<Query>>>,
+  Schema,
+  Query
+>
 
 export type ValidateQuery<
   Schema extends SQLDatabaseSchema<any, any>,
   Query extends SQLQuery<any>,
-> = AddProjections<ExtractProjections<SplitTables<Query>>, Schema>
+> = VerifyProjections<ExtractProjections<SplitTables<Query>>, Schema, Query>
 
 type AddProjection<
   P extends ProjectedQuery<any>,
@@ -46,20 +50,23 @@ type AddProjection<
       : never
     : never
 
-type AddProjections<T, S extends SQLDatabaseSchema<any, any>> = T extends [
-  infer Projection,
-  ...infer Rest,
-]
+type VerifyProjections<
+  T,
+  S extends SQLDatabaseSchema<any, any>,
+  R = S,
+> = T extends [infer Projection, ...infer Rest]
   ? Rest extends never[]
     ? Projection extends ProjectedQuery<any, any>
-      ? AddProjection<Projection, S>
-      : Projection
+      ? AddProjection<Projection, S> extends SQLDatabaseSchema<any, any>
+        ? R
+        : AddProjection<Projection, S>
+      : Invalid<"Invalid projection, corrupted query syntax">
     : Projection extends ProjectedQuery<any>
       ? AddProjection<Projection, S> extends SQLDatabaseSchema<any, any>
-        ? AddProjections<Rest, AddProjection<Projection, S>>
+        ? VerifyProjections<Rest, AddProjection<Projection, S>, R>
         : AddProjection<Projection, S>
-      : Projection
-  : "3"
+      : Invalid<"Invalid projection, corrupted query syntax">
+  : Invalid<"Error during verification">
 
 type ColumnInfo<
   Column extends string = string,
