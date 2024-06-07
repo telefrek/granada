@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/ban-types */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Validation should parse a query against a schema and validate the objects
@@ -40,6 +39,11 @@ export type ValidateQuery<
   _IsValidQuery<Schema, Query> extends true
     ? Query
     : _IsValidQuery<Schema, Query>
+
+export type VerifySchema<
+  Schema extends SQLDatabaseSchema<any, any>,
+  Query extends SQLQuery<any>,
+> = AddProjections<ExtractProjections<SplitTables<Query>>, Schema>
 
 /**
  * We need to do a couple things to make this work.
@@ -99,7 +103,13 @@ type AddProjection<
           >
           ? CheckTable<Reference["table"], Columns, ColumnSchema> extends true
             ? SQLDatabaseSchema<
-                Flatten<TableSchema & { [key in Table]: SQLTableSchema<{}> }>,
+                Flatten<
+                  TableSchema & {
+                    [key in Table]: SQLTableSchema<
+                      ExtractProjectionSchema<Columns, ColumnSchema>
+                    >
+                  }
+                >,
                 Relations
               >
             : CheckTable<Reference["table"], Columns, ColumnSchema>
@@ -115,6 +125,26 @@ type ColumnInfo<
   column: Column
   alias: Alias
 }
+
+type ExtractProjectionSchema<
+  Columns,
+  Schema extends SQLColumnSchema,
+> = Columns extends "*"
+  ? Schema
+  : Columns extends [infer Column, ...infer Rest]
+    ? Rest extends never[]
+      ? Column extends ColumnInfo<infer Name, infer Alias>
+        ? { [key in Alias]: Schema[Name] }
+        : never
+      : Column extends ColumnInfo<infer Name, infer Alias>
+        ? Flatten<
+            { [key in Alias]: Schema[Name] } & ExtractProjectionSchema<
+              Rest,
+              Schema
+            >
+          >
+        : never
+    : never
 
 type CheckTable<
   Table extends string,

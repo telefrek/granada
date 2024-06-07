@@ -25,6 +25,13 @@ describe("SQL mechanics should be supported", () => {
     fo AS (SELECT * FROM foo)
     SELECT * FROM baz`)
 
+    // type t = VerifySchema<
+    //   typeof b,
+    //   ParseSQLQuery<`with foo AS (SELECT id, name aS bname FROM bar WHERE id < 4),
+    // fo AS (SELECT * FROM foo)
+    // SELECT * FROM baz`>
+    // >
+
     // Verify the queyr was created
     expect(query).not.toBeUndefined()
   })
