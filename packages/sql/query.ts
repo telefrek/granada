@@ -3,15 +3,16 @@
  * Queries that are bound to SQL syntax and can be applied to a source
  */
 
+import type { NormalizeQuery } from "./parser.js"
 import type { SQLDatabaseSchema } from "./schema.js"
 import type { ValidateQueryString } from "./validation.js"
 
 export function createBuilder<S extends SQLDatabaseSchema<any, any>>() {
   return <T extends string, P extends unknown[] = []>(
     q: ValidateQueryString<S, T>,
-  ): Query<T, object, P> => {
+  ): Query<NormalizeQuery<T>, object, P> => {
     return {
-      queryString: q as T,
+      queryString: q as any,
       execute(..._args: P) {
         throw new Error("not implemented")
       },

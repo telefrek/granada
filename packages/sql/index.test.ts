@@ -22,7 +22,7 @@ describe("SQL mechanics should be supported", () => {
     const query = createBuilder<
       typeof b
     >()(`with foo AS (SELECT id, name aS bname FROM bar WHERE id < 4),
-    baz AS (SELECT * FROM foo)
+    fo AS (SELECT * FROM foo)
     SELECT * FROM baz`)
 
     // Verify the queyr was created

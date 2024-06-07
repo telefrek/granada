@@ -69,7 +69,7 @@ type Split<
     ? [Trim<`${S} ${T & string}`>]
     : never
 
-type NormalizeQuery<T> = SplitJoin<
+export type NormalizeQuery<T> = SplitJoin<
   SplitJoin<SplitJoin<SplitJoin<T, "\n">, ",">, "(">,
   ")"
 >
