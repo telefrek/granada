@@ -94,6 +94,7 @@ export function SQLColumn<T extends SQLBuiltinTypes>(
     ...options,
     type,
     nullable: options?.nullable ?? false,
+    array: options?.array ?? false,
   } as ColumnTypeDefinition<T>
 }
 

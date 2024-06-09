@@ -30,11 +30,11 @@
     "lint": "npx eslint . --fix --ignore-pattern \"dist\""
   },
   "dependencies": {
-    "@opentelemetry/api": "^1.8.0",
-    "@opentelemetry/semantic-conventions": "^1.24.1",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/semantic-conventions": "^1.25.0",
     "@telefrek/core": "^1.0.0-alpha.61",
     "@telefrek/query": "^1.0.0-alpha.61",
-    "pg": "^8.11.5"
+    "pg": "^8.12.0"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^10.9.0",

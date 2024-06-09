@@ -18,12 +18,18 @@ import type {
 } from "./ast.js"
 import type { ParseSQLQuery } from "./parser.js"
 import {
+  type ColumnTypeDefinition,
   type SQLColumnSchema,
   type SQLDatabaseSchema,
+  type SQLDatabaseTables,
+  type SQLTableEntity,
   type SQLTableSchema,
 } from "./schema.js"
 import type { Flatten, Invalid } from "./utils.js"
 
+/**
+ * Validate the query string against the schema
+ */
 export type ValidateQueryString<
   Schema extends SQLDatabaseSchema<any, any>,
   Query extends string,
@@ -32,6 +38,9 @@ export type ValidateQueryString<
     ? Query
     : _IsValidQuery<Schema, ParseSQLQuery<Query>>
 
+/**
+ * Validate the parsed query against the schema
+ */
 export type ValidateQuery<
   Schema extends SQLDatabaseSchema<any, any>,
   Query extends SQLQuery<any>,
@@ -40,10 +49,99 @@ export type ValidateQuery<
     ? Query
     : _IsValidQuery<Schema, Query>
 
-export type VerifySchema<
+/**
+ * Verify the query against the schema and ensure no structural issues,
+ * returning the validated schema to use
+ */
+export type ValidateSchema<
   Schema extends SQLDatabaseSchema<any, any>,
   Query extends SQLQuery<any>,
-> = AddProjections<ExtractProjections<SplitTables<Query>>, Schema>
+> =
+  AddProjections<
+    ExtractProjections<SplitTables<Query>>,
+    Schema
+  > extends SQLDatabaseSchema<infer TableSchema, infer References>
+    ? SQLDatabaseSchema<TableSchema, References>
+    : AddProjections<ExtractProjections<SplitTables<Query>>, Schema>
+
+/**
+ * Verify the query itself and determine the resulting type/parameters
+ */
+export type VerifyQuery<
+  Schema extends SQLDatabaseSchema<any, any>,
+  Query extends SQLQuery<any>,
+> =
+  ExtractReturnType<Schema, Query> extends { [key: string]: any } // TODO: handle parameters too
+    ? QueryValidationResult<ExtractReturnType<Schema, Query>, object>
+    : ExtractReturnType<Schema, Query>
+
+/**
+ * Get the return type information for the query and parameters required to run it
+ */
+export type QueryValidationResult<
+  ReturnType extends object | number = number,
+  Parameters extends object = object,
+> = {
+  returns: ReturnType
+  parameters: Parameters
+}
+
+type ExtractReturnType<
+  Schema extends SQLDatabaseSchema<any, any>,
+  Query extends SQLQuery<any>,
+> =
+  Query extends SQLQuery<infer Q>
+    ? Q extends QueryClause
+      ? Q extends SelectClause<any, any>
+        ? ExtractSelectReturnType<Schema, Q>
+        : Invalid<`Unsupported query type`>
+      : Invalid<`Cannot extract return from non QueryClause`>
+    : Invalid<`Query is not a SQLQuery`>
+
+type ExtractSelectReturnType<
+  Schema extends SQLDatabaseSchema<any, any>,
+  Select extends SelectClause<any>,
+> =
+  Select extends SelectClause<infer Columns, infer From>
+    ? Schema extends SQLDatabaseSchema<infer TableSchema, infer _>
+      ? From["alias"] extends keyof TableSchema // TODO: joins much? lol
+        ? ExtractReturnColumns<Columns, From["alias"], TableSchema> extends {
+            [key: string]: ColumnTypeDefinition<any>
+          }
+          ? SQLTableEntity<{
+              columns: ExtractReturnColumns<Columns, From["alias"], TableSchema>
+            }>
+          : ExtractReturnColumns<Columns, From["alias"], TableSchema>
+        : Invalid<`${From["alias"]} is not a valid table in the schema`>
+      : Invalid<`Corrupted database schema`>
+    : Invalid<`Corrupted select clause`>
+
+type ExtractReturnColumns<
+  Columns,
+  Table extends string,
+  Schema extends SQLDatabaseTables,
+> = Columns extends [infer Column, ...infer Rest]
+  ? Rest extends never[]
+    ? Column extends ColumnReference<infer Reference, infer Alias>
+      ? Reference["column"] extends keyof Schema[Table]["columns"]
+        ? { [key in Alias]: Schema[Table]["columns"][Reference["column"]] } // TODO: Handle table references, this assumes un-named
+        : Invalid<`${Reference["column"]} is not a valid column in ${Table}`>
+      : Invalid<`Column is not a valid reference`>
+    : Column extends ColumnReference<infer Reference, infer Alias>
+      ? Reference["column"] extends keyof Schema[Table]["columns"]
+        ? Flatten<
+            {
+              [key in Alias]: Schema[Table]["columns"][Reference["column"]]
+            } & ExtractReturnColumns<Rest, Table, Schema>
+          > // TODO: Handle table references, this assumes un-named
+        : Invalid<`${Reference["column"]} is not a valid column in ${Table}`>
+      : Invalid<`Column is not a valid reference`>
+  : Invalid<`Invalid column types in return type building`>
+
+// type ExtractParameters<
+//   _Schema extends SQLDatabaseSchema<any, any>,
+//   _Query extends SQLQuery<any>,
+// > = object
 
 /**
  * We need to do a couple things to make this work.
@@ -74,74 +172,102 @@ type _IsValidQuery<
     ? true
     : AddProjections<ExtractProjections<SplitTables<Query>>, Schema>
 
-type AddProjections<T, S extends SQLDatabaseSchema<any, any>> = T extends [
-  infer Projection,
-  ...infer Rest,
-]
+/**
+ * Add all the projections that we find in the query
+ */
+type AddProjections<
+  Projections,
+  Schema extends SQLDatabaseSchema<any, any>,
+> = Projections extends [infer Projection, ...infer Rest]
   ? Rest extends never[]
     ? Projection extends ProjectedQuery<any, any>
-      ? AddProjection<Projection, S>
+      ? AddProjection<Projection, Schema>
       : Invalid<"Invalid projection, corrupted query syntax">
     : Projection extends ProjectedQuery<any>
-      ? AddProjection<Projection, S> extends SQLDatabaseSchema<any, any>
-        ? AddProjections<Rest, AddProjection<Projection, S>>
-        : AddProjection<Projection, S>
+      ? AddProjection<Projection, Schema> extends SQLDatabaseSchema<any, any>
+        ? AddProjections<Rest, AddProjection<Projection, Schema>>
+        : AddProjection<Projection, Schema>
       : Invalid<"Invalid projection, corrupted query syntax">
-  : T extends never[]
-    ? S
+  : Projections extends never[]
+    ? Schema
     : Invalid<"Corrupted table scan">
 
+/**
+ * Add the projection to the schema
+ */
 type AddProjection<
-  P extends ProjectedQuery<any>,
-  S extends SQLDatabaseSchema<any, any>,
+  Projection extends ProjectedQuery<any>,
+  Schema extends SQLDatabaseSchema<any, any>,
 > =
-  S extends SQLDatabaseSchema<infer TableSchema, infer Relations>
-    ? P extends ProjectedQuery<infer Table, infer Columns, infer Reference>
+  Schema extends SQLDatabaseSchema<infer TableSchema, infer Relations>
+    ? Projection extends ProjectedQuery<
+        infer Table,
+        infer Columns,
+        infer Reference
+      >
       ? Reference["table"] extends keyof TableSchema
         ? TableSchema[Reference["table"]] extends SQLTableSchema<
             infer ColumnSchema
           >
           ? CheckTable<Reference["table"], Columns, ColumnSchema> extends true
-            ? SQLDatabaseSchema<
-                Flatten<
-                  TableSchema & {
-                    [key in Table]: SQLTableSchema<
-                      ExtractProjectionSchema<Columns, ColumnSchema>
-                    >
-                  }
-                >,
-                Relations
-              >
+            ? ExtractProjectionSchema<
+                Columns,
+                Reference["table"],
+                TableSchema
+              > extends SQLColumnSchema
+              ? SQLDatabaseSchema<
+                  Flatten<
+                    TableSchema & {
+                      [key in Table]: SQLTableSchema<
+                        ExtractProjectionSchema<
+                          Columns,
+                          Reference["table"],
+                          TableSchema
+                        >
+                      >
+                    }
+                  >,
+                  Relations
+                >
+              : Columns //Invalid<`${Reference["table"]} resulted in an invalid column schema`>
             : CheckTable<Reference["table"], Columns, ColumnSchema>
           : Invalid<`${Reference["table"]} has an invalid column schema...`>
         : Invalid<`${Reference["table"]} does not exist in schema`>
       : never
     : never
 
-type ColumnInfo<
+/**
+ * The column source information
+ */
+type ColumnSourceInfo<
+  Table extends string = string,
   Column extends string = string,
   Alias extends string = Column,
 > = {
+  table: Table
   column: Column
   alias: Alias
 }
 
+/**
+ * Get the schema for the projection based on the columns pulled
+ */
 type ExtractProjectionSchema<
   Columns,
-  Schema extends SQLColumnSchema,
+  Table extends string,
+  Schema extends SQLDatabaseTables,
 > = Columns extends "*"
   ? Schema
   : Columns extends [infer Column, ...infer Rest]
     ? Rest extends never[]
-      ? Column extends ColumnInfo<infer Name, infer Alias>
-        ? { [key in Alias]: Schema[Name] }
+      ? Column extends ColumnSourceInfo<infer _Tbl, infer Name, infer Alias>
+        ? { [key in Alias]: Schema[Table]["columns"][Name] }
         : never
-      : Column extends ColumnInfo<infer Name, infer Alias>
+      : Column extends ColumnSourceInfo<infer _Tbl, infer Name, infer Alias>
         ? Flatten<
-            { [key in Alias]: Schema[Name] } & ExtractProjectionSchema<
-              Rest,
-              Schema
-            >
+            {
+              [key in Alias]: Schema[Table]["columns"][Name]
+            } & ExtractProjectionSchema<Rest, Table, Schema>
           >
         : never
     : never
@@ -154,12 +280,12 @@ type CheckTable<
   ? true
   : Columns extends [infer Info, ...infer Rest]
     ? Rest extends never[]
-      ? Info extends ColumnInfo<infer Column, infer _>
+      ? Info extends ColumnSourceInfo<infer _T, infer Column, infer _>
         ? Column extends keyof Schema
           ? true
           : Invalid<`${Column} doesn't exist in ${Table}`>
         : Invalid<`Invalid column info on last`>
-      : Info extends ColumnInfo<infer Column, infer _>
+      : Info extends ColumnSourceInfo<infer _T, infer Column, infer _>
         ? Column extends keyof Schema
           ? CheckTable<Table, Rest, Schema>
           : Invalid<`${Column} doesn't exist in ${Table}`>
@@ -168,7 +294,7 @@ type CheckTable<
 
 type TableQuery<
   Table extends string = string,
-  Columns extends ColumnInfo[] | "*" = ColumnInfo[],
+  Columns extends ColumnSourceInfo[] | "*" = ColumnSourceInfo[],
 > = {
   type: "Table"
   table: Table
@@ -177,7 +303,7 @@ type TableQuery<
 
 type ProjectedQuery<
   Table extends string = string,
-  Columns extends ColumnInfo[] | "*" = ColumnInfo[],
+  Columns extends ColumnSourceInfo[] | "*" = ColumnSourceInfo[],
   Reference extends ProjectedQuery<any> | TableQuery<any> = TableQuery<any>,
 > = {
   type: "Projection"
@@ -186,6 +312,7 @@ type ProjectedQuery<
   reference: Reference
 }
 
+// TODO: Probably need to explore nested as well...
 type ExtractProjections<T> = T extends [infer Query, ...infer Rest]
   ? Rest extends never[]
     ? Query extends NamedQuery<infer Q, infer Alias>
@@ -219,7 +346,7 @@ type ExtractProjection<Query extends NamedQuery<any>> =
 
 type CheckColumnInfo<T> = T extends ["*"]
   ? "*"
-  : T extends ColumnInfo[]
+  : T extends ColumnSourceInfo[]
     ? T
     : never
 
@@ -235,24 +362,28 @@ type ExtractTableReference<Q extends QueryClause> =
           : never
 
 type ExtractColumns<Q extends QueryClause> =
-  Q extends SelectClause<infer Columns, infer _>
-    ? ExtractColumnNames<Columns>
+  Q extends SelectClause<infer Columns, infer From>
+    ? ExtractColumnNames<Columns, From["alias"]>
     : Q extends ReturningClause<infer Returning>
       ? ExtractColumnNames<Returning>
       : []
 
-type ExtractColumnNames<T> = T extends "*"
+// TODO: Broken for column reference without table names...
+type ExtractColumnNames<T, Table extends string = string> = T extends "*"
   ? ["*"]
   : T extends [infer Column, ...infer Rest]
     ? Rest extends never[]
       ? Column extends ColumnReference<infer Reference, infer Alias>
-        ? [ColumnInfo<Reference["column"], Alias>]
+        ? [ColumnSourceInfo<Table, Reference["column"], Alias>]
         : Column extends TableColumnReference<infer _, infer Name>
-          ? [ColumnInfo<Name>]
+          ? [ColumnSourceInfo<Table, Name>]
           : never
       : Column extends ColumnReference<infer Reference, infer Alias>
-        ? [ColumnInfo<Reference["column"], Alias>, ...ExtractColumnNames<Rest>]
+        ? [
+            ColumnSourceInfo<Table, Reference["column"], Alias>,
+            ...ExtractColumnNames<Rest>,
+          ]
         : Column extends TableColumnReference<infer _, infer Name>
-          ? [ColumnInfo<Name>, ...ExtractColumnNames<Rest>]
+          ? [ColumnSourceInfo<Table, Name>, ...ExtractColumnNames<Rest>]
           : never
     : never

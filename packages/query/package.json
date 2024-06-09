@@ -30,8 +30,8 @@
     "lint": "npx eslint . --fix --ignore-pattern \"dist\""
   },
   "dependencies": {
-    "@opentelemetry/api": "^1.8.0",
-    "@opentelemetry/semantic-conventions": "^1.24.1",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/semantic-conventions": "^1.25.0",
     "@telefrek/core": "^1.0.0-alpha.61"
   },
   "peerDependencies": {
