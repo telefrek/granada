@@ -10,7 +10,7 @@
     "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --coverageProvider=v8 --detectOpenHandles --forceExit -c jest.unit.config.cjs",
     "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --coverageProvider=v8 --detectOpenHandles --forceExit -c jest.integration.config.cjs",
     "format": "pnpx prettier --write .",
-    "ci": "turbo lint && tsc && pnpm run test:unit",
+    "ci": "turbo lint && tsc --build tsconfig.json && pnpm run test:unit",
     "build": "tsc --build tsconfig.json",
     "lint": "turbo lint",
     "publish:alpha": "turbo compile && lerna publish --preid alpha --force-publish"
