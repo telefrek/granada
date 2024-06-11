@@ -18,6 +18,7 @@ jobs:
           command: |
             sudo corepack enable
             sudo corepack prepare pnpm@latest-9 --activate
+            pnpm install --no-frozen-lockfile
       - run:
           command: pnpm run ci
           name: Build app for publishing
