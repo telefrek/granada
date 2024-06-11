@@ -125,15 +125,11 @@ importers:
 
   packages/sql:
     dependencies:
-      '@telefrek/core':
-        specifier: ^1.0.0-alpha.61
-        version: 1.0.0-alpha.61
+      '@telefrek/type-utils':
+        specifier: workspace:^
+        version: link:../type-utils
 
-  packages/type-utils:
-    dependencies:
-      '@telefrek/core':
-        specifier: ^1.0.0-alpha.61
-        version: 1.0.0-alpha.61
+  packages/type-utils: {}
 
 packages:
 
