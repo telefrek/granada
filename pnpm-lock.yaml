@@ -67,14 +67,10 @@ importers:
   packages/http:
     dependencies:
       '@telefrek/core':
-        specifier: ^1.0.0-alpha.61
-        version: 1.0.0-alpha.61
+        specifier: workspace:^
+        version: link:../core
 
-  packages/json:
-    dependencies:
-      '@telefrek/core':
-        specifier: ^1.0.0-alpha.61
-        version: 1.0.0-alpha.61
+  packages/json: {}
 
   packages/otel: {}
 
@@ -89,11 +85,11 @@ importers:
         specifier: ^1.25.0
         version: 1.25.0
       '@telefrek/core':
-        specifier: ^1.0.0-alpha.61
-        version: 1.0.0-alpha.61
+        specifier: workspace:^
+        version: link:../core
       '@telefrek/query':
-        specifier: ^1.0.0-alpha.61
-        version: 1.0.0-alpha.61(@opentelemetry/api@1.9.0)(@opentelemetry/semantic-conventions@1.25.0)(@telefrek/core@1.0.0-alpha.61)
+        specifier: workspace:^
+        version: link:../query
       pg:
         specifier: ^8.12.0
         version: 8.12.0
@@ -104,6 +100,11 @@ importers:
       '@types/pg':
         specifier: ^8.11.6
         version: 8.11.6
+    dependenciesMeta:
+      '@telefrek/core':
+        injected: true
+      '@telefrek/query':
+        injected: true
 
   packages/query:
     dependencies:
@@ -114,14 +115,25 @@ importers:
         specifier: ^1.25.0
         version: 1.25.0
       '@telefrek/core':
-        specifier: ^1.0.0-alpha.61
-        version: 1.0.0-alpha.61
+        specifier: workspace:^
+        version: link:../core
+    dependenciesMeta:
+      '@telefrek/core':
+        injected: true
 
   packages/service:
     dependencies:
+      '@telefrek/core':
+        specifier: workspace:^
+        version: link:../core
       '@telefrek/http':
-        specifier: ^1.0.0-alpha.61
-        version: 1.0.0-alpha.61
+        specifier: workspace:^
+        version: file:packages/http
+    dependenciesMeta:
+      '@telefrek/core':
+        injected: true
+      '@telefrek/http':
+        injected: true
 
   packages/sql:
     dependencies:
@@ -708,18 +720,8 @@ packages:
   '@sinonjs/fake-timers@10.3.0':
     resolution: {integrity: sha512-V4BG07kuYSUkTCSBHG8G8TNhM+F19jXFWnQtzj+we8DrkpSBCee9Z3Ms8yiGer/dlmhe35/Xdgyo3/0rQKg7YA==}
 
-  '@telefrek/core@1.0.0-alpha.61':
-    resolution: {integrity: sha512-XPTrHMx+54/a2VL0bKIFmG6eNqcxZv8KeXStCQeG8yE6pSeozpzpUkjFLSQdoCLBPwDgZrE2reePB/ZT2M7AZQ==}
-
-  '@telefrek/http@1.0.0-alpha.61':
-    resolution: {integrity: sha512-CSz4yuFKzskWCUfr5vnBlCa5eX7fQrGKASS1D6xMIz4PpCj2kraeRNoxAPf6V7BNYOiNpHJIxuJ1FRqEVWhzSw==}
-
-  '@telefrek/query@1.0.0-alpha.61':
-    resolution: {integrity: sha512-Wf9vKk4yi6GrGs042CjiRwKDONAfsEXqfYKQ+KnQkCTlxRZ5KeTG7NMt/y2Gj4sB2GQZSPf53rzi29a8P0AcVg==}
-    peerDependencies:
-      '@opentelemetry/api': ^1.8.0
-      '@opentelemetry/semantic-conventions': ^1.23.0
-      '@telefrek/core': ^1.0.0-alpha.31
+  '@telefrek/http@file:packages/http':
+    resolution: {directory: packages/http, type: directory}
 
   '@testcontainers/postgresql@10.9.0':
     resolution: {integrity: sha512-Z3K/TFkl/PVE2v8A6yKqgF4pSFk9ilFG02yeGhPswUjmBlcig/rpVOjBQOkQ/yJCcQ/r2RrX3RR+7vr+UO4QlQ==}
@@ -4539,22 +4541,9 @@ snapshots:
     dependencies:
       '@sinonjs/commons': 3.0.1
 
-  '@telefrek/core@1.0.0-alpha.61':
+  '@telefrek/http@file:packages/http':
     dependencies:
-      '@opentelemetry/api': 1.9.0
-      '@opentelemetry/context-async-hooks': 1.25.0(@opentelemetry/api@1.9.0)
-      '@opentelemetry/resources': 1.25.0(@opentelemetry/api@1.9.0)
-      '@opentelemetry/semantic-conventions': 1.25.0
-
-  '@telefrek/http@1.0.0-alpha.61':
-    dependencies:
-      '@telefrek/core': 1.0.0-alpha.61
-
-  '@telefrek/query@1.0.0-alpha.61(@opentelemetry/api@1.9.0)(@opentelemetry/semantic-conventions@1.25.0)(@telefrek/core@1.0.0-alpha.61)':
-    dependencies:
-      '@opentelemetry/api': 1.9.0
-      '@opentelemetry/semantic-conventions': 1.25.0
-      '@telefrek/core': 1.0.0-alpha.61
+      '@telefrek/core': link:packages/core
 
   '@testcontainers/postgresql@10.9.0(encoding@0.1.13)':
     dependencies:

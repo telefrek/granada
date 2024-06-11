@@ -29,7 +29,12 @@
     "lint": "npx eslint . --fix --ignore-pattern \"dist\""
   },
   "dependencies": {
-    "@telefrek/core": "^1.0.0-alpha.61"
+    "@telefrek/core": "workspace:^"
+  },
+  "dependenciesMeta": {
+    "@telefrek/http": {
+      "injected": true
+    }
   },
   "gitHead": "1be6bb3a61aab8ae5361827b54f8428682b9d536"
 }

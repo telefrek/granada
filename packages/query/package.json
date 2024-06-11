@@ -31,12 +31,16 @@
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/semantic-conventions": "^1.25.0",
-    "@telefrek/core": "^1.0.0-alpha.61"
+    "@telefrek/core": "workspace:^"
   },
   "peerDependencies": {
     "@opentelemetry/api": "^1.8.0",
-    "@opentelemetry/semantic-conventions": "^1.23.0",
-    "@telefrek/core": "^1.0.0-alpha.31"
+    "@opentelemetry/semantic-conventions": "^1.23.0"
+  },
+  "dependenciesMeta": {
+    "@telefrek/core": {
+      "injected": true
+    }
   },
   "gitHead": "1be6bb3a61aab8ae5361827b54f8428682b9d536"
 }
