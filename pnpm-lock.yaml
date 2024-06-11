@@ -66,9 +66,15 @@ importers:
 
   packages/http:
     dependencies:
+      '@opentelemetry/api':
+        specifier: ^1.9.0
+        version: 1.9.0
       '@telefrek/core':
         specifier: workspace:^
         version: link:../core
+    dependenciesMeta:
+      '@telefrek/http':
+        injected: true
 
   packages/json: {}
 
@@ -123,12 +129,15 @@ importers:
 
   packages/service:
     dependencies:
+      '@opentelemetry/api':
+        specifier: ^1.9.0
+        version: 1.9.0
       '@telefrek/core':
         specifier: workspace:^
         version: link:../core
       '@telefrek/http':
         specifier: workspace:^
-        version: file:packages/http
+        version: link:../http
     dependenciesMeta:
       '@telefrek/core':
         injected: true
@@ -719,9 +728,6 @@ packages:
 
   '@sinonjs/fake-timers@10.3.0':
     resolution: {integrity: sha512-V4BG07kuYSUkTCSBHG8G8TNhM+F19jXFWnQtzj+we8DrkpSBCee9Z3Ms8yiGer/dlmhe35/Xdgyo3/0rQKg7YA==}
-
-  '@telefrek/http@file:packages/http':
-    resolution: {directory: packages/http, type: directory}
 
   '@testcontainers/postgresql@10.9.0':
     resolution: {integrity: sha512-Z3K/TFkl/PVE2v8A6yKqgF4pSFk9ilFG02yeGhPswUjmBlcig/rpVOjBQOkQ/yJCcQ/r2RrX3RR+7vr+UO4QlQ==}
@@ -4540,10 +4546,6 @@ snapshots:
   '@sinonjs/fake-timers@10.3.0':
     dependencies:
       '@sinonjs/commons': 3.0.1
-
-  '@telefrek/http@file:packages/http':
-    dependencies:
-      '@telefrek/core': link:packages/core
 
   '@testcontainers/postgresql@10.9.0(encoding@0.1.13)':
     dependencies:
