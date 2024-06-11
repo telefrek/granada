@@ -4,6 +4,11 @@ import type { Trim } from "@telefrek/type-utils/strings.js"
 import type { Invalid } from "@telefrek/type-utils"
 
 /**
+ * Utility type for extracting clauses and remainders
+ */
+export type Extractor<U> = [clause: U | never, remainder: string]
+
+/**
  * Check if T starts with S (case insensitive)
  */
 export type StartsWith<T, S> =

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type {
   BooleanValueType,
   BufferValueType,
@@ -10,31 +11,33 @@ import type {
   NumberValueType,
   ParameterValueType,
   StringValueType,
+  WhereClause,
 } from "../ast.js"
 
 import { Dec, Inc } from "@telefrek/type-utils/numeric.js"
 import { Trim } from "@telefrek/type-utils/strings.js"
 import { ParseColumnDetails } from "./columns.js"
 import { OptionKeywords } from "./keywords.js"
-import { ExtractUntil, NextToken, StartsWith } from "./utils.js"
+import { ExtractUntil, Extractor, NextToken, StartsWith } from "./utils.js"
+
+/**
+ * Defines a where extractor
+ */
+export type WhereExtractor<_T extends string> = Extractor<WhereClause<any>>
 
 /**
  * Extract the {@link WhereClause} off of the query string
  */
-export type ExtractWhere<T> =
+export type ExtractWhere<T extends string> =
   StartsWith<T, "WHERE"> extends true
-    ? ExtractUntil<T, OptionKeywords> extends [infer Where, infer _]
+    ? ExtractUntil<T, OptionKeywords> extends [infer Where, infer Remainder]
       ? NextToken<Where> extends ["WHERE", infer Exp]
-        ? {
-            where: ParseExpressionTree<Exp>
-          }
-        : never
+        ? [WhereClause<ParseExpressionTree<Exp>>, Remainder]
+        : [never, T]
       : NextToken<T> extends ["WHERE", infer Exp]
-        ? {
-            where: ParseExpressionTree<Exp>
-          }
-        : never
-    : "none"
+        ? [WhereClause<ParseExpressionTree<Exp>>, ""]
+        : [never, T]
+    : [never, T]
 
 /**
  * Parse an expression tree
@@ -118,7 +121,7 @@ type CheckValueType<T> = T extends `:${infer Name}`
       : T extends `0x${infer _}`
         ? BufferValueType<Int8Array>
         : T extends `${infer First}${infer _}`
-          ? First extends [Digits]
+          ? [First] extends [Digits]
             ? NumberValueType<number>
             : never
           : Lowercase<T & string> extends "null"

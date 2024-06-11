@@ -80,4 +80,8 @@ type ExtractFrom<T> =
  * Extract the join portion if present
  */
 type ExtractJoin<T> =
-  StartsWith<T, JoinKeywords> extends true ? "not supported" : ExtractWhere<T>
+  StartsWith<T, JoinKeywords> extends true
+    ? "not supported"
+    : ExtractWhere<T & string> extends [infer Where, infer _]
+      ? CheckWhere<Where>
+      : object
