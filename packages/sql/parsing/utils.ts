@@ -1,6 +1,8 @@
 import type { Dec, Inc } from "@telefrek/type-utils/numeric.js"
 import type { Trim } from "@telefrek/type-utils/strings.js"
 
+import type { Invalid } from "@telefrek/type-utils"
+
 export type FromKeywords = "WHERE" | OptionKeywords | JoinKeywords
 export type JoinKeywords =
   | "INNER"
@@ -54,7 +56,7 @@ export type SplitSQL<
     : SplitSQL<Right, Token, Trim<`${S} ${Left} ${Token}`>>
   : EqualParenthesis<`${S} ${T & string}`> extends true
     ? [Trim<`${S} ${T & string}`>]
-    : never // TODO: Start incorporating Invalid<>...
+    : Invalid<"Unequal parenthesis"> // TODO: Start incorporating Invalid<>...
 
 type EqualParenthesis<T> = CountOpen<T> extends CountClosed<T> ? true : false
 

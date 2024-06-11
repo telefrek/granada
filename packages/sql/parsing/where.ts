@@ -15,7 +15,8 @@ import type {
 import { Dec, Inc } from "@telefrek/type-utils/numeric.js"
 import { Trim } from "@telefrek/type-utils/strings.js"
 import { ParseColumnDetails } from "./columns.js"
-import { ExtractUntil, NextToken, OptionKeywords, StartsWith } from "./utils.js"
+import { OptionKeywords } from "./keywords.js"
+import { ExtractUntil, NextToken, StartsWith } from "./utils.js"
 
 export type ParseWhere<T> =
   StartsWith<T, "WHERE"> extends true

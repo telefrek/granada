@@ -3,16 +3,11 @@ import { ParseColumnReference } from "./columns.js"
 import { JoinClause, SelectClause, WhereClause } from "../ast.js"
 
 import { Flatten } from "@telefrek/type-utils"
-import { ParseWhere } from "./expressions.js"
 import { ParseTableReference } from "./tables.js"
-import {
-  ExtractUntil,
-  FromKeywords,
-  JoinKeywords,
-  NextToken,
-  SplitSQL,
-  StartsWith,
-} from "./utils.js"
+import { ExtractUntil, NextToken, SplitSQL, StartsWith } from "./utils.js"
+import { ParseWhere } from "./where.js"
+
+import { FromKeywords, JoinKeywords } from "./keywords.js"
 
 export type ParseSelect<T> =
   NextToken<T> extends ["SELECT", infer Right]
