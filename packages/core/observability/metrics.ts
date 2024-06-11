@@ -175,7 +175,7 @@ async function trackHeapMetrics(meter: Meter): Promise<void> {
     lastHeapInfo = getHeapStatistics()
   }, 15_000)
 
-  registerShutdown(()=>{
+  registerShutdown(() => {
     clearInterval(interval)
   })
 

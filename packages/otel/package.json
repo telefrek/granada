@@ -27,7 +27,7 @@
     "clean": "rm -rf ./dist",
     "build": "tsc",
     "compile": "tsc -p tsconfig.compile.json",
-    "lint": "npx eslint . --fix --ignore-pattern \"dist\""
+    "lint": "pnpx eslint . --fix --ignore-pattern \"dist\""
   },
   "dependencies": {},
   "gitHead": "1be6bb3a61aab8ae5361827b54f8428682b9d536"

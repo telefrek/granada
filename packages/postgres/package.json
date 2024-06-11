@@ -26,7 +26,7 @@
     "clean": "rm -rf ./dist",
     "build": "tsc",
     "compile": "tsc -p tsconfig.compile.json",
-    "lint": "npx eslint . --fix --ignore-pattern \"dist\""
+    "lint": "pnpx eslint . --fix --ignore-pattern \"dist\""
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
@@ -34,14 +34,6 @@
     "@telefrek/core": "workspace:^",
     "@telefrek/query": "workspace:^",
     "pg": "^8.12.0"
-  },
-  "dependenciesMeta": {
-    "@telefrek/core": {
-      "injected": true
-    },
-    "@telefrek/query": {
-      "injected": true
-    }
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^10.9.0",
