@@ -10,7 +10,7 @@
     "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --coverageProvider=v8 --detectOpenHandles --forceExit -c jest.unit.config.cjs",
     "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --coverageProvider=v8 --detectOpenHandles --forceExit -c jest.integration.config.cjs",
     "format": "npx prettier --write .",
-    "ci": "pnpm install && turbo lint && turbo build && pnpm run test:unit",
+    "ci": "turbo lint && turbo build && pnpm run test:unit",
     "build": "turbo build",
     "lint": "pnpm run lint --workspaces --if-present",
     "publish:alpha": "turbo compile && lerna publish --preid alpha --force-publish"
