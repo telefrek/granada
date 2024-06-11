@@ -21,6 +21,9 @@ export type NextToken<T> =
     ? [Token, Remainder]
     : [Trim<T>, ""]
 
+/**
+ * Keep aggregating the next token until the terminator is reached
+ */
 export type ExtractUntil<T, K, N = 0, S extends string = ""> =
   NextToken<T> extends [infer Token, infer Rest]
     ? Rest extends ""
@@ -36,6 +39,9 @@ export type ExtractUntil<T, K, N = 0, S extends string = ""> =
             : ExtractUntil<Rest, K, N, `${S} ${Token & string}`>
     : never
 
+/**
+ * Custom split that is SQL aware and respects parenthesis depth
+ */
 export type SplitSQL<
   T,
   Token extends string = ",",
@@ -48,12 +54,21 @@ export type SplitSQL<
     ? [Trim<`${S} ${T & string}`>]
     : Invalid<"Unequal parenthesis">
 
+/**
+ * Test if ( matches ) counts
+ */
 type EqualParenthesis<T> = CountOpen<T> extends CountClosed<T> ? true : false
 
+/**
+ * Count the ( characters
+ */
 type CountOpen<T, N extends number = 0> = T extends `${infer _}(${infer Right}`
   ? CountOpen<Right, Inc<N>>
   : N
 
+/**
+ * Count the ) characters
+ */
 type CountClosed<
   T,
   N extends number = 0,

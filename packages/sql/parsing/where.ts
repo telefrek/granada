@@ -18,7 +18,10 @@ import { ParseColumnDetails } from "./columns.js"
 import { OptionKeywords } from "./keywords.js"
 import { ExtractUntil, NextToken, StartsWith } from "./utils.js"
 
-export type ParseWhere<T> =
+/**
+ * Extract the {@link WhereClause} off of the query string
+ */
+export type ExtractWhere<T> =
   StartsWith<T, "WHERE"> extends true
     ? ExtractUntil<T, OptionKeywords> extends [infer Where, infer _]
       ? NextToken<Where> extends ["WHERE", infer Exp]
@@ -33,10 +36,16 @@ export type ParseWhere<T> =
         : never
     : "none"
 
+/**
+ * Parse an expression tree
+ */
 export type ParseExpressionTree<T> = T extends `( ${infer Inner} )`
   ? ParseExpressionTree<Inner>
   : ParseColumnFilter<T> | ExtractLogical<T>
 
+/**
+ * Extract a {@link LogicalTree}
+ */
 type ExtractLogical<T> =
   ExtractUntil<T, LogicalOperation> extends [infer Left, infer Remainder]
     ? NextToken<Remainder> extends [infer Operation, infer Right]
@@ -50,6 +59,9 @@ type ExtractLogical<T> =
       : never
     : ParseColumnFilter<T>
 
+/**
+ * Parse out a {@link ColumnFilter}
+ */
 type ParseColumnFilter<T> =
   NextToken<T> extends [infer Column, infer Exp]
     ? NextToken<Exp> extends [infer Op, infer Value]
@@ -65,6 +77,9 @@ type ParseColumnFilter<T> =
       : never
     : never
 
+/**
+ * Parse out the entire value string (may be quoted)
+ */
 type ExtractValue<T, N = 0, S extends string = ""> =
   NextToken<T> extends [infer Left, infer Right]
     ? Right extends ""
@@ -86,8 +101,14 @@ type ExtractValue<T, N = 0, S extends string = ""> =
                 : ExtractValue<Right, N, `${S} ${Left & string}`>
     : never
 
-type Digits = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | " " | "9"
+/**
+ * Set of valid digits
+ */
+type Digits = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
 
+/**
+ * Check the type of value
+ */
 type CheckValueType<T> = T extends `:${infer Name}`
   ? ParameterValueType<Name>
   : T extends `$${infer Name}`
