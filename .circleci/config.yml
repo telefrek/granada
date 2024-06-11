@@ -14,7 +14,12 @@ jobs:
     steps:
       - checkout
       - run:
-          command: npm run ci
+          name: Install pnpm package manager
+          command: |
+            corepack enable
+            corepack prepare pnpm@latest-9 --activate
+      - run:
+          command: pnpm run ci
           name: Build app for publishing
       - persist_to_workspace:
           root: ~/project

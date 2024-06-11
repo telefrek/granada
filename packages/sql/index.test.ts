@@ -25,12 +25,12 @@ describe("SQL mechanics should be supported", () => {
     // Create a query
     const query = createBuilder<
       typeof b
-    >()(`with foo AS (SELECT id, firstName aS first_name FROM bat WHERE id < 4),
+    >()(`with foo AS (SELECT id, firstName aS first_name FROM bat WHERE id < :id),
     baz AS (SELECT id, first_name FROM foo)
     SELECT first_name FROM baz`)
 
     // Verify the queyr was created
     expect(query).not.toBeUndefined()
-    query.execute()
+    expect(() => query.execute({ id: 4 })).rejects.toThrow()
   })
 })

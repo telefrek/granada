@@ -1,10 +1,4 @@
 /**
- * Utilities that are helpful when working with SQL
- */
-
-export type Invalid<S> = S | void | never
-
-/**
  * Get the next value or undefined if >= 63
  */
 export type Inc<T> = T extends keyof Increment ? Increment[T] : never
@@ -13,29 +7,6 @@ export type Inc<T> = T extends keyof Increment ? Increment[T] : never
  * Get the previous value or undefined if <= 63
  */
 export type Dec<T> = T extends keyof Decrement ? Decrement[T] : never
-
-export type StrLen<
-  T extends string,
-  N = 0,
-> = T extends `${infer _}${infer Rest}` ? StrLen<Rest, Inc<N>> : N
-
-/**
- * Perform a comparison between two values
- */
-export type Compare<L, R> = L extends -1
-  ? never
-  : R extends -1
-    ? never
-    : L extends R
-      ? 0
-      : L extends 0
-        ? -1
-        : R extends 0
-          ? 1
-          : Compare<Dec<L>, Dec<R>>
-
-type _<T> = T
-export type Flatten<T> = _<{ [K in keyof T]: T[K] }>
 
 /**
  * I'm not trying to support ANY number, if you're going more than 128 deep for

@@ -1,14 +1,13 @@
 {
-  "name": "@telefrek/otel",
+  "name": "@telefrek/type-utils",
   "version": "1.0.0-alpha.61",
-  "description": "This package has open telemetry integrations",
+  "description": "This package has utilities for manipulating Typescript types",
   "author": "nathan@telefrek.com",
   "license": "MIT",
   "keywords": [
     "granada",
     "framework",
-    "sql",
-    "query"
+    "type-utils"
   ],
   "type": "module",
   "files": [
@@ -29,6 +28,5 @@
     "compile": "tsc -p tsconfig.compile.json",
     "lint": "npx eslint . --fix --ignore-pattern \"dist\""
   },
-  "dependencies": {},
   "gitHead": "1be6bb3a61aab8ae5361827b54f8428682b9d536"
 }

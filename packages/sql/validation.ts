@@ -3,6 +3,7 @@
  * Validation should parse a query against a schema and validate the objects
  */
 
+import type { Flatten, Invalid } from "@telefrek/type-utils/index.js"
 import type {
   ColumnReference,
   DeleteClause,
@@ -25,7 +26,6 @@ import {
   type SQLTableEntity,
   type SQLTableSchema,
 } from "./schema.js"
-import type { Flatten, Invalid } from "./utils.js"
 
 /**
  * Validate the query string against the schema

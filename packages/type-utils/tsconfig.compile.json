@@ -32,14 +32,20 @@
     "target": "ESNext",
     "baseUrl": "./",
     "paths": {
-      "@telefrek/type-utils": ["../type-utils"],
-      "@telefrek/type-utils/*": ["../type-utils/*"]
+      "@telefrek/core": ["./packages/core"],
+      "@telefrek/core/*": ["./packages/core/*"]
     }
   },
-  "exclude": ["node_modules", "dist", "**/*.d.ts"],
   "ts-node": {
     "esm": true
   },
   "include": ["./**/*.ts"],
-  "references": [{ "path": "../type-utils" }]
+  "exclude": [
+    "node_modules",
+    "./dist/**/*",
+    "./**/*.test.ts",
+    "./**/*.integration.ts",
+    "./testUtils.ts"
+  ],
+  "references": [{ "path": "../core" }]
 }

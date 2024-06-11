@@ -37,9 +37,28 @@
       "@telefrek/http": ["./packages/http"],
       "@telefrek/http/*": ["./packages/http/*"],
       "@telefrek/query": ["./packages/query"],
-      "@telefrek/query/*": ["./packages/query/*"]
+      "@telefrek/query/*": ["./packages/query/*"],
+      "@telefrek/sql": ["./packages/sql"],
+      "@telefrek/sql/*": ["./packages/sql/*"],
+      "@telefrek/type-utils": ["./packages/type-utils"],
+      "@telefrek/type-utils/*": ["./packages/type-utils/*"],
+      "@telefrek/json": ["./packages/json"],
+      "@telefrek/json/*": ["./packages/json/*"],
+      "@telefrek/pipelines": ["./packages/pipelines"],
+      "@telefrek/pipelines/*": ["./packages/pipelines/*"]
     }
   },
+  "references": [
+    { "path": "./packages/core" },
+    { "path": "./packages/query" },
+    { "path": "./packages/http" },
+    { "path": "./packages/postgres" },
+    { "path": "./packages/type-utils" },
+    { "path": "./packages/sql" },
+    { "path": "./packages/json" },
+    { "path": "./packages/service" },
+    { "path": "./packages/pipelines" }
+  ],
   "include": ["./**/*.ts", "./packages/http/mimeTypes.json"],
   "exclude": ["node_modules", "dist"],
   "watchOptions": {

@@ -25,13 +25,12 @@
   },
   "scripts": {
     "clean": "rm -rf ./dist",
-    "upgrade": "npx npm-check-updates -u && npm install --legacy-peer-deps",
     "build": "tsc",
     "compile": "tsc -p tsconfig.compile.json",
     "lint": "npx eslint . --fix --ignore-pattern \"dist\""
   },
   "dependencies": {
-    "@telefrek/core": "^1.0.0-alpha.61"
+    "@telefrek/type-utils": "*"
   },
   "gitHead": "1be6bb3a61aab8ae5361827b54f8428682b9d536"
 }

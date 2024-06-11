@@ -2,6 +2,15 @@
  * Set of utilities to validate a query against a schema
  */
 
+import type { Dec, Inc } from "@telefrek/type-utils/numeric.js"
+import { NormalizeQuery } from "./parsing/normalization.js"
+import {
+  ExtractUntil,
+  NextToken,
+  SplitSQL,
+  StartsWith,
+} from "./parsing/utils.js"
+
 import type {
   BooleanValueType,
   BufferValueType,
@@ -24,7 +33,20 @@ import type {
   WhereClause,
   WithClause,
 } from "./ast.js"
-import type { Dec, Flatten, Inc, StrLen } from "./utils.js"
+
+import { Flatten } from "@telefrek/type-utils/index.js"
+import { Trim } from "@telefrek/type-utils/strings.js"
+
+/**
+ * Things to do
+ *
+ * - Fix where clause id=1 parsing, etc
+ * - Add more tests for structure
+ * - Verify columns on select
+ * - Parse insert/update/delete
+ * - Add aggregation methods to columns
+ * - Add in unions, etc
+ */
 
 /**
  * Parse a SQLQuery type from the given query string
@@ -32,91 +54,6 @@ import type { Dec, Flatten, Inc, StrLen } from "./utils.js"
 export type ParseSQLQuery<Query extends string> = ParseSQL<
   NormalizeQuery<Query>
 >
-
-/**
- * Trim the leading/trailing whitespace characters
- */
-type Trim<T> = T extends ` ${infer Rest}`
-  ? Trim<Rest>
-  : T extends `\n${infer Rest}`
-    ? Trim<Rest>
-    : T extends `${infer Rest} `
-      ? Trim<Rest>
-      : T extends `${infer Rest}\n`
-        ? Trim<Rest>
-        : T
-
-type EqualParenthesis<T> = CountOpen<T> extends CountClosed<T> ? true : false
-
-type CountOpen<T, N extends number = 0> = T extends `${infer _}(${infer Right}`
-  ? CountOpen<Right, Inc<N>>
-  : N
-
-type CountClosed<
-  T,
-  N extends number = 0,
-> = T extends `${infer _})${infer Right}` ? CountClosed<Right, Inc<N>> : N
-
-type Split<
-  T,
-  Token extends string = ",",
-  S extends string = "",
-> = T extends `${infer Left} ${Token} ${infer Right}`
-  ? EqualParenthesis<`${S} ${Left}`> extends true
-    ? [Trim<`${S} ${Left}`>, ...Split<Trim<Right>, Token>]
-    : Split<Right, Token, Trim<`${S} ${Left} ${Token}`>>
-  : EqualParenthesis<`${S} ${T & string}`> extends true
-    ? [Trim<`${S} ${T & string}`>]
-    : never
-
-export type NormalizeQuery<T> = SplitJoin<
-  SplitJoin<SplitJoin<SplitJoin<T, "\n">, ",">, "(">,
-  ")"
->
-
-type SplitJoin<T, C extends string = ","> = Join<SplitTrim<T, C>>
-
-type SplitTrim<T, C extends string = ","> =
-  Trim<T> extends `${infer Left}${C}${infer Right}`
-    ? [...SplitTrim<Left, C>, Trim<C>, ...SplitTrim<Right, C>]
-    : [NormalizedJoin<SplitWords<Trim<T>>>]
-
-type SplitWords<T> =
-  Trim<T> extends `${infer Left} ${infer Right}`
-    ? [...SplitWords<Left>, ...SplitWords<Right>]
-    : [Trim<T>]
-
-type NormalizedJoin<T> = T extends [infer Left, ...infer Rest]
-  ? Rest extends never[]
-    ? Check<Left & string>
-    : `${Check<Left & string> & string} ${NormalizedJoin<Rest> & string}`
-  : ""
-
-type Check<T extends string> =
-  Uppercase<T> extends NormalizedKeyWords ? Uppercase<T> : T
-
-type NormalizedKeyWords =
-  | "SELECT"
-  | "INSERT"
-  | "UPDATE"
-  | "DELETE"
-  | "FROM"
-  | "WHERE"
-  | "AS"
-  | "JOIN"
-  | "INTO"
-  | "OUTER"
-  | "INNER"
-  | "FULL"
-  | "HAVING"
-  | "LEFT"
-  | "RIGHT"
-  | "LATERAL"
-  | "ORDER"
-  | "BY"
-  | "LIMIT"
-  | "OFFSET"
-  | "WITH"
 
 /**
  * Parse T as a {@link SQLQuery}
@@ -145,7 +82,7 @@ type ParseWith<T> =
         infer Query,
       ]
       ? {
-          with: ParseWithClauses<Split<WithClauses>>
+          with: ParseWithClauses<SplitSQL<WithClauses>>
           query: ParseQuery<Query>
         }
       : never
@@ -189,7 +126,7 @@ type ParseColumns<T> =
             columns: Columns
           } & ParseFrom<From>
         : {
-            columns: SplitColumns<Split<Columns>>
+            columns: SplitColumns<SplitSQL<Columns>>
           } & ParseFrom<From>
       : never
     : never
@@ -284,11 +221,6 @@ type ExtractValue<T, N = 0, S extends string = ""> =
 
 type Digits = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | " " | "9"
 
-export type c7 =
-  StrLen<`with foo AS (SELECT id, name aS bname FROM bar WHERE id < 4),
-    baz AS (SELECT * FROM foo)
-    SELECT * FROM baz`>
-
 type CheckValueType<T> = T extends `:${infer Name}`
   ? ParameterValueType<Name>
   : T extends `$${infer Name}`
@@ -329,45 +261,3 @@ type ParseColumnReference<T> =
 type ParseColumnDetails<T> = T extends `${infer Table}.${infer Column}`
   ? TableColumnReference<Table, Column>
   : UnboundColumnReference<T & string>
-
-/**
- * Check if T starts with S (case insensitive)
- */
-type StartsWith<T, S> =
-  NextToken<T> extends [infer Left, infer _]
-    ? Uppercase<Left & string> extends S
-      ? true
-      : false
-    : false
-
-type ExtractUntil<T, K, N = 0, S extends string = ""> =
-  NextToken<T> extends [infer Token, infer Rest]
-    ? Rest extends ""
-      ? [Trim<S>]
-      : Token extends "("
-        ? ExtractUntil<Rest, K, Inc<N>, `${S} (`>
-        : Token extends ")"
-          ? ExtractUntil<Rest, K, Dec<N>, `${S} )`>
-          : [Uppercase<Token & string>] extends [K]
-            ? N extends 0
-              ? [Trim<S>, Trim<`${Token & string} ${Rest & string}`>]
-              : ExtractUntil<Rest, K, N, `${S} ${Token & string}`>
-            : ExtractUntil<Rest, K, N, `${S} ${Token & string}`>
-    : never
-
-/**
- * Joins the segments
- */
-type Join<T, C extends string = " "> = T extends [infer Left, ...infer Rest]
-  ? Rest extends never[]
-    ? `${Left & string}`
-    : `${Left & string}${C}${Join<Rest, C> & string}`
-  : ""
-
-/**
- * Get the next token from the string (assumes normalized)
- */
-type NextToken<T> =
-  Trim<T> extends `${infer Token} ${infer Remainder}`
-    ? [Token, Remainder]
-    : [Trim<T>, ""]

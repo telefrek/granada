@@ -4,13 +4,13 @@
  * Handle schema generation and manipulation
  */
 
+import type { Flatten } from "@telefrek/type-utils/index.js"
 import type {
   IncrementalSQLTypes,
   SQLBuiltinTypes,
   TSSQLType,
   VariableSQLTypes,
 } from "./types.js"
-import type { Flatten } from "./utils.js"
 
 /**
  * Define a schema
@@ -101,11 +101,15 @@ export function SQLColumn<T extends SQLBuiltinTypes>(
 export type TableColumnType<T extends ColumnTypeDefinition<SQLBuiltinTypes>> =
   T["array"] extends true ? TSSQLType<T["type"]>[] : TSSQLType<T["type"]>
 
-export type SQLTableEntity<T extends SQLTableSchema> = Flatten<
+export type SQLTableEntity<T extends SQLTableSchema> = SQLRowEntity<
+  T["columns"]
+>
+
+export type SQLRowEntity<T extends SQLColumnSchema> = Flatten<
   {
-    [K in RequiredKeys<T>]: TableColumnType<T["columns"][K]>
+    [K in RequiredKeys<T>]: TableColumnType<T[K]>
   } & {
-    [K in NullableKeys<T>]?: TableColumnType<T["columns"][K]>
+    [K in NullableKeys<T>]?: TableColumnType<T[K]>
   }
 >
 
@@ -193,17 +197,13 @@ class SQLTableSchemaBuilder<
   }
 }
 
-type RequiredKeys<T extends SQLTableSchema> = {
-  [K in keyof T["columns"]]: T["columns"][K]["nullable"] extends true
-    ? never
-    : K
-}[keyof T["columns"]]
+type RequiredKeys<T extends SQLColumnSchema> = {
+  [K in keyof T]: T[K]["nullable"] extends true ? never : K
+}[keyof T]
 
-type NullableKeys<T extends SQLTableSchema> = {
-  [K in keyof T["columns"]]: T["columns"][K]["nullable"] extends true
-    ? K
-    : never
-}[keyof T["columns"]]
+type NullableKeys<T extends SQLColumnSchema> = {
+  [K in keyof T]: T[K]["nullable"] extends true ? K : never
+}[keyof T]
 
 type BaseColumnDefinition<T extends SQLBuiltinTypes> = {
   type: T
