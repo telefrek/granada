@@ -1,4 +1,5 @@
 import { Trim, type Join } from "@telefrek/type-utils/strings.js"
+import type { SplitWords } from "./utils.js"
 
 /**
  * Ensure a query has a known structure with keywords uppercase and consistent spacing
@@ -20,14 +21,6 @@ type SplitTrim<T, C extends string = ","> =
   Trim<T> extends `${infer Left}${C}${infer Right}`
     ? [...SplitTrim<Left, C>, Trim<C>, ...SplitTrim<Right, C>]
     : [NormalizedJoin<SplitWords<Trim<T>>>]
-
-/**
- * Split words based on spacing only
- */
-export type SplitWords<T> =
-  Trim<T> extends `${infer Left} ${infer Right}`
-    ? [...SplitWords<Left>, ...SplitWords<Right>]
-    : [Trim<T>]
 
 /**
  * Normalize the values by ensuring capitalization

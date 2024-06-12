@@ -19,6 +19,14 @@ export type StartsWith<T, S> =
     : false
 
 /**
+ * Split words based on spacing only
+ */
+export type SplitWords<T> =
+  Trim<T> extends `${infer Left} ${infer Right}`
+    ? [...SplitWords<Left>, ...SplitWords<Right>]
+    : [Trim<T>]
+
+/**
  * Get the next token from the string (assumes normalized)
  */
 export type NextToken<T> =
