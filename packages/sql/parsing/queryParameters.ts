@@ -13,8 +13,6 @@ import type {
   WithClause,
 } from "../ast.js"
 
-import { Inc } from "@telefrek/type-utils/numeric.js"
-
 /**
  * Type representing parameter
  */
@@ -62,9 +60,32 @@ type FindWithParameters<T> = T extends [infer With, ...infer Rest]
 type FindWhereParameters<W, Table extends string> =
   W extends WhereClause<infer Where>
     ? Where extends LogicalTree<infer _Left, infer _Op, infer _Right>
-      ? CollapseTree<ExpandTree<Where>, Table>
+      ? CollapseTree<RecursivelyExpandTree<[Where]>, Table>
       : FindParameters<Where, Table>
     : []
+
+type RecursivelyExpandTree<T> =
+  CheckTreeRecursion<T> extends true ? RecursivelyExpandTree<ExpandTree<T>> : T
+
+type CheckTreeRecursion<T> = T extends [infer Next, ...infer Rest]
+  ? Rest extends never[]
+    ? Next extends LogicalTree<infer _Left, infer _, infer _Right>
+      ? true
+      : false
+    : Next extends LogicalTree<infer _Left, infer _, infer _Right>
+      ? true
+      : CheckTreeRecursion<Rest>
+  : false
+
+type ExpandTree<T> = T extends [infer Next, ...infer Rest]
+  ? Rest extends never[]
+    ? Next extends LogicalTree<infer Left, infer _, infer Right>
+      ? [Left, Right]
+      : [Next]
+    : Next extends LogicalTree<infer Left, infer _, infer Right>
+      ? [Left, Right, ...ExpandTree<Rest>]
+      : [Next, ...ExpandTree<Rest>]
+  : []
 
 type CollapseTree<T, Table extends string> = T extends [
   infer Exp,
@@ -78,22 +99,10 @@ type CollapseTree<T, Table extends string> = T extends [
 type FindParameters<E, Table extends string> =
   E extends ColumnFilter<infer _Left, infer _Op, infer Right>
     ? Right extends ParameterValueType<infer Name>
-      ? [ParameterInfo<Name, E["left"]["alias"], Table>]
+      ? [{ name: Name; column: E["left"]["alias"]; table: Table }] //[ParameterInfo<Name, E["left"]["alias"], Table>]
       : []
     : E extends SubqueryFilter<infer _Column, infer Sub, infer _Op>
       ? Sub extends SubQuery<infer Query>
         ? FindQueryParameters<Query>
         : []
       : []
-
-type ExpandTree<T extends LogicalTree<any>, N extends number = 0> = N extends 2
-  ? []
-  : T extends LogicalTree<infer Left, infer _, infer Right>
-    ? Left extends LogicalTree<infer _L1, infer _, infer _R1>
-      ? Right extends LogicalTree<infer _L2, infer _, infer _R2>
-        ? [...ExpandTree<Left, Inc<N>>, ...ExpandTree<Right, Inc<N>>]
-        : [...ExpandTree<Left, Inc<N>>, Right]
-      : Right extends LogicalTree<infer _L2, infer _, infer _R2>
-        ? [Left, ...ExpandTree<Right, Inc<N>>]
-        : [Left, Right]
-    : []

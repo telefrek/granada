@@ -21,6 +21,16 @@ import { OptionKeywords } from "./keywords.js"
 import { ExtractUntil, Extractor, NextToken, StartsWith } from "./utils.js"
 
 /**
+ * Helper to simply parse a where clause for testing or bypassing the Extractor functionality
+ */
+export type ParseWhereClause<T extends string> =
+  ExtractWhere<T> extends [infer Where, infer _]
+    ? Where extends WhereClause<infer W>
+      ? WhereClause<W>
+      : never
+    : never
+
+/**
  * Defines a where extractor
  */
 export type WhereExtractor<_T extends string> = Extractor<WhereClause<any>>
@@ -91,7 +101,7 @@ type ExtractValue<T, N = 0, S extends string = ""> =
         ? ExtractValue<Right, N, `${S} ${Left}`>
         : Left extends `'${infer Rest}`
           ? N extends 0
-            ? ExtractValue<Right, Inc<N>, `${S} ${Rest & string}`>
+            ? ExtractValue<Right, Inc<N>, `${S} '${Rest & string}`>
             : ExtractValue<Right, Inc<N>, `${S} ${Left & string}`>
           : Left extends `${infer _}\\'`
             ? ExtractValue<Right, N, `${S} ${Left & string}`>
@@ -120,14 +130,14 @@ type CheckValueType<T> = T extends `:${infer Name}`
       ? StringValueType<Value>
       : T extends `0x${infer _}`
         ? BufferValueType<Int8Array>
-        : T extends `${infer First}${infer _}`
-          ? [First] extends [Digits]
-            ? NumberValueType<number>
-            : never
-          : Lowercase<T & string> extends "null"
-            ? NullValueType
-            : Lowercase<T & string> extends "true"
-              ? BooleanValueType<true>
-              : Lowercase<T & string> extends "false"
-                ? BooleanValueType<false>
+        : Lowercase<T & string> extends "null"
+          ? NullValueType
+          : Lowercase<T & string> extends "true"
+            ? BooleanValueType<true>
+            : Lowercase<T & string> extends "false"
+              ? BooleanValueType<false>
+              : T extends `${infer First}${infer _}`
+                ? [First] extends [Digits]
+                  ? NumberValueType<number>
+                  : never
                 : never
