@@ -2,8 +2,7 @@
  * Set of tests that are used for verifying schema results
  */
 
-import { inspect } from "util"
-import { createBuilder } from "./query.js"
+import { createSelectBuilder } from "./builder.js"
 import { createSchemaBuilder } from "./schema.js"
 import { SQLBuiltinTypes } from "./types.js"
 
@@ -17,20 +16,7 @@ describe("SQL mechanics should be supported", () => {
       .addTable("id")
       .build()
 
-    // eslint-disable-next-line no-console
-    console.log(inspect(b, true, 10, true))
-
-    expect(b).not.toBeUndefined()
-
-    // Create a query
-    const query = createBuilder<
-      typeof b
-    >()(`with foo AS (SELECT id, firstName aS first_name FROM bat WHERE id < :id),
-    baz AS (SELECT id, first_name FROM foo)
-    SELECT first_name FROM baz`)
-
-    // Verify the queyr was created
-    expect(query).not.toBeUndefined()
-    expect(() => query.execute({ id: 4 })).rejects.toThrow()
+    const builder = createSelectBuilder(b, "bat").columns("firstName", "id")
+    expect(builder).not.toBeUndefined()
   })
 })
