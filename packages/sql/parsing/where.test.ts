@@ -226,6 +226,51 @@ describe("Where clause parsing should handle reasonable cases", () => {
     })
   })
 
+  describe("Should be able to identify non-normalized logical trees", () => {
+    it("Should identify a non-spaced but valid column filter", () => {
+      const q: ParseWhereClause<`WHERE ( ( id=1 ) anD ( id< 4 ) )`> = {
+        where: {
+          type: "LogicalTree",
+          left: {
+            type: "ColumnFilter",
+            left: {
+              type: "ColumnReference",
+              reference: {
+                type: "UnboundColumnReference",
+                column: "id",
+              },
+              alias: "id",
+            },
+            op: "=",
+            right: {
+              type: "NumberValue",
+              value: 1,
+            },
+          },
+          op: "AND",
+          right: {
+            type: "ColumnFilter",
+            left: {
+              type: "ColumnReference",
+              reference: {
+                type: "UnboundColumnReference",
+                column: "id",
+              },
+              alias: "id",
+            },
+            op: "<",
+            right: {
+              type: "NumberValue",
+              value: 1,
+            },
+          },
+        },
+      }
+
+      expect(q).not.toBeUndefined()
+    })
+  })
+
   describe("Logical trees should be identified correctly", () => {
     it("Should identify a simple compound clause", () => {
       const q: ParseWhereClause<`WHERE id > 2 AND id < 4`> = {

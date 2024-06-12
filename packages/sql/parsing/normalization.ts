@@ -24,7 +24,7 @@ type SplitTrim<T, C extends string = ","> =
 /**
  * Split words based on spacing only
  */
-type SplitWords<T> =
+export type SplitWords<T> =
   Trim<T> extends `${infer Left} ${infer Right}`
     ? [...SplitWords<Left>, ...SplitWords<Right>]
     : [Trim<T>]
@@ -32,17 +32,21 @@ type SplitWords<T> =
 /**
  * Normalize the values by ensuring capitalization
  */
-type NormalizedJoin<T> = T extends [infer Left, ...infer Rest]
+export type NormalizedJoin<T, Keywords = NormalizedKeyWords> = T extends [
+  infer Left,
+  ...infer Rest,
+]
   ? Rest extends never[]
-    ? Check<Left & string>
-    : `${Check<Left & string> & string} ${NormalizedJoin<Rest> & string}`
+    ? Check<Left & string, Keywords>
+    : `${Check<Left & string, Keywords> & string} ${NormalizedJoin<Rest, Keywords> & string}`
   : ""
 
 /**
  * Check if a value is a normalized keyword
  */
-type Check<T extends string> =
-  Uppercase<T> extends NormalizedKeyWords ? Uppercase<T> : T
+type Check<T extends string, Keywords> = [Uppercase<Trim<T>>] extends [Keywords]
+  ? Uppercase<Trim<T>>
+  : Trim<T>
 
 /**
  * Set of keywords we need to ensure casing for

@@ -18,6 +18,7 @@ import { Dec, Inc } from "@telefrek/type-utils/numeric.js"
 import { Trim } from "@telefrek/type-utils/strings.js"
 import { ParseColumnDetails } from "./columns.js"
 import { OptionKeywords } from "./keywords.js"
+import type { NormalizedJoin, SplitWords } from "./normalization.js"
 import { ExtractUntil, Extractor, NextToken, StartsWith } from "./utils.js"
 
 /**
@@ -42,19 +43,43 @@ export type ExtractWhere<T extends string> =
   StartsWith<T, "WHERE"> extends true
     ? ExtractUntil<T, OptionKeywords> extends [infer Where, infer Remainder]
       ? NextToken<Where> extends ["WHERE", infer Exp]
-        ? [WhereClause<ParseExpressionTree<Exp>>, Remainder]
+        ? [WhereClause<ParseExpressionTree<NormalizeWhere<Exp>>>, Remainder]
         : [never, T]
       : NextToken<T> extends ["WHERE", infer Exp]
-        ? [WhereClause<ParseExpressionTree<Exp>>, ""]
+        ? [WhereClause<ParseExpressionTree<NormalizeWhere<Exp>>>, ""]
         : [never, T]
     : [never, T]
+
+type NormalizeWhere<T> = NormalizedJoin<SplitWhere<T>, LogicalOperation>
+
+type SplitWhere<T> = T extends `${infer Left}<>${infer Right}`
+  ? [...SplitWhere<Left>, "<>", ...SplitWhere<Right>]
+  : T extends `${infer Left}>${infer Next}${infer Right}`
+    ? SplitEqual<Left, Next, Right, ">">
+    : T extends `${infer Left}<${infer Next}${infer Right}`
+      ? SplitEqual<Left, Next, Right, "<">
+      : T extends `${infer Left}=${infer Right}`
+        ? [...SplitWhere<Left>, "=", ...SplitWhere<Right>]
+        : SplitWords<T>
+
+type SplitEqual<
+  Left extends string,
+  Next extends string,
+  Right extends string,
+  C extends string,
+> = Next extends "="
+  ? [...SplitWhere<Left>, `${C}=`, ...SplitWhere<Right>]
+  : [...SplitWhere<Left>, C, ...SplitWhere<`${Next}${Right}`>]
 
 /**
  * Parse an expression tree
  */
-export type ParseExpressionTree<T> = T extends `( ${infer Inner} )`
-  ? ParseExpressionTree<Inner>
-  : ParseColumnFilter<T> | ExtractLogical<T>
+export type ParseExpressionTree<T> =
+  Trim<T> extends `( ${infer Inner} )`
+    ? ParseExpressionTree<Inner>
+    : ExtractLogical<T> extends LogicalTree<infer Left, infer Op, infer Right>
+      ? LogicalTree<Left, Op, Right>
+      : ParseColumnFilter<T>
 
 /**
  * Extract a {@link LogicalTree}
