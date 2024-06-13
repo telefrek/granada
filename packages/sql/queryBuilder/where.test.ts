@@ -23,5 +23,6 @@ describe("Where clauses should support simple functionality", () => {
     const b = whereClause(testContext)
     expect(b).not.toBeUndefined()
     b.eq("n", "t2", 1)
+    b.eq("b", "t1", true)
   })
 })

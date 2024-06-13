@@ -16,21 +16,27 @@ type TableWithKey<T extends QueryContext<any>, N> = {
   [K in keyof T]: N extends keyof T[K] ? K : never
 }[keyof T]
 
-type ColumnValue<
+type Parameter<
+  V,
   T extends QueryContext<any>,
   C,
   K extends keyof T = keyof T,
-> = TableColumnType<T[K][C]["definition"]>
+> = V extends `:${infer _}`
+  ? V
+  : V extends `$${infer _}`
+    ? V
+    : TableColumnType<T[K][C]["definition"]>
 
 export interface WhereClauseBuilder<Context extends QueryContext<any>> {
   eq<
     Column extends Keys<Context>,
     Table extends TableWithKey<Context, Column>,
-    Value extends ColumnValue<Context, Column, Table>,
+    //Value extends ColumnValue<Context, Column, Table>,
+    Value,
   >(
     column: Column,
     table: Table,
-    value: Value,
+    value: Parameter<Value, Context, Column, Table>,
   ): void
 }
 
@@ -48,12 +54,15 @@ class DefaultWhereClauseBuilder<Context extends QueryContext<any>>
   constructor(context: Context) {
     this._context = context
   }
-
   eq<
     Column extends Keys<Context>,
     Table extends TableWithKey<Context, Column>,
-    Value extends TableColumnType<Context[Table][Column]["definition"]>,
-  >(column: Column, table: Table, value: Value): void {
+    Value,
+  >(
+    column: Column,
+    table: Table,
+    value: Parameter<Value, Context, Column, Table>,
+  ): void {
     log(`Column: ${String(column)}, Table: ${String(table)}, Value: ${value}`)
   }
 }
