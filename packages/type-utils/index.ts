@@ -16,3 +16,31 @@ export type Flatten<T> = Extract<{ [K in keyof T]: T[K] }>
  * Type for passing invalid typings since there is no way to do it currently
  */
 export type Invalid<S> = S | void | never
+
+/**
+ * All of the literal required keys from a type
+ */
+export type RequiredLiteralKeys<T> = {
+  [K in keyof T as string extends K
+    ? never
+    : number extends K
+      ? never
+      : // eslint-disable-next-line @typescript-eslint/ban-types
+        {} extends Pick<T, K>
+        ? never
+        : K]: T[K]
+}
+
+/**
+ * All of the optional (explicit) keys
+ */
+export type OptionalLiteralKeys<T> = {
+  [K in keyof T as string extends K
+    ? never
+    : number extends K
+      ? never
+      : // eslint-disable-next-line @typescript-eslint/ban-types
+        {} extends Pick<T, K>
+        ? K
+        : never]: T[K]
+}

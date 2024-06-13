@@ -4,7 +4,10 @@
  * Handle schema generation and manipulation
  */
 
-import type { Flatten } from "@telefrek/type-utils/index.js"
+import type {
+  Flatten,
+  OptionalLiteralKeys,
+} from "@telefrek/type-utils/index.js"
 import type {
   IncrementalSQLTypes,
   SQLBuiltinTypes,
@@ -86,16 +89,18 @@ export type SQLColumnOptions<T extends SQLBuiltinTypes> = Flatten<
     VariableType<T>
 >
 
-export function SQLColumn<T extends SQLBuiltinTypes>(
-  type: T,
-  options?: SQLColumnOptions<T>,
-): ColumnTypeDefinition<T> {
+type Consolidate<T, N> = Flatten<
+  Omit<T, keyof OptionalLiteralKeys<T>> & Omit<N, keyof OptionalLiteralKeys<N>>
+>
+
+export function SQLColumn<
+  T extends SQLBuiltinTypes,
+  Options extends SQLColumnOptions<T>,
+>(type: T, options?: Options): Consolidate<ColumnTypeDefinition<T>, Options> {
   return {
     ...options,
     type,
-    nullable: options?.nullable ?? false,
-    array: options?.array ?? false,
-  } as ColumnTypeDefinition<T>
+  } as Flatten<ColumnTypeDefinition<T> & Options>
 }
 
 export type TableColumnType<T extends ColumnTypeDefinition<SQLBuiltinTypes>> =
