@@ -19,9 +19,8 @@ import type {
   ParameterValueType,
   StringValueType,
   TableColumnReference,
-  ValueTypes,
+  UnboundColumnReference,
 } from "../ast.js"
-import type { CheckFilter } from "../parsing/where.js"
 import type { TableColumnType } from "../schema.js"
 import { type QueryContext } from "./context.js"
 import { buildColumnReference, parseValue } from "./utils.js"
@@ -34,22 +33,42 @@ type TableWithKey<T extends QueryContext<any>, N> = {
   [K in keyof T]: N extends keyof T[K] ? K : never
 }[keyof T]
 
-type Parameter<
+type IsUnion<T, U extends T = T> = (
+  T extends any ? (U extends T ? false : true) : never
+) extends false
+  ? false
+  : true
+
+type UniqueKeys<T extends QueryContext<any>> = {
+  [K in Keys<T>]: IsUnion<TableWithKey<T, K>> extends true ? never : K
+}[Keys<T>]
+
+type TT<T extends QueryContext<any>, C> = {
+  [K in TableWithKey<T, C>]: C extends keyof T[K]
+    ? TableColumnType<T[K][C]["definition"]>
+    : never
+}[TableWithKey<T, C>]
+
+export type Parameter<
   V,
   T extends QueryContext<any>,
   C,
-  K extends keyof T = keyof T,
-> = V extends `:${infer _}`
-  ? V
-  : V extends `$${infer _}`
-    ? V
-    : TableColumnType<T[K][C]["definition"]>
+> = V extends `:${infer _}` ? V : V extends `$${infer _}` ? V : TT<T, C>
 
 export interface WhereClauseBuilder<Context extends QueryContext<any>> {
   and<Left extends LogicalExpression, Right extends LogicalExpression>(
     left: Left,
     right: Right,
   ): LogicalTree<Left, "AND", Right>
+
+  eq<Column extends Extract<UniqueKeys<Context>, string>, Value>(
+    column: Column,
+    value: Parameter<Value, Context, Column>,
+  ): ColumnFilter<
+    ColumnReference<UnboundColumnReference<Column>>,
+    "=",
+    CheckValueType<Value>
+  >
 
   eq<
     Column extends Extract<Keys<Context>, string>,
@@ -58,11 +77,11 @@ export interface WhereClauseBuilder<Context extends QueryContext<any>> {
   >(
     column: Column,
     table: Table,
-    value: Parameter<Value, Context, Column, Table>,
-  ): CheckFilter<
+    value: Parameter<Value, Context, Column>,
+  ): ColumnFilter<
     ColumnReference<TableColumnReference<Table, Column>>,
     "=",
-    CheckValueType<Parameter<Value, Context, Column, Table>>
+    CheckValueType<Value>
   >
 
   neq<
@@ -72,11 +91,11 @@ export interface WhereClauseBuilder<Context extends QueryContext<any>> {
   >(
     column: Column,
     table: Table,
-    value: Parameter<Value, Context, Column, Table>,
-  ): CheckFilter<
+    value: Parameter<Value, Context, Column>,
+  ): ColumnFilter<
     ColumnReference<TableColumnReference<Table, Column>>,
     "!=",
-    CheckValueType<Parameter<Value, Context, Column, Table>>
+    CheckValueType<Value>
   >
 
   gt<
@@ -86,11 +105,11 @@ export interface WhereClauseBuilder<Context extends QueryContext<any>> {
   >(
     column: Column,
     table: Table,
-    value: Parameter<Value, Context, Column, Table>,
-  ): CheckFilter<
+    value: Parameter<Value, Context, Column>,
+  ): ColumnFilter<
     ColumnReference<TableColumnReference<Table, Column>>,
     ">",
-    CheckValueType<Parameter<Value, Context, Column, Table>>
+    CheckValueType<Value>
   >
 
   gte<
@@ -100,11 +119,11 @@ export interface WhereClauseBuilder<Context extends QueryContext<any>> {
   >(
     column: Column,
     table: Table,
-    value: Parameter<Value, Context, Column, Table>,
-  ): CheckFilter<
+    value: Parameter<Value, Context, Column>,
+  ): ColumnFilter<
     ColumnReference<TableColumnReference<Table, Column>>,
     ">=",
-    CheckValueType<Parameter<Value, Context, Column, Table>>
+    CheckValueType<Value>
   >
 
   lt<
@@ -114,11 +133,11 @@ export interface WhereClauseBuilder<Context extends QueryContext<any>> {
   >(
     column: Column,
     table: Table,
-    value: Parameter<Value, Context, Column, Table>,
-  ): CheckFilter<
+    value: Parameter<Value, Context, Column>,
+  ): ColumnFilter<
     ColumnReference<TableColumnReference<Table, Column>>,
     "<",
-    CheckValueType<Parameter<Value, Context, Column, Table>>
+    CheckValueType<Value>
   >
 
   lte<
@@ -128,11 +147,11 @@ export interface WhereClauseBuilder<Context extends QueryContext<any>> {
   >(
     column: Column,
     table: Table,
-    value: Parameter<Value, Context, Column, Table>,
-  ): CheckFilter<
+    value: Parameter<Value, Context, Column>,
+  ): ColumnFilter<
     ColumnReference<TableColumnReference<Table, Column>>,
     "<=",
-    CheckValueType<Parameter<Value, Context, Column, Table>>
+    CheckValueType<Value>
   >
 }
 
@@ -163,6 +182,14 @@ class DefaultWhereClauseBuilder<Context extends QueryContext<any>>
     }
   }
 
+  eq<Column extends Extract<UniqueKeys<Context>, string>, Value>(
+    column: Column,
+    value: Parameter<Value, Context, Column>,
+  ): ColumnFilter<
+    ColumnReference<UnboundColumnReference<Column>>,
+    "=",
+    CheckValueType<Value>
+  >
   eq<
     Column extends Extract<Keys<Context>, string>,
     Table extends Extract<TableWithKey<Context, Column>, string>,
@@ -170,16 +197,53 @@ class DefaultWhereClauseBuilder<Context extends QueryContext<any>>
   >(
     column: Column,
     table: Table,
-    value: Parameter<Value, Context, Column, Table>,
-  ): CheckFilter<
+    value: Parameter<Value, Context, Column>,
+  ): ColumnFilter<
     ColumnReference<TableColumnReference<Table, Column>>,
     "=",
-    CheckValueType<Parameter<Value, Context, Column, Table>>
-  > {
-    return buildFilter(column, table, "=", value) as CheckFilter<
+    CheckValueType<Value>
+  >
+  eq<
+    Column extends Extract<Keys<Context>, string>,
+    Table extends Extract<TableWithKey<Context, Column>, string>,
+    Value,
+  >(
+    column: Column,
+    table: Table | Parameter<Value, Context, Column>,
+    value?: Parameter<Value, Context, Column>,
+  ):
+    | ColumnFilter<
+        ColumnReference<UnboundColumnReference<Column>>,
+        "=",
+        CheckValueType<Value>
+      >
+    | ColumnFilter<
+        ColumnReference<TableColumnReference<Table, Column>>,
+        "=",
+        CheckValueType<Value>
+      > {
+    // There is only a column
+    if (value === undefined) {
+      return buildFilter1(
+        column,
+        "=",
+        table as Parameter<Value, Context, Column>,
+      ) as ColumnFilter<
+        ColumnReference<UnboundColumnReference<Column>>,
+        "=",
+        CheckValueType<Value>
+      >
+    }
+
+    return buildFilter(
+      column,
+      table as Table,
+      "=",
+      value as Parameter<Value, Context, Column>,
+    ) as ColumnFilter<
       ColumnReference<TableColumnReference<Table, Column>>,
       "=",
-      CheckValueType<Parameter<Value, Context, Column, Table>>
+      CheckValueType<Value>
     >
   }
 
@@ -190,17 +254,13 @@ class DefaultWhereClauseBuilder<Context extends QueryContext<any>>
   >(
     column: Column,
     table: Table,
-    value: Parameter<Value, Context, Column, Table>,
-  ): CheckFilter<
+    value: Parameter<Value, Context, Column>,
+  ): ColumnFilter<
     ColumnReference<TableColumnReference<Table, Column>>,
     ">=",
-    CheckValueType<Parameter<Value, Context, Column, Table>>
+    CheckValueType<Value>
   > {
-    return buildFilter(column, table, "=", value) as CheckFilter<
-      ColumnReference<TableColumnReference<Table, Column>>,
-      ">=",
-      CheckValueType<Parameter<Value, Context, Column, Table>>
-    >
+    return buildFilter(column, table, "=", value) as any
   }
 
   gt<
@@ -210,17 +270,13 @@ class DefaultWhereClauseBuilder<Context extends QueryContext<any>>
   >(
     column: Column,
     table: Table,
-    value: Parameter<Value, Context, Column, Table>,
-  ): CheckFilter<
+    value: Parameter<Value, Context, Column>,
+  ): ColumnFilter<
     ColumnReference<TableColumnReference<Table, Column>>,
     ">",
-    CheckValueType<Parameter<Value, Context, Column, Table>>
+    CheckValueType<Value>
   > {
-    return buildFilter(column, table, "=", value) as CheckFilter<
-      ColumnReference<TableColumnReference<Table, Column>>,
-      ">",
-      CheckValueType<Parameter<Value, Context, Column, Table>>
-    >
+    return buildFilter(column, table, "=", value) as any
   }
 
   lt<
@@ -230,17 +286,13 @@ class DefaultWhereClauseBuilder<Context extends QueryContext<any>>
   >(
     column: Column,
     table: Table,
-    value: Parameter<Value, Context, Column, Table>,
-  ): CheckFilter<
+    value: Parameter<Value, Context, Column>,
+  ): ColumnFilter<
     ColumnReference<TableColumnReference<Table, Column>>,
     "<",
-    CheckValueType<Parameter<Value, Context, Column, Table>>
+    CheckValueType<Value>
   > {
-    return buildFilter(column, table, "=", value) as CheckFilter<
-      ColumnReference<TableColumnReference<Table, Column>>,
-      "<",
-      CheckValueType<Parameter<Value, Context, Column, Table>>
-    >
+    return buildFilter(column, table, "=", value) as any
   }
 
   lte<
@@ -250,17 +302,13 @@ class DefaultWhereClauseBuilder<Context extends QueryContext<any>>
   >(
     column: Column,
     table: Table,
-    value: Parameter<Value, Context, Column, Table>,
-  ): CheckFilter<
+    value: Parameter<Value, Context, Column>,
+  ): ColumnFilter<
     ColumnReference<TableColumnReference<Table, Column>>,
     "<=",
-    CheckValueType<Parameter<Value, Context, Column, Table>>
+    CheckValueType<Value>
   > {
-    return buildFilter(column, table, "=", value) as CheckFilter<
-      ColumnReference<TableColumnReference<Table, Column>>,
-      "<=",
-      CheckValueType<Parameter<Value, Context, Column, Table>>
-    >
+    return buildFilter(column, table, "=", value) as any
   }
 
   neq<
@@ -270,17 +318,39 @@ class DefaultWhereClauseBuilder<Context extends QueryContext<any>>
   >(
     column: Column,
     table: Table,
-    value: Parameter<Value, Context, Column, Table>,
-  ): CheckFilter<
+    value: Parameter<Value, Context, Column>,
+  ): ColumnFilter<
     ColumnReference<TableColumnReference<Table, Column>>,
     "!=",
-    CheckValueType<Parameter<Value, Context, Column, Table>>
+    CheckValueType<Value>
   > {
-    return buildFilter(column, table, "=", value) as CheckFilter<
-      ColumnReference<TableColumnReference<Table, Column>>,
-      "!=",
-      CheckValueType<Parameter<Value, Context, Column, Table>>
-    >
+    return buildFilter(column, table, "=", value) as any
+  }
+}
+
+function buildFilter1<
+  Column extends string,
+  Operation extends FilteringOperation,
+  Value,
+>(
+  column: Column,
+  op: Operation,
+  value: Value,
+): ColumnFilter<
+  ColumnReference<UnboundColumnReference<Column>>,
+  Operation,
+  CheckValueType<Value>
+> {
+  return {
+    type: "ColumnFilter",
+    left: buildColumnReference(column),
+    op,
+    right: (isParameter(value)
+      ? {
+          type: "ParameterValue",
+          name: String(value).substring(1),
+        }
+      : parseValue(value)) as CheckValueType<Value>,
   }
 }
 
@@ -297,18 +367,18 @@ function buildFilter<
 ): ColumnFilter<
   ColumnReference<TableColumnReference<Table, Column>>,
   Operation,
-  ValueTypes
+  CheckValueType<Value>
 > {
   return {
     type: "ColumnFilter",
     left: buildColumnReference(column, table),
     op,
-    right: isParameter(value)
+    right: (isParameter(value)
       ? {
           type: "ParameterValue",
           name: String(value).substring(1),
         }
-      : parseValue(value),
+      : parseValue(value)) as CheckValueType<Value>,
   }
 }
 

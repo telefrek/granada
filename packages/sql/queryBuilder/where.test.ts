@@ -26,6 +26,12 @@ describe("Where clauses should support simple functionality", () => {
       where: whereClause(testContext).eq("n", "t2", 1),
     }
     expect(w).not.toBeUndefined()
+
+    const w2: ParseWhereClause<`WHERE b = false`> = {
+      where: whereClause(testContext).eq("b", false),
+    }
+
+    expect(w2).not.toBeUndefined()
   })
 
   it("Should support a logical tree", () => {
