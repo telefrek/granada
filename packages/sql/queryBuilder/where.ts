@@ -12,6 +12,8 @@ import type {
   ColumnFilter,
   ColumnReference,
   FilteringOperation,
+  LogicalExpression,
+  LogicalTree,
   NullValueType,
   NumberValueType,
   ParameterValueType,
@@ -44,6 +46,11 @@ type Parameter<
     : TableColumnType<T[K][C]["definition"]>
 
 export interface WhereClauseBuilder<Context extends QueryContext<any>> {
+  and<Left extends LogicalExpression, Right extends LogicalExpression>(
+    left: Left,
+    right: Right,
+  ): LogicalTree<Left, "AND", Right>
+
   eq<
     Column extends Extract<Keys<Context>, string>,
     Table extends Extract<TableWithKey<Context, Column>, string>,
@@ -55,6 +62,76 @@ export interface WhereClauseBuilder<Context extends QueryContext<any>> {
   ): CheckFilter<
     ColumnReference<TableColumnReference<Table, Column>>,
     "=",
+    CheckValueType<Parameter<Value, Context, Column, Table>>
+  >
+
+  neq<
+    Column extends Extract<Keys<Context>, string>,
+    Table extends Extract<TableWithKey<Context, Column>, string>,
+    Value,
+  >(
+    column: Column,
+    table: Table,
+    value: Parameter<Value, Context, Column, Table>,
+  ): CheckFilter<
+    ColumnReference<TableColumnReference<Table, Column>>,
+    "!=",
+    CheckValueType<Parameter<Value, Context, Column, Table>>
+  >
+
+  gt<
+    Column extends Extract<Keys<Context>, string>,
+    Table extends Extract<TableWithKey<Context, Column>, string>,
+    Value,
+  >(
+    column: Column,
+    table: Table,
+    value: Parameter<Value, Context, Column, Table>,
+  ): CheckFilter<
+    ColumnReference<TableColumnReference<Table, Column>>,
+    ">",
+    CheckValueType<Parameter<Value, Context, Column, Table>>
+  >
+
+  gte<
+    Column extends Extract<Keys<Context>, string>,
+    Table extends Extract<TableWithKey<Context, Column>, string>,
+    Value,
+  >(
+    column: Column,
+    table: Table,
+    value: Parameter<Value, Context, Column, Table>,
+  ): CheckFilter<
+    ColumnReference<TableColumnReference<Table, Column>>,
+    ">=",
+    CheckValueType<Parameter<Value, Context, Column, Table>>
+  >
+
+  lt<
+    Column extends Extract<Keys<Context>, string>,
+    Table extends Extract<TableWithKey<Context, Column>, string>,
+    Value,
+  >(
+    column: Column,
+    table: Table,
+    value: Parameter<Value, Context, Column, Table>,
+  ): CheckFilter<
+    ColumnReference<TableColumnReference<Table, Column>>,
+    "<",
+    CheckValueType<Parameter<Value, Context, Column, Table>>
+  >
+
+  lte<
+    Column extends Extract<Keys<Context>, string>,
+    Table extends Extract<TableWithKey<Context, Column>, string>,
+    Value,
+  >(
+    column: Column,
+    table: Table,
+    value: Parameter<Value, Context, Column, Table>,
+  ): CheckFilter<
+    ColumnReference<TableColumnReference<Table, Column>>,
+    "<=",
     CheckValueType<Parameter<Value, Context, Column, Table>>
   >
 }
@@ -74,6 +151,18 @@ class DefaultWhereClauseBuilder<Context extends QueryContext<any>>
     this._context = context
   }
 
+  and<Left extends LogicalExpression, Right extends LogicalExpression>(
+    left: Left,
+    right: Right,
+  ): LogicalTree<Left, "AND", Right> {
+    return {
+      type: "LogicalTree",
+      left,
+      op: "AND",
+      right,
+    }
+  }
+
   eq<
     Column extends Extract<Keys<Context>, string>,
     Table extends Extract<TableWithKey<Context, Column>, string>,
@@ -90,6 +179,106 @@ class DefaultWhereClauseBuilder<Context extends QueryContext<any>>
     return buildFilter(column, table, "=", value) as CheckFilter<
       ColumnReference<TableColumnReference<Table, Column>>,
       "=",
+      CheckValueType<Parameter<Value, Context, Column, Table>>
+    >
+  }
+
+  gte<
+    Column extends Extract<Keys<Context>, string>,
+    Table extends Extract<TableWithKey<Context, Column>, string>,
+    Value,
+  >(
+    column: Column,
+    table: Table,
+    value: Parameter<Value, Context, Column, Table>,
+  ): CheckFilter<
+    ColumnReference<TableColumnReference<Table, Column>>,
+    ">=",
+    CheckValueType<Parameter<Value, Context, Column, Table>>
+  > {
+    return buildFilter(column, table, "=", value) as CheckFilter<
+      ColumnReference<TableColumnReference<Table, Column>>,
+      ">=",
+      CheckValueType<Parameter<Value, Context, Column, Table>>
+    >
+  }
+
+  gt<
+    Column extends Extract<Keys<Context>, string>,
+    Table extends Extract<TableWithKey<Context, Column>, string>,
+    Value,
+  >(
+    column: Column,
+    table: Table,
+    value: Parameter<Value, Context, Column, Table>,
+  ): CheckFilter<
+    ColumnReference<TableColumnReference<Table, Column>>,
+    ">",
+    CheckValueType<Parameter<Value, Context, Column, Table>>
+  > {
+    return buildFilter(column, table, "=", value) as CheckFilter<
+      ColumnReference<TableColumnReference<Table, Column>>,
+      ">",
+      CheckValueType<Parameter<Value, Context, Column, Table>>
+    >
+  }
+
+  lt<
+    Column extends Extract<Keys<Context>, string>,
+    Table extends Extract<TableWithKey<Context, Column>, string>,
+    Value,
+  >(
+    column: Column,
+    table: Table,
+    value: Parameter<Value, Context, Column, Table>,
+  ): CheckFilter<
+    ColumnReference<TableColumnReference<Table, Column>>,
+    "<",
+    CheckValueType<Parameter<Value, Context, Column, Table>>
+  > {
+    return buildFilter(column, table, "=", value) as CheckFilter<
+      ColumnReference<TableColumnReference<Table, Column>>,
+      "<",
+      CheckValueType<Parameter<Value, Context, Column, Table>>
+    >
+  }
+
+  lte<
+    Column extends Extract<Keys<Context>, string>,
+    Table extends Extract<TableWithKey<Context, Column>, string>,
+    Value,
+  >(
+    column: Column,
+    table: Table,
+    value: Parameter<Value, Context, Column, Table>,
+  ): CheckFilter<
+    ColumnReference<TableColumnReference<Table, Column>>,
+    "<=",
+    CheckValueType<Parameter<Value, Context, Column, Table>>
+  > {
+    return buildFilter(column, table, "=", value) as CheckFilter<
+      ColumnReference<TableColumnReference<Table, Column>>,
+      "<=",
+      CheckValueType<Parameter<Value, Context, Column, Table>>
+    >
+  }
+
+  neq<
+    Column extends Extract<Keys<Context>, string>,
+    Table extends Extract<TableWithKey<Context, Column>, string>,
+    Value,
+  >(
+    column: Column,
+    table: Table,
+    value: Parameter<Value, Context, Column, Table>,
+  ): CheckFilter<
+    ColumnReference<TableColumnReference<Table, Column>>,
+    "!=",
+    CheckValueType<Parameter<Value, Context, Column, Table>>
+  > {
+    return buildFilter(column, table, "=", value) as CheckFilter<
+      ColumnReference<TableColumnReference<Table, Column>>,
+      "!=",
       CheckValueType<Parameter<Value, Context, Column, Table>>
     >
   }
