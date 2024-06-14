@@ -229,6 +229,30 @@ describe("Where clause parsing should handle reasonable cases", () => {
 
       expect(i).not.toBeUndefined()
     })
+
+    it("Should be able to handle table referenced columns", () => {
+      const q: ParseWhereClause<`WHERE t.c = 1`> = {
+        where: {
+          type: "ColumnFilter",
+          left: {
+            type: "ColumnReference",
+            reference: {
+              type: "TableColumnReference",
+              column: "c",
+              table: "t",
+            },
+            alias: "c",
+          },
+          op: "=",
+          right: {
+            type: "NumberValue",
+            value: 1,
+          },
+        },
+      }
+
+      expect(q).not.toBeUndefined()
+    })
   })
 
   describe("Should identify invalid types", () => {

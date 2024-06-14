@@ -163,7 +163,7 @@ type ParseColumnFilter<T> =
 /**
  * Check that the column filter is appropriate and well formed
  */
-type CheckFilter<Left, Operation, Right> =
+export type CheckFilter<Left, Operation, Right> =
   Left extends ColumnReference<infer Reference, infer Alias>
     ? [Operation] extends [FilteringOperation]
       ? Right extends ValueTypes

@@ -2,6 +2,7 @@
  * Testing for where clauses
  */
 
+import type { ParseWhereClause } from "../parsing/where.js"
 import { SQLColumn } from "../schema.js"
 import { SQLBuiltinTypes } from "../types.js"
 import { QueryContextBuilder } from "./context.js"
@@ -20,9 +21,10 @@ describe("Where clauses should support simple functionality", () => {
     .queryContext.build()
 
   it("Should support a simple filter", () => {
-    const b = whereClause(testContext)
-    expect(b).not.toBeUndefined()
-    b.eq("n", "t2", 1)
-    b.eq("b", "t1", ":param")
+    // Verify that our string parsing type matches what the query returns
+    const w: ParseWhereClause<`WHERE t2.n = 1`> = {
+      where: whereClause(testContext).eq("n", "t2", 1),
+    }
+    expect(w).not.toBeUndefined()
   })
 })

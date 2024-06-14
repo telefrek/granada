@@ -4,9 +4,25 @@
  * Where query clause building
  */
 
-import { log } from "console"
+import type {
+  ArrayValueType,
+  BigIntValueType,
+  BooleanValueType,
+  BufferValueType,
+  ColumnFilter,
+  ColumnReference,
+  FilteringOperation,
+  NullValueType,
+  NumberValueType,
+  ParameterValueType,
+  StringValueType,
+  TableColumnReference,
+  ValueTypes,
+} from "../ast.js"
+import type { CheckFilter } from "../parsing/where.js"
 import type { TableColumnType } from "../schema.js"
 import { type QueryContext } from "./context.js"
+import { buildColumnReference, parseValue } from "./utils.js"
 
 type Keys<T extends QueryContext<any>> = {
   [K in keyof T]: keyof T[K]
@@ -29,15 +45,18 @@ type Parameter<
 
 export interface WhereClauseBuilder<Context extends QueryContext<any>> {
   eq<
-    Column extends Keys<Context>,
-    Table extends TableWithKey<Context, Column>,
-    //Value extends ColumnValue<Context, Column, Table>,
+    Column extends Extract<Keys<Context>, string>,
+    Table extends Extract<TableWithKey<Context, Column>, string>,
     Value,
   >(
     column: Column,
     table: Table,
     value: Parameter<Value, Context, Column, Table>,
-  ): void
+  ): CheckFilter<
+    ColumnReference<TableColumnReference<Table, Column>>,
+    "=",
+    CheckValueType<Parameter<Value, Context, Column, Table>>
+  >
 }
 
 export function whereClause<Context extends QueryContext<any>>(
@@ -54,15 +73,79 @@ class DefaultWhereClauseBuilder<Context extends QueryContext<any>>
   constructor(context: Context) {
     this._context = context
   }
+
   eq<
-    Column extends Keys<Context>,
-    Table extends TableWithKey<Context, Column>,
+    Column extends Extract<Keys<Context>, string>,
+    Table extends Extract<TableWithKey<Context, Column>, string>,
     Value,
   >(
     column: Column,
     table: Table,
     value: Parameter<Value, Context, Column, Table>,
-  ): void {
-    log(`Column: ${String(column)}, Table: ${String(table)}, Value: ${value}`)
+  ): CheckFilter<
+    ColumnReference<TableColumnReference<Table, Column>>,
+    "=",
+    CheckValueType<Parameter<Value, Context, Column, Table>>
+  > {
+    return buildFilter(column, table, "=", value) as CheckFilter<
+      ColumnReference<TableColumnReference<Table, Column>>,
+      "=",
+      CheckValueType<Parameter<Value, Context, Column, Table>>
+    >
   }
 }
+
+function buildFilter<
+  Column extends string,
+  Table extends string,
+  Operation extends FilteringOperation,
+  Value,
+>(
+  column: Column,
+  table: Table,
+  op: Operation,
+  value: Value,
+): ColumnFilter<
+  ColumnReference<TableColumnReference<Table, Column>>,
+  Operation,
+  ValueTypes
+> {
+  return {
+    type: "ColumnFilter",
+    left: buildColumnReference(column, table),
+    op,
+    right: isParameter(value)
+      ? {
+          type: "ParameterValue",
+          name: String(value).substring(1),
+        }
+      : parseValue(value),
+  }
+}
+
+function isParameter<T>(value: T): boolean {
+  return (
+    typeof value === "string" &&
+    (value.startsWith(":") || value.startsWith("$"))
+  )
+}
+
+type CheckValueType<T> = T extends number
+  ? NumberValueType<T>
+  : T extends bigint
+    ? BigIntValueType<T>
+    : T extends boolean
+      ? BooleanValueType<T>
+      : T extends [null]
+        ? NullValueType
+        : T extends Int8Array
+          ? BufferValueType<T>
+          : T extends []
+            ? ArrayValueType<T>
+            : T extends string
+              ? T extends `:${infer _}`
+                ? ParameterValueType<_>
+                : T extends `$${infer _}`
+                  ? ParameterValueType<_>
+                  : StringValueType<T>
+              : never

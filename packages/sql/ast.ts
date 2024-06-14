@@ -86,7 +86,7 @@ export type JsonValueType<J extends object = object> = {
 /**
  * An array value
  */
-export type ArrayValueType<A extends [] = []> = {
+export type ArrayValueType<A extends any[] = any[]> = {
   type: "ArrayValue"
   value: A
 }
