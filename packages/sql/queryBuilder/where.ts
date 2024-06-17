@@ -4,6 +4,7 @@
  * Where query clause building
  */
 
+import type { Keys } from "@telefrek/type-utils"
 import type {
   ArrayValueType,
   BigIntValueType,
@@ -22,38 +23,29 @@ import type {
   UnboundColumnReference,
 } from "../ast.js"
 import type { TableColumnType } from "../schema.js"
-import { type QueryContext } from "./context.js"
+import { type QueryContext, type QueryContextColumns } from "./context.js"
 import { buildColumnReference, parseValue } from "./utils.js"
 
-type Keys<T extends QueryContext<any>> = {
-  [K in keyof T]: keyof T[K]
-}[keyof T]
-
-type TableWithKey<T extends QueryContext<any>, N> = {
-  [K in keyof T]: N extends keyof T[K] ? K : never
-}[keyof T]
-
-type IsUnion<T, U extends T = T> = (
-  T extends any ? (U extends T ? false : true) : never
-) extends false
-  ? false
-  : true
-
-type UniqueKeys<T extends QueryContext<any>> = {
-  [K in Keys<T>]: IsUnion<TableWithKey<T, K>> extends true ? never : K
-}[Keys<T>]
-
-type TT<T extends QueryContext<any>, C> = {
-  [K in TableWithKey<T, C>]: C extends keyof T[K]
-    ? TableColumnType<T[K][C]["definition"]>
-    : never
-}[TableWithKey<T, C>]
+type ColumnType<
+  T extends QueryContext<any>,
+  C,
+> = C extends `${infer Table}.${infer Column}`
+  ? TableColumnType<T[Table][Column]["definition"]>
+  : {
+      [Key in Keys<T>]: C extends keyof T[Key]
+        ? TableColumnType<T[Key][C]["definition"]>
+        : never
+    }[Keys<T>]
 
 export type Parameter<
   V,
   T extends QueryContext<any>,
   C,
-> = V extends `:${infer _}` ? V : V extends `$${infer _}` ? V : TT<T, C>
+> = V extends `:${infer _}` ? V : V extends `$${infer _}` ? V : ColumnType<T, C>
+
+type RefType<C extends string> = C extends `${infer Table}.${infer Column}`
+  ? ColumnReference<TableColumnReference<Table, Column>>
+  : ColumnReference<UnboundColumnReference<C>>
 
 export interface WhereClauseBuilder<Context extends QueryContext<any>> {
   and<Left extends LogicalExpression, Right extends LogicalExpression>(
@@ -61,98 +53,15 @@ export interface WhereClauseBuilder<Context extends QueryContext<any>> {
     right: Right,
   ): LogicalTree<Left, "AND", Right>
 
-  eq<Column extends Extract<UniqueKeys<Context>, string>, Value>(
-    column: Column,
-    value: Parameter<Value, Context, Column>,
-  ): ColumnFilter<
-    ColumnReference<UnboundColumnReference<Column>>,
-    "=",
-    CheckValueType<Value>
-  >
-
-  eq<
-    Column extends Extract<Keys<Context>, string>,
-    Table extends Extract<TableWithKey<Context, Column>, string>,
+  filter<
+    Column extends QueryContextColumns<Context>,
+    Op extends FilteringOperation,
     Value,
   >(
     column: Column,
-    table: Table,
+    op: Op,
     value: Parameter<Value, Context, Column>,
-  ): ColumnFilter<
-    ColumnReference<TableColumnReference<Table, Column>>,
-    "=",
-    CheckValueType<Value>
-  >
-
-  neq<
-    Column extends Extract<Keys<Context>, string>,
-    Table extends Extract<TableWithKey<Context, Column>, string>,
-    Value,
-  >(
-    column: Column,
-    table: Table,
-    value: Parameter<Value, Context, Column>,
-  ): ColumnFilter<
-    ColumnReference<TableColumnReference<Table, Column>>,
-    "!=",
-    CheckValueType<Value>
-  >
-
-  gt<
-    Column extends Extract<Keys<Context>, string>,
-    Table extends Extract<TableWithKey<Context, Column>, string>,
-    Value,
-  >(
-    column: Column,
-    table: Table,
-    value: Parameter<Value, Context, Column>,
-  ): ColumnFilter<
-    ColumnReference<TableColumnReference<Table, Column>>,
-    ">",
-    CheckValueType<Value>
-  >
-
-  gte<
-    Column extends Extract<Keys<Context>, string>,
-    Table extends Extract<TableWithKey<Context, Column>, string>,
-    Value,
-  >(
-    column: Column,
-    table: Table,
-    value: Parameter<Value, Context, Column>,
-  ): ColumnFilter<
-    ColumnReference<TableColumnReference<Table, Column>>,
-    ">=",
-    CheckValueType<Value>
-  >
-
-  lt<
-    Column extends Extract<Keys<Context>, string>,
-    Table extends Extract<TableWithKey<Context, Column>, string>,
-    Value,
-  >(
-    column: Column,
-    table: Table,
-    value: Parameter<Value, Context, Column>,
-  ): ColumnFilter<
-    ColumnReference<TableColumnReference<Table, Column>>,
-    "<",
-    CheckValueType<Value>
-  >
-
-  lte<
-    Column extends Extract<Keys<Context>, string>,
-    Table extends Extract<TableWithKey<Context, Column>, string>,
-    Value,
-  >(
-    column: Column,
-    table: Table,
-    value: Parameter<Value, Context, Column>,
-  ): ColumnFilter<
-    ColumnReference<TableColumnReference<Table, Column>>,
-    "<=",
-    CheckValueType<Value>
-  >
+  ): ColumnFilter<RefType<Column>, Op, CheckValueType<Value>>
 }
 
 export function whereClause<Context extends QueryContext<any>>(
@@ -182,196 +91,41 @@ class DefaultWhereClauseBuilder<Context extends QueryContext<any>>
     }
   }
 
-  eq<Column extends Extract<UniqueKeys<Context>, string>, Value>(
-    column: Column,
-    value: Parameter<Value, Context, Column>,
-  ): ColumnFilter<
-    ColumnReference<UnboundColumnReference<Column>>,
-    "=",
-    CheckValueType<Value>
-  >
-  eq<
-    Column extends Extract<Keys<Context>, string>,
-    Table extends Extract<TableWithKey<Context, Column>, string>,
+  filter<
+    Column extends QueryContextColumns<Context>,
+    Op extends FilteringOperation,
     Value,
   >(
     column: Column,
-    table: Table,
+    op: Op,
     value: Parameter<Value, Context, Column>,
-  ): ColumnFilter<
-    ColumnReference<TableColumnReference<Table, Column>>,
-    "=",
-    CheckValueType<Value>
-  >
-  eq<
-    Column extends Extract<Keys<Context>, string>,
-    Table extends Extract<TableWithKey<Context, Column>, string>,
-    Value,
-  >(
-    column: Column,
-    table: Table | Parameter<Value, Context, Column>,
-    value?: Parameter<Value, Context, Column>,
-  ):
-    | ColumnFilter<
-        ColumnReference<UnboundColumnReference<Column>>,
-        "=",
-        CheckValueType<Value>
-      >
-    | ColumnFilter<
-        ColumnReference<TableColumnReference<Table, Column>>,
-        "=",
-        CheckValueType<Value>
-      > {
-    // There is only a column
-    if (value === undefined) {
-      return buildFilter1(
-        column,
-        "=",
-        table as Parameter<Value, Context, Column>,
-      ) as ColumnFilter<
-        ColumnReference<UnboundColumnReference<Column>>,
-        "=",
-        CheckValueType<Value>
-      >
-    }
-
-    return buildFilter(
-      column,
-      table as Table,
-      "=",
-      value as Parameter<Value, Context, Column>,
-    ) as ColumnFilter<
-      ColumnReference<TableColumnReference<Table, Column>>,
-      "=",
-      CheckValueType<Value>
-    >
-  }
-
-  gte<
-    Column extends Extract<Keys<Context>, string>,
-    Table extends Extract<TableWithKey<Context, Column>, string>,
-    Value,
-  >(
-    column: Column,
-    table: Table,
-    value: Parameter<Value, Context, Column>,
-  ): ColumnFilter<
-    ColumnReference<TableColumnReference<Table, Column>>,
-    ">=",
-    CheckValueType<Value>
-  > {
-    return buildFilter(column, table, "=", value) as any
-  }
-
-  gt<
-    Column extends Extract<Keys<Context>, string>,
-    Table extends Extract<TableWithKey<Context, Column>, string>,
-    Value,
-  >(
-    column: Column,
-    table: Table,
-    value: Parameter<Value, Context, Column>,
-  ): ColumnFilter<
-    ColumnReference<TableColumnReference<Table, Column>>,
-    ">",
-    CheckValueType<Value>
-  > {
-    return buildFilter(column, table, "=", value) as any
-  }
-
-  lt<
-    Column extends Extract<Keys<Context>, string>,
-    Table extends Extract<TableWithKey<Context, Column>, string>,
-    Value,
-  >(
-    column: Column,
-    table: Table,
-    value: Parameter<Value, Context, Column>,
-  ): ColumnFilter<
-    ColumnReference<TableColumnReference<Table, Column>>,
-    "<",
-    CheckValueType<Value>
-  > {
-    return buildFilter(column, table, "=", value) as any
-  }
-
-  lte<
-    Column extends Extract<Keys<Context>, string>,
-    Table extends Extract<TableWithKey<Context, Column>, string>,
-    Value,
-  >(
-    column: Column,
-    table: Table,
-    value: Parameter<Value, Context, Column>,
-  ): ColumnFilter<
-    ColumnReference<TableColumnReference<Table, Column>>,
-    "<=",
-    CheckValueType<Value>
-  > {
-    return buildFilter(column, table, "=", value) as any
-  }
-
-  neq<
-    Column extends Extract<Keys<Context>, string>,
-    Table extends Extract<TableWithKey<Context, Column>, string>,
-    Value,
-  >(
-    column: Column,
-    table: Table,
-    value: Parameter<Value, Context, Column>,
-  ): ColumnFilter<
-    ColumnReference<TableColumnReference<Table, Column>>,
-    "!=",
-    CheckValueType<Value>
-  > {
-    return buildFilter(column, table, "=", value) as any
-  }
-}
-
-function buildFilter1<
-  Column extends string,
-  Operation extends FilteringOperation,
-  Value,
->(
-  column: Column,
-  op: Operation,
-  value: Value,
-): ColumnFilter<
-  ColumnReference<UnboundColumnReference<Column>>,
-  Operation,
-  CheckValueType<Value>
-> {
-  return {
-    type: "ColumnFilter",
-    left: buildColumnReference(column),
-    op,
-    right: (isParameter(value)
-      ? {
-          type: "ParameterValue",
-          name: String(value).substring(1),
-        }
-      : parseValue(value)) as CheckValueType<Value>,
+  ): ColumnFilter<RefType<Column>, Op, CheckValueType<Value>> {
+    return buildFilter<Column, Op, Value>(column, op, value as Value) as any
   }
 }
 
 function buildFilter<
   Column extends string,
-  Table extends string,
   Operation extends FilteringOperation,
   Value,
 >(
   column: Column,
-  table: Table,
   op: Operation,
   value: Value,
 ): ColumnFilter<
-  ColumnReference<TableColumnReference<Table, Column>>,
+  Column extends `${infer Table}.${infer Col}`
+    ? ColumnReference<TableColumnReference<Table, Col>>
+    : ColumnReference<UnboundColumnReference<Column>>,
   Operation,
   CheckValueType<Value>
 > {
+  const data = column.split(".")
   return {
     type: "ColumnFilter",
-    left: buildColumnReference(column, table),
+    left:
+      data.length > 1
+        ? buildColumnReference(data[1], data[0])
+        : (buildColumnReference(column) as any),
     op,
     right: (isParameter(value)
       ? {

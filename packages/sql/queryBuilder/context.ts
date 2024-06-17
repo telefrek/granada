@@ -1,7 +1,26 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import type { Flatten } from "@telefrek/type-utils"
+import type { Flatten, IsUnion, Keys } from "@telefrek/type-utils"
 import { type ColumnTypeDefinition } from "../schema.js"
+
+export type QueryContextColumns<Context extends QueryContext<any>> =
+  IsUnion<Keys<Context>> extends true
+    ? {
+        [Key in Keys<Context>]: `${Key & string}.${Keys<Context[Key]> & string}`
+      }[Keys<Context>]
+    : {
+        [Key in Keys<Context>]: `${Keys<Context[Key]> & string}`
+      }[Keys<Context>]
+
+export type UniqueKeys<Context extends QueryContext<any>> = {
+  [Key in Keys<Context>]: {
+    [K in keyof Context[Key]]: K extends OtherKeys<Context, Key> ? never : K
+  }[keyof Context[Key]]
+}[Keys<Context>]
+
+type OtherKeys<Context extends QueryContext<any>, K extends keyof Context> = {
+  [Key in Keys<Context>]: [Key] extends [K] ? never : keyof Context[Key]
+}[Keys<Context>]
 
 type ExtendedQueryContext<
   Context extends QueryContext<any>,

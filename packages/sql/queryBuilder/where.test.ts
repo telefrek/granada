@@ -23,12 +23,12 @@ describe("Where clauses should support simple functionality", () => {
   it("Should support a simple filter", () => {
     // Verify that our string parsing type matches what the query returns
     const w: ParseWhereClause<`WHERE t2.n = 1`> = {
-      where: whereClause(testContext).eq("n", "t2", 1),
+      where: whereClause(testContext).filter("t2.n", "=", 1),
     }
     expect(w).not.toBeUndefined()
 
-    const w2: ParseWhereClause<`WHERE b = false`> = {
-      where: whereClause(testContext).eq("b", false),
+    const w2: ParseWhereClause<`WHERE t1.b = false`> = {
+      where: whereClause(testContext).filter("t1.b", "=", false),
     }
 
     expect(w2).not.toBeUndefined()
@@ -37,7 +37,7 @@ describe("Where clauses should support simple functionality", () => {
   it("Should support a logical tree", () => {
     const b = whereClause(testContext)
     const w: ParseWhereClause<`WHERE t1.n > 1 AND t1.n < 3`> = {
-      where: b.and(b.gt("n", "t1", 1), b.lt("n", "t1", 3)),
+      where: b.and(b.filter("t1.n", ">", 1), b.filter("t1.n", "<", 3)),
     }
 
     expect(w).not.toBeUndefined()
