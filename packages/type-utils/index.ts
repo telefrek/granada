@@ -19,12 +19,15 @@ export type Flatten<T> = Extract<{ [K in keyof T]: T[K] }>
 export type Invalid<S> = S | void | never
 
 /**
- * Get all the keys of a type
+ * Get all the keys of type T
  */
 export type Keys<T> = {
   [K in keyof T]: K
 }[keyof T]
 
+/**
+ * Get all the keys that are of type K in the given type T
+ */
 export type KeysOfType<T, K> = {
   [Key in keyof T]: T[Key] extends [K] ? Key : never
 }[keyof T]
@@ -65,3 +68,11 @@ export type OptionalLiteralKeys<T> = {
         ? K
         : never]: T[K]
 }
+
+/**
+ * Consolidates the definition of two types, removing anything that is optional
+ * (useful for collapsing types based on objects passed where no options were provided)
+ */
+export type Consolidate<T, N> = Flatten<
+  Omit<T, keyof OptionalLiteralKeys<T>> & Omit<N, keyof OptionalLiteralKeys<N>>
+>

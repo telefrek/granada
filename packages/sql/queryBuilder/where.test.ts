@@ -27,8 +27,8 @@ describe("Where clauses should support simple functionality", () => {
     }
     expect(w).not.toBeUndefined()
 
-    const w2: ParseWhereClause<`WHERE t1.b = false`> = {
-      where: whereClause(testContext).filter("t1.b", "=", false),
+    const w2: ParseWhereClause<`WHERE b = false`> = {
+      where: whereClause(testContext).filter("b", "=", false),
     }
 
     expect(w2).not.toBeUndefined()

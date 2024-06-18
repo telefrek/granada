@@ -5,8 +5,10 @@
  */
 
 import type {
+  Consolidate,
   Flatten,
-  OptionalLiteralKeys,
+  IsUnion,
+  Keys,
 } from "@telefrek/type-utils/index.js"
 import type {
   IncrementalSQLTypes,
@@ -29,19 +31,19 @@ export type SQLTableSchema<Schema extends SQLColumnSchema = SQLColumnSchema> = {
   columns: Schema
 }
 
-// TODO: Need to add table options
-
 /**
  * A table key
  */
-export type TableKey<
+export type SQLTableKey<
   Schema extends SQLColumnSchema = SQLColumnSchema,
   PK extends
     | PrimaryKey<keyof Schema>
-    | CompositePrimaryKey<(keyof Schema)[]> = PrimaryKey<keyof Schema>,
-> = {
-  primaryKey: PK
-}
+    | CompositePrimaryKey<keyof Schema> = PrimaryKey<keyof Schema>,
+> = Flatten<
+  SQLTableSchema<Schema> & {
+    primaryKey: PK
+  }
+>
 
 export type SQLDatabaseTables = {
   [key: string]: SQLTableSchema<any>
@@ -66,7 +68,7 @@ export type PrimaryKey<Column> = {
 }
 
 export type CompositePrimaryKey<Columns> = {
-  columns: Columns
+  columns: Columns[]
 }
 
 export type ForeignKey<
@@ -89,10 +91,6 @@ export type SQLColumnOptions<T extends SQLBuiltinTypes> = Flatten<
     VariableType<T>
 >
 
-type Consolidate<T, N> = Flatten<
-  Omit<T, keyof OptionalLiteralKeys<T>> & Omit<N, keyof OptionalLiteralKeys<N>>
->
-
 export function SQLColumn<
   T extends SQLBuiltinTypes,
   Options extends SQLColumnOptions<T>,
@@ -100,7 +98,7 @@ export function SQLColumn<
   return {
     ...options,
     type,
-  } as Flatten<ColumnTypeDefinition<T> & Options>
+  } as any
 }
 
 export type TableColumnType<T extends ColumnTypeDefinition<SQLBuiltinTypes>> =
@@ -122,83 +120,107 @@ export function createSchemaBuilder(): SQLSchemaBuilder<EmptySchema> {
   return new SQLSchemaBuilder({ tables: {}, relations: [] })
 }
 
-class SQLSchemaBuilder<T extends SQLDatabaseSchema<any>> {
-  _schema: T
+class SQLSchemaBuilder<T extends SQLDatabaseSchema<any, any>> {
+  private _schema: T
   constructor(schema: T) {
     this._schema = schema
   }
 
-  createTable<Name extends string>(
-    name: Name,
-  ): SQLTableSchemaBuilder<{}, Name, T> {
-    return new SQLTableSchemaBuilder(name, {}, this)
+  get schema(): T {
+    return this._schema
   }
 
-  build(): T {
-    return this._schema
+  addTable<
+    Name extends string,
+    Builder extends SQLTableSchemaBuilder<Name, any, any>,
+  >(
+    name: Name,
+    builder: (b: SQLTableSchemaBuilder<Name>) => Builder,
+  ): SQLSchemaBuilder<
+    Builder extends SQLTableSchemaBuilder<Name, infer _, infer Schema>
+      ? AddTableToSchema<T, Name, Schema>
+      : never
+  > {
+    const ts = {}
+    Object.defineProperty(this._schema.tables, name, { value: ts })
+    builder(new SQLTableSchemaBuilder(name, ts as SQLTableSchema<{}>))
+    return this as any
   }
 }
 
-class SQLTableSchemaBuilder<
-  Columns extends SQLColumnSchema,
+type AddTableToSchema<
+  Schema extends SQLDatabaseSchema<any, any>,
   Name extends string,
-  T extends SQLDatabaseSchema<any>,
+  TableSchema extends SQLTableSchema<any>,
+> =
+  Schema extends SQLDatabaseSchema<infer Tables, infer Relations>
+    ? SQLDatabaseSchema<
+        Flatten<Tables & { [key in Name]: TableSchema }>,
+        Relations
+      >
+    : never
+
+class SQLTableSchemaBuilder<
+  Name extends string,
+  Columns extends SQLColumnSchema = {},
+  Schema extends SQLTableSchema<Columns> = SQLTableSchema<Columns>,
 > {
-  _columns: Columns
-  _name: Name
-  _builder: SQLSchemaBuilder<T>
-  constructor(name: Name, columns: Columns, builder: SQLSchemaBuilder<T>) {
+  private _name: Name
+  private _schema: Schema
+
+  constructor(name: Name, schema: Schema) {
     this._name = name
-    this._columns = columns
-    this._builder = builder
+    this._schema = schema
   }
 
-  addColumn<Column extends string, CType extends SQLBuiltinTypes>(
+  addColumn<
+    Column extends string,
+    CType extends SQLBuiltinTypes,
+    Options extends SQLColumnOptions<CType>,
+  >(
     column: Column,
     type: CType,
-    options?: SQLColumnOptions<CType>,
-  ) {
-    ;(this._columns as any)[column] = SQLColumn(type, options)
-
-    return new SQLTableSchemaBuilder<
-      Flatten<Columns & { [key in Column]: ColumnTypeDefinition<CType> }>,
-      Name,
-      T
-    >(this._name, this._columns as any, this._builder)
-  }
-
-  addTable<Column extends keyof Columns>(
-    key: Column,
-  ): SQLSchemaBuilder<{
-    tables: Flatten<
-      T["tables"] & {
-        [key in Name]: {
-          columns: Columns
-          key: PrimaryKey<Column>
-        }
+    options?: Options,
+  ): SQLTableSchemaBuilder<
+    Name,
+    Flatten<
+      Columns & {
+        [key in Column]: Consolidate<ColumnTypeDefinition<CType>, Options>
       }
     >
-    relations: T["relations"]
-  }> {
-    const tables = this._builder._schema["tables"] as any
-    tables[this._name] = {
-      columns: this._columns,
-      key: {
-        column: key,
-      },
+  > {
+    Object.defineProperty(this._schema, column, {
+      value: SQLColumn(type, options),
+    })
+
+    return new SQLTableSchemaBuilder(this._name, this._schema as any)
+  }
+
+  withKey<Column extends Keys<Columns>>(
+    primary: Column,
+    ...secondary: Column[]
+  ): SQLTableSchemaBuilder<
+    Name,
+    Columns,
+    SQLTableKey<
+      Columns,
+      IsUnion<Column> extends true
+        ? CompositePrimaryKey<Column>
+        : PrimaryKey<Column>
+    >
+  > {
+    if (secondary !== undefined && secondary.length > 0) {
+      Object.defineProperty(this._schema, "primaryKey", {
+        value: { columns: [primary, ...secondary] },
+      })
+      return new SQLTableSchemaBuilder(this._name, this._schema as any)
     }
 
-    return this._builder as SQLSchemaBuilder<{
-      tables: Flatten<
-        T["tables"] & {
-          [key in Name]: {
-            columns: Columns
-            key: PrimaryKey<Column>
-          }
-        }
-      >
-      relations: T["relations"]
-    }>
+    Object.defineProperty(this._schema, "primaryKey", {
+      value: { column: primary },
+    })
+
+    return new SQLTableSchemaBuilder(this._name, this._schema as any)
   }
 }
 

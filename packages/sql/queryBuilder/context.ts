@@ -5,20 +5,34 @@ import { type ColumnTypeDefinition } from "../schema.js"
 
 export type QueryContextColumns<Context extends QueryContext<any>> =
   IsUnion<Keys<Context>> extends true
-    ? {
-        [Key in Keys<Context>]: `${Key & string}.${Keys<Context[Key]> & string}`
-      }[Keys<Context>]
+    ? TableColumns<Context>
     : {
         [Key in Keys<Context>]: `${Keys<Context[Key]> & string}`
       }[Keys<Context>]
 
-export type UniqueKeys<Context extends QueryContext<any>> = {
-  [Key in Keys<Context>]: {
-    [K in keyof Context[Key]]: K extends OtherKeys<Context, Key> ? never : K
-  }[keyof Context[Key]]
+type TableColumns<Context extends QueryContext<any>> = {
+  [T in Keys<Context>]: {
+    [C in Keys<Context[T]>]: [C] extends [UniqueColumns<Context>]
+      ? `${C & string}`
+      : `${T & string}.${C & string}`
+  }[Keys<Context[T]>]
 }[Keys<Context>]
 
-type OtherKeys<Context extends QueryContext<any>, K extends keyof Context> = {
+type UniqueColumns<Context extends QueryContext<any>> = {
+  [T in Keys<Context>]: Unique<keyof Context[T], OtherColumns<Context, T>>
+}[Keys<Context>]
+
+type Unique<
+  Left extends string | number | symbol,
+  Right extends string | number | symbol,
+> = {
+  [v in Left]: [v] extends [Right] ? never : v
+}[Left]
+
+type OtherColumns<
+  Context extends QueryContext<any>,
+  K extends keyof Context,
+> = {
   [Key in Keys<Context>]: [Key] extends [K] ? never : keyof Context[Key]
 }[Keys<Context>]
 
