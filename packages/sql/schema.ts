@@ -120,6 +120,67 @@ export function createSchemaBuilder(): SQLSchemaBuilder<EmptySchema> {
   return new SQLSchemaBuilder({ tables: {}, relations: [] })
 }
 
+/**
+ * Create a builder for manipulating the {@link SQLColumnSchema}
+ *
+ * @param columns The current columns
+ * @returns A new {@link ColumnSchemaBuilder} for modifying the schema
+ *
+ * @template Columns The current SQLColumnSchema
+ */
+export function columnSchemaBuilder<Columns extends SQLColumnSchema = {}>(
+  columns: Columns,
+): ColumnSchemaBuilder<Columns> {
+  return new ColumnSchemaBuilder(columns)
+}
+
+export type ColumnSchemaManager<
+  Schema extends SQLColumnSchema,
+  Result extends SQLColumnSchema,
+> = (original: ColumnSchemaBuilder<Schema>) => ColumnSchemaBuilder<Result>
+
+type ModifiedColumnSchema<
+  Original extends SQLColumnSchema,
+  Column extends string,
+  ColumnType extends SQLBuiltinTypes,
+  Options extends SQLColumnOptions<ColumnType>,
+> = Flatten<
+  Original & {
+    [key in Column]: Consolidate<ColumnTypeDefinition<ColumnType>, Options>
+  }
+>
+
+class ColumnSchemaBuilder<T extends SQLColumnSchema = {}> {
+  private _schema: T
+  constructor(schema: T) {
+    this._schema = schema
+  }
+
+  get schema(): T {
+    return this._schema
+  }
+
+  addColumn<
+    Column extends string,
+    CType extends SQLBuiltinTypes,
+    Options extends SQLColumnOptions<CType>,
+  >(
+    column: Column,
+    type: CType,
+    options?: Options,
+  ): ColumnSchemaBuilder<ModifiedColumnSchema<T, Column, CType, Options>> {
+    // Add the property
+    Object.defineProperty(this._schema, column, {
+      value: SQLColumn(type, options),
+    })
+
+    // Return the updated typed builder
+    return new ColumnSchemaBuilder<
+      ModifiedColumnSchema<T, Column, CType, Options>
+    >(this._schema as any)
+  }
+}
+
 class SQLSchemaBuilder<T extends SQLDatabaseSchema<any, any>> {
   private _schema: T
   constructor(schema: T) {
@@ -141,9 +202,16 @@ class SQLSchemaBuilder<T extends SQLDatabaseSchema<any, any>> {
       ? AddTableToSchema<T, Name, Schema>
       : never
   > {
-    const ts = {}
-    Object.defineProperty(this._schema.tables, name, { value: ts })
-    builder(new SQLTableSchemaBuilder(name, ts as SQLTableSchema<{}>))
+    const ts: SQLTableSchema<{}> = { columns: {} }
+    const schema = builder(
+      new SQLTableSchemaBuilder(name, ts as SQLTableSchema<{}>),
+    ).schema
+    Object.defineProperty(this._schema.tables, name, {
+      configurable: false,
+      enumerable: true,
+      writable: false,
+      value: schema,
+    })
     return this as any
   }
 }
@@ -173,6 +241,10 @@ class SQLTableSchemaBuilder<
     this._schema = schema
   }
 
+  get schema(): Schema {
+    return this._schema
+  }
+
   addColumn<
     Column extends string,
     CType extends SQLBuiltinTypes,
@@ -189,7 +261,10 @@ class SQLTableSchemaBuilder<
       }
     >
   > {
-    Object.defineProperty(this._schema, column, {
+    Object.defineProperty(this._schema["columns"], column, {
+      enumerable: true,
+      configurable: false,
+      writable: false,
       value: SQLColumn(type, options),
     })
 
