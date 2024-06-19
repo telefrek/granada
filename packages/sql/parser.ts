@@ -2,6 +2,7 @@
  * Set of utilities to validate a query against a schema
  */
 
+import type { Invalid } from "@telefrek/type-utils"
 import type { NormalizeQuery } from "./parsing/normalization.js"
 import type { ParseSQL } from "./parsing/queries.js"
 
@@ -22,3 +23,17 @@ import type { ParseSQL } from "./parsing/queries.js"
 export type ParseSQLQuery<Query extends string> = ParseSQL<
   NormalizeQuery<Query>
 >
+
+export type ParseAlias<Value extends string, Valid extends string> =
+  NormalizeQuery<Value> extends `${infer Target} AS ${infer Alias}`
+    ? [Target] extends [Valid]
+      ? SQLAlias<Target, Alias>
+      : Invalid<`${Target} does not extend a valid column`>
+    : [Value] extends [Valid]
+      ? [Value]
+      : Invalid<`${Value} does not extend ${Valid}`>
+
+export type SQLAlias<Target, Alias> = {
+  target: Target
+  alias: Alias
+}

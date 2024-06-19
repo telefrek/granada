@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import type { Flatten, IsUnion, Keys } from "@telefrek/type-utils"
-import { type ColumnTypeDefinition } from "../schema.js"
+import { type ColumnTypeDefinition, type SQLColumnSchema } from "../schema.js"
 
 export type QueryContextColumns<Context extends QueryContext<any>> =
   IsUnion<Keys<Context>> extends true
@@ -156,11 +156,14 @@ export type ColumnReference<
 /**
  * Information about a table
  */
-export type TableContext<Table extends string, Columns extends string> = {
-  [key in Columns]: ColumnReference<
+export type TableContext<
+  Table extends string,
+  Columns extends SQLColumnSchema,
+> = {
+  [key in Keys<Columns>]: ColumnReference<
     Table,
     any,
-    ColumnTypeDefinition<any>,
+    Columns[key],
     key & string
   >
 }
@@ -169,5 +172,5 @@ export type TableContext<Table extends string, Columns extends string> = {
  * The current context available for the query
  */
 export type QueryContext<Tables extends string> = {
-  [key in Tables]: TableContext<key & string, any>
+  [key in Tables]: TableContext<key, any>
 }
