@@ -155,7 +155,9 @@ export class QueryContextBuilder<
         : builder
 
     // Add the table
-    Object.defineProperty(this._context["active"], table, { value: schema })
+    Object.defineProperty(this._context["active"], table, {
+      value: { columns: schema },
+    })
 
     // Ignore the typing we know it is correct here
     return this as any

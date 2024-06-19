@@ -1,5 +1,3 @@
-import { log } from "console"
-import { inspect } from "util"
 import { TEST_DATABASE } from "../testUtils.js"
 import { SQLBuiltinTypes } from "../types.js"
 import { QueryContextBuilder } from "./context.js"
@@ -21,7 +19,5 @@ describe("Query context should be buildable and reflect the correct types", () =
     const returning = context["returning"]
     expect(returning).not.toBeUndefined()
     expect(returning["amount"]).not.toBeUndefined()
-
-    log(inspect(context, true, 10, true))
   })
 })

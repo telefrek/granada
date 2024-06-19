@@ -101,7 +101,7 @@ export function SQLColumn<
   } as any
 }
 
-export type TableColumnType<T extends ColumnTypeDefinition<SQLBuiltinTypes>> =
+export type TableColumnType<T extends ColumnTypeDefinition<any>> =
   T["array"] extends true ? TSSQLType<T["type"]>[] : TSSQLType<T["type"]>
 
 export type SQLTableEntity<T extends SQLTableSchema> = SQLRowEntity<
