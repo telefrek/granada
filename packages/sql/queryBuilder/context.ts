@@ -8,6 +8,7 @@ import {
   type SQLColumnSchema,
   type SQLDatabaseSchema,
   type SQLDatabaseTables,
+  type SQLRowEntity,
   type SQLTableSchema,
 } from "../schema.js"
 
@@ -19,14 +20,28 @@ import {
  * @template Returning The resulting shape of the context
  */
 export type QueryContext<
-  Database extends SQLDatabaseSchema,
+  Database extends SQLDatabaseSchema = SQLDatabaseSchema,
   Active extends SQLDatabaseTables = {},
-  Returning extends SQLColumnSchema | number = number,
+  Returning extends SQLColumnSchema | number = SQLColumnSchema | number,
 > = {
   database: Database
   active: Active
   returning: Returning
 }
+
+/**
+ * Utility type to extract the shape of the returning query
+ *
+ * @template Context The query context to extract
+ */
+export type QueryReturnType<Context extends QueryContext<any, any, any>> =
+  Context extends QueryContext<infer _Database, infer _Active, infer Returning>
+    ? Returning extends SQLColumnSchema
+      ? SQLRowEntity<Returning>
+      : {
+          rows: number
+        }
+    : never
 
 /**
  * Retrieve the valid column values with type aliasing as necessary for

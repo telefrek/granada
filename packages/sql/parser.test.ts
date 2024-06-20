@@ -35,8 +35,8 @@ describe("SQL syntax should be correctly identified", () => {
             table: "table",
             alias: "table",
           },
-          columns: [
-            {
+          columns: {
+            col1: {
               type: "ColumnReference",
               reference: {
                 type: "UnboundColumnReference",
@@ -44,7 +44,7 @@ describe("SQL syntax should be correctly identified", () => {
               },
               alias: "col1",
             },
-            {
+            col2: {
               type: "ColumnReference",
               reference: {
                 type: "UnboundColumnReference",
@@ -52,7 +52,7 @@ describe("SQL syntax should be correctly identified", () => {
               },
               alias: "col2",
             },
-          ],
+          },
         },
       }
 
@@ -70,8 +70,8 @@ describe("SQL syntax should be correctly identified", () => {
             table: "table",
             alias: "table",
           },
-          columns: [
-            {
+          columns: {
+            c1: {
               type: "ColumnReference",
               reference: {
                 type: "UnboundColumnReference",
@@ -79,7 +79,7 @@ describe("SQL syntax should be correctly identified", () => {
               },
               alias: "c1",
             },
-          ],
+          },
         },
       }
 
@@ -115,8 +115,8 @@ describe("SQL syntax should be correctly identified", () => {
             table: "table",
             alias: "t",
           },
-          columns: [
-            {
+          columns: {
+            c: {
               type: "ColumnReference",
               reference: {
                 type: "TableColumnReference",
@@ -125,7 +125,7 @@ describe("SQL syntax should be correctly identified", () => {
               },
               alias: "c",
             },
-          ],
+          },
         },
       }
 

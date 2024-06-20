@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type {
   BooleanValueType,
   BufferValueType,
@@ -43,7 +42,7 @@ export type ParseWhereClause<T extends string> =
 /**
  * Defines a where extractor
  */
-export type WhereExtractor<_T extends string> = Extractor<WhereClause<any>>
+export type WhereExtractor<_T extends string> = Extractor<WhereClause>
 
 /**
  * Extract the {@link WhereClause} off of the query string
@@ -151,7 +150,7 @@ type ParseColumnFilter<T> =
       ? Op extends FilteringOperation
         ? ExtractValue<Value> extends [infer V]
           ? CheckFilter<
-              ColumnReference<ParseColumnDetails<Column>>,
+              ColumnReference<ParseColumnDetails<Column & string>>,
               Op,
               CheckValueType<V>
             >

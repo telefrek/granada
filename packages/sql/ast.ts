@@ -136,7 +136,9 @@ export type SubQuery<Query extends SQLQuery<any> = SQLQuery<any>> = {
  * A filter between two objects
  */
 export type ColumnFilter<
-  Left extends ColumnReference<any> = ColumnReference<any>,
+  Left extends ColumnReference<
+    TableColumnReference | UnboundColumnReference
+  > = ColumnReference<TableColumnReference | UnboundColumnReference>,
   Operation extends FilteringOperation = FilteringOperation,
   Right extends ValueTypes = ValueTypes,
 > = {
@@ -214,9 +216,7 @@ export type TableColumnReference<
  * A reference (bound or unbound) to a column
  */
 export type ColumnReference<
-  Reference extends
-    | UnboundColumnReference
-    | TableColumnReference = UnboundColumnReference,
+  Reference extends UnboundColumnReference | TableColumnReference,
   Alias extends string = Reference["column"],
 > = {
   type: "ColumnReference"
@@ -279,11 +279,15 @@ export type JoinClause<
  */
 export type SelectedColumn = ColumnAggregate<any> | ColumnReference<any>
 
+export type SelectColumns = {
+  [key: string]: SelectedColumn
+}
+
 /**
  * Structure for a select clause
  */
 export type SelectClause<
-  Columns extends SelectedColumn[] | "*" = "*",
+  Columns extends SelectColumns | "*" = "*",
   From extends TableReference<any> | NamedQuery<any> = TableReference<any>,
 > = {
   type: "SelectClause"

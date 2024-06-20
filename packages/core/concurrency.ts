@@ -5,6 +5,7 @@
 import { MaybeAwaitable } from "./index.js"
 import { Duration } from "./time.js"
 import type { Optional } from "./type/utils.js"
+import { getOrSet } from "./utils.js"
 
 /**
  * This is a wrapper around a value that allows it to be changed and reflect
@@ -262,10 +263,7 @@ export function getMonitor(obj: unknown): Monitor {
     throw new Error("Trying to obtain monitor on non-object")
 
   // Get the monitor or inject it
-  return obj[MONITOR_SYMBOL as keyof typeof obj] === undefined
-    ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ((obj as any)[MONITOR_SYMBOL] = new Monitor())
-    : (obj[MONITOR_SYMBOL as keyof typeof obj] as Monitor)
+  return getOrSet(obj, MONITOR_SYMBOL as keyof typeof obj, () => new Monitor())
 }
 
 /**

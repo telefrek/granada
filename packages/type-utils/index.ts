@@ -1,18 +1,18 @@
-/* eslint-disable @typescript-eslint/ban-types */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Common Type utilities
  */
 
+import type { ECKeyPairKeyObjectOptions } from "crypto"
+
 /**
  * Utility type to return back the type that was given
  */
-type Extract<T> = T
+type Identity<T> = T
 
 /**
  * Flatten the definition by extracting all keys into a new type
  */
-export type Flatten<T> = Extract<{ [K in keyof T]: T[K] }>
+export type Flatten<T> = Identity<{ [K in keyof T]: T[K] }>
 
 /**
  * Type for passing invalid typings since there is no way to do it currently
@@ -29,6 +29,10 @@ export type Keys<T> = {
 }[keyof T]
 
 /**
+ * Get all of the keys that are strings
+ */
+export type StringKeys<T> = Extract<Keys<T>, string>
+/**
  * Get all the keys that are of type K in the given type T
  */
 export type KeysOfType<T, K> = {
@@ -42,7 +46,7 @@ export type KeysOfType<T, K> = {
  * @template U An extension of T to use for validating set exclusivity
  */
 export type IsUnion<T, U extends T = T> = (
-  T extends any ? (U extends T ? false : true) : never
+  T extends [never] ? never : U extends T ? false : true
 ) extends false
   ? false
   : true
@@ -57,7 +61,7 @@ export type RequiredLiteralKeys<T> = {
     ? never
     : number extends K
       ? never
-      : {} extends Pick<T, K>
+      : ECKeyPairKeyObjectOptions extends Pick<T, K>
         ? never
         : K]: T[K]
 }
@@ -72,7 +76,7 @@ export type OptionalLiteralKeys<T> = {
     ? never
     : number extends K
       ? never
-      : {} extends Pick<T, K>
+      : object extends Pick<T, K>
         ? K
         : never]: T[K]
 }

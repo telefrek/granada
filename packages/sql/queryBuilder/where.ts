@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 /**
  * Where query clause building
  */
@@ -26,7 +24,7 @@ import type { TableColumnType } from "../schema.js"
 import { type QueryContext, type QueryContextColumns } from "./context.js"
 import { buildColumnReference, parseValue } from "./utils.js"
 
-type ColumnType<Context extends QueryContext<any, any, any>, Column> =
+type ColumnType<Context extends QueryContext, Column> =
   Context extends QueryContext<infer _Database, infer Active, infer _Returning>
     ? Column extends `${infer Table}.${infer Column}`
       ? TableColumnType<Active[Table]["columns"][Column]>
@@ -39,7 +37,7 @@ type ColumnType<Context extends QueryContext<any, any, any>, Column> =
 
 type Parameter<
   Value,
-  Context extends QueryContext<any, any, any>,
+  Context extends QueryContext,
   Column,
 > = Value extends `:${infer _}`
   ? Value
@@ -51,9 +49,7 @@ type RefType<C extends string> = C extends `${infer Table}.${infer Column}`
   ? ColumnReference<TableColumnReference<Table, Column>>
   : ColumnReference<UnboundColumnReference<C>>
 
-export interface WhereClauseBuilder<
-  Context extends QueryContext<any, any, any>,
-> {
+export interface WhereClauseBuilder<Context extends QueryContext> {
   and<Left extends LogicalExpression, Right extends LogicalExpression>(
     left: Left,
     right: Right,
@@ -70,13 +66,13 @@ export interface WhereClauseBuilder<
   ): ColumnFilter<RefType<Column>, Op, CheckValueType<Value>>
 }
 
-export function whereClause<Context extends QueryContext<any, any, any>>(
+export function whereClause<Context extends QueryContext>(
   context: Context,
 ): WhereClauseBuilder<Context> {
   return new DefaultWhereClauseBuilder(context)
 }
 
-class DefaultWhereClauseBuilder<Context extends QueryContext<any, any, any>>
+class DefaultWhereClauseBuilder<Context extends QueryContext>
   implements WhereClauseBuilder<Context>
 {
   private _context: Context
@@ -106,7 +102,11 @@ class DefaultWhereClauseBuilder<Context extends QueryContext<any, any, any>>
     op: Op,
     value: Parameter<Value, Context, Column>,
   ): ColumnFilter<RefType<Column>, Op, CheckValueType<Value>> {
-    return buildFilter<Column, Op, Value>(column, op, value as Value) as any
+    return buildFilter<Column, Op, Value>(
+      column,
+      op,
+      value as Value,
+    ) as unknown as ColumnFilter<RefType<Column>, Op, CheckValueType<Value>>
   }
 }
 
@@ -126,12 +126,15 @@ function buildFilter<
   CheckValueType<Value>
 > {
   const data = column.split(".")
+  const left =
+    data.length > 1
+      ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (buildColumnReference(data[1], data[0]) as any)
+      : buildColumnReference(column)
+
   return {
     type: "ColumnFilter",
-    left:
-      data.length > 1
-        ? buildColumnReference(data[1], data[0])
-        : (buildColumnReference(column) as any),
+    left,
     op,
     right: (isParameter(value)
       ? {

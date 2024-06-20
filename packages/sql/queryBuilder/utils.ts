@@ -1,9 +1,11 @@
+import type { StringKeys } from "@telefrek/type-utils"
 import type {
   ColumnReference,
   TableColumnReference,
   UnboundColumnReference,
   ValueTypes,
 } from "../ast.js"
+import type { SQLDatabaseTables } from "../schema.js"
 
 export function deepCopy<T, U = T extends Array<infer V> ? V : never>(
   source: T,
@@ -28,6 +30,31 @@ export function deepCopy<T, U = T extends Array<infer V> ? V : never>(
   }
   return source
 }
+
+/**
+ * Extract the column type from a column or table.column reference pair
+ */
+export type getColumnType<
+  Column extends string,
+  Tables extends SQLDatabaseTables,
+> = Column extends `${infer Table}.${infer Col}`
+  ? Table extends StringKeys<Tables>
+    ? Col extends StringKeys<Tables[Table]["columns"]>
+      ? Tables[Table]["columns"][Col]["type"]
+      : never
+    : never
+  : GetUniqueColumn<Column, Tables>
+
+type GetUniqueColumn<
+  Column extends string,
+  Tables extends SQLDatabaseTables,
+> = {
+  [Table in StringKeys<Tables>]: Column extends StringKeys<
+    Tables[Table]["columns"]
+  >
+    ? Tables[Table]["columns"][Column]["type"]
+    : never
+}[StringKeys<Tables>]
 
 export function buildColumnReference<Column extends string>(
   column: Column,

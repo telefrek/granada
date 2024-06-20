@@ -1,6 +1,11 @@
 import { ParseColumnReference } from "./columns.js"
 
-import { JoinClause, SelectClause, WhereClause } from "../ast.js"
+import {
+  JoinClause,
+  SelectClause,
+  WhereClause,
+  type ColumnReference,
+} from "../ast.js"
 
 import { Flatten, Invalid } from "@telefrek/type-utils"
 import { ParseTableReference } from "./tables.js"
@@ -44,10 +49,33 @@ type ExtractColumns<T> =
 /**
  * Parse the columns that were extracted
  */
-type ParseColumns<T> = T extends [infer Column, ...infer Rest]
+type ParseColumns<T, O = object> = T extends [infer Column, ...infer Rest]
   ? Rest extends never[]
-    ? [ParseColumnReference<Column>]
-    : [ParseColumnReference<Column>, ...ParseColumns<Rest>]
+    ? ParseColumnReference<Column & string> extends ColumnReference<
+        infer C,
+        infer A
+      >
+      ? Flatten<
+          O & {
+            [key in A]: ColumnReference<C, A>
+          }
+        >
+      : Invalid<`Invalid column reference`>
+    : ParseColumnReference<Column & string> extends ColumnReference<
+          infer C,
+          infer A
+        >
+      ? Flatten<
+          ParseColumns<
+            Rest,
+            Flatten<
+              O & {
+                [key in A]: ColumnReference<C, A>
+              }
+            >
+          >
+        >
+      : Invalid<`Invalid column reference`>
   : never
 
 /**
