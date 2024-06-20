@@ -161,7 +161,7 @@ export class QueryContextBuilder<
     builder: ColumnSchemaManager<{}, Updated> | Updated,
   ): QueryContextBuilder<
     Database,
-    AddTableToContext<Database, Context, Table, Updated>
+    ActivateTableContext<Database, Context, Table, Updated>
   > {
     // Modify the schema
     const schema =
@@ -190,7 +190,7 @@ export class QueryContextBuilder<
     table: CheckDuplicateTable<Table & string, Context>,
   ): QueryContextBuilder<
     Database,
-    AddTableToContext<
+    ActivateTableContext<
       Database,
       Context,
       Table & string,
@@ -263,7 +263,7 @@ type AddReturnToContext<
  * @template Table The table name to add
  * @template Schema The schema for the table
  */
-type AddTableToContext<
+export type ActivateTableContext<
   Database extends SQLDatabaseSchema,
   Context extends QueryContext<Database>,
   Table extends string,

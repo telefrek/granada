@@ -7,29 +7,25 @@ import type {
   SelectClause,
   SelectColumns,
   SelectedColumn,
-  TableColumnReference,
   TableReference,
-  UnboundColumnReference,
   WhereClause,
 } from "../ast.js"
 import {
   type ColumnTypeDefinition,
-  type SQLColumnSchema,
   type SQLDatabaseSchema,
   type SQLDatabaseTables,
 } from "../schema.js"
 import type { SQLBuiltinTypes } from "../types.js"
 import { type QueryContext, type QueryContextColumns } from "./context.js"
-import type { getColumnType } from "./utils.js"
+import type {
+  AliasedValue,
+  BuildColumnReferences,
+  getColumnType,
+} from "./utils.js"
 import { whereClause, type WhereClauseBuilder } from "./where.js"
 
 /**
- * Template literal for allowing Column aliasing
- */
-type ColumnAlias<C extends string> = `${C} AS ${string}`
-
-/**
- * Check to ensure the alias has a valid string since {@link ColumnAlias} allows
+ * Check to ensure the alias has a valid string since {@link AliasedValue} allows
  * "" as a valid string
  */
 type CheckColumn<T> = T extends `${infer _} AS ${infer Alias}`
@@ -81,19 +77,12 @@ type ModifyReturn<Context, Columns extends string> =
 
 export function createSelect<
   Database extends SQLDatabaseSchema,
-  Active extends SQLDatabaseTables,
-  Table extends StringKeys<Active>,
+  Context extends QueryContext<Database>,
+  Table extends string,
 >(
-  context: QueryContext<Database, Active>,
+  context: Context,
   table: Table,
-): SelectBuilder<
-  Database,
-  Active,
-  Table,
-  QueryContext<Database, Active, Active[Table]["columns"]>,
-  never,
-  "*"
-> {
+): SelectBuilder<Database, Table, Context, never, "*"> {
   return new DefaultSelectBuilder(table, context)
 }
 
@@ -107,8 +96,8 @@ type CheckSelect<Select, Where> =
     : Select
 
 type CheckColumns<Columns extends string> =
-  UnionToTuple<ColumnsToSelect<Columns>> extends SelectedColumn[]
-    ? BuildSelectColumns<UnionToTuple<ColumnsToSelect<Columns>>>
+  UnionToTuple<BuildColumnReferences<Columns>> extends SelectedColumn[]
+    ? BuildSelectColumns<UnionToTuple<BuildColumnReferences<Columns>>>
     : "*"
 
 type BuildSelectColumns<Columns, O = object> = Columns extends [
@@ -127,20 +116,10 @@ type BuildSelectColumns<Columns, O = object> = Columns extends [
       : never
   : never
 
-type ColumnsToSelect<Columns extends string> =
-  Columns extends `${infer Column} AS ${infer Alias}`
-    ? Column extends `${infer Table}.${infer Col}`
-      ? ColumnReference<TableColumnReference<Table, Col>, Alias>
-      : ColumnReference<UnboundColumnReference<Column>, Alias>
-    : Columns extends `${infer Table}.${infer Col}`
-      ? ColumnReference<TableColumnReference<Table, Col>>
-      : ColumnReference<UnboundColumnReference<Columns>>
-
 export interface SelectBuilder<
   Database extends SQLDatabaseSchema,
-  Active extends SQLDatabaseTables,
-  Table extends StringKeys<Active>,
-  Context extends QueryContext<Database, Active, number | SQLColumnSchema>,
+  Table extends string,
+  Context extends QueryContext<Database>,
   Where extends LogicalExpression = never,
   SelectedColumns extends SelectColumns | "*" = SelectColumns | "*",
 > {
@@ -151,18 +130,17 @@ export interface SelectBuilder<
 
   where<Exp extends LogicalExpression>(
     builder: (w: WhereClauseBuilder<Context>) => Exp,
-  ): SelectBuilder<Database, Active, Table, Context, Exp, SelectedColumns>
+  ): SelectBuilder<Database, Table, Context, Exp, SelectedColumns>
 
   columns<
     Columns extends
       | QueryContextColumns<Context>
-      | ColumnAlias<QueryContextColumns<Context>>,
+      | AliasedValue<QueryContextColumns<Context>>,
   >(
     first: CheckColumn<Columns>,
     ...rest: CheckColumn<Columns>[]
   ): SelectBuilder<
     Database,
-    Active,
     Table,
     ModifyReturn<Context, Columns>,
     Where,
@@ -181,7 +159,7 @@ class DefaultSelectBuilder<
   >,
   Where extends LogicalExpression = never,
   SelectedColumns extends SelectColumns | "*" = SelectColumns | "*",
-> implements SelectBuilder<Database, Active, Table, Context, Where>
+> implements SelectBuilder<Database, Table, Context, Where>
 {
   private _table: TableReference<Table>
   private _columns: SelectedColumns = "*" as any
@@ -214,7 +192,7 @@ class DefaultSelectBuilder<
 
   where<Exp extends LogicalExpression>(
     builder: (w: WhereClauseBuilder<Context>) => Exp,
-  ): SelectBuilder<Database, Active, Table, Context, Exp, SelectedColumns> {
+  ): SelectBuilder<Database, Table, Context, Exp, SelectedColumns> {
     this._where = builder(whereClause(this._context))
     return this as any
   }
@@ -222,13 +200,12 @@ class DefaultSelectBuilder<
   columns<
     Columns extends
       | QueryContextColumns<Context>
-      | ColumnAlias<QueryContextColumns<Context>>,
+      | AliasedValue<QueryContextColumns<Context>>,
   >(
     first: CheckColumn<Columns>,
     ...rest: CheckColumn<Columns>[]
   ): SelectBuilder<
     Database,
-    Active,
     Table,
     ModifyReturn<Context, Columns>,
     Where,

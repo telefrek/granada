@@ -31,6 +31,17 @@ export function deepCopy<T, U = T extends Array<infer V> ? V : never>(
   return source
 }
 
+export type AliasedValue<C extends string> = `${C} AS ${string}`
+
+export type BuildColumnReferences<Columns extends string> =
+  Columns extends `${infer Column} AS ${infer Alias}`
+    ? Column extends `${infer Table}.${infer Col}`
+      ? ColumnReference<TableColumnReference<Table, Col>, Alias>
+      : ColumnReference<UnboundColumnReference<Column>, Alias>
+    : Columns extends `${infer Table}.${infer Col}`
+      ? ColumnReference<TableColumnReference<Table, Col>>
+      : ColumnReference<UnboundColumnReference<Columns>>
+
 /**
  * Extract the column type from a column or table.column reference pair
  */
