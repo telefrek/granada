@@ -1,5 +1,5 @@
 import { Flatten } from "@telefrek/type-utils"
-import { NamedQuery, SQLQuery, WithClause } from "../ast.js"
+import { NamedQuery, SQLQuery, WithClause, type QueryClause } from "../ast.js"
 import { ParseSelect } from "./select.js"
 import { ExtractUntil, NextToken, SplitSQL } from "./utils.js"
 
@@ -14,7 +14,9 @@ export type ParseSQL<T extends string> = CheckQuery<ParseWith<T>>
 type CheckQuery<T> =
   T extends Partial<SQLQuery<infer Query>>
     ? Flatten<SQLQuery<Query> & CheckWith<T>>
-    : T
+    : T extends Omit<QueryClause, "type">
+      ? Flatten<T & { type: "SQLQuery" }>
+      : T
 
 type CheckWith<T> = T extends WithClause<infer With> ? WithClause<With> : object
 

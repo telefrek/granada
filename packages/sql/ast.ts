@@ -17,7 +17,7 @@ export type ValueTypes =
   | ArrayValueType
   | NullValueType
   | ParameterValueType
-  | ColumnReference<any>
+  | ColumnReference
 
 /**
  * A parameter that is passed into the query at runtime
@@ -127,7 +127,7 @@ export type ArithmeticOperation =
 /**
  * Structure of a subquery
  */
-export type SubQuery<Query extends SQLQuery<any> = SQLQuery<any>> = {
+export type SubQuery<Query extends SQLQuery = SQLQuery> = {
   type: "SubQuery"
   query: Query
 }
@@ -154,8 +154,8 @@ export type SubQueryFilterOperation = "IN" | "ANY" | "ALL" | "EXISTS" | "SOME"
  * The IN filter definition
  */
 export type SubqueryFilter<
-  Column extends ColumnReference<any> = ColumnReference<any>,
-  Subquery extends SubQuery<any> = SubQuery<any>,
+  Column extends ColumnReference = ColumnReference,
+  Subquery extends SubQuery = SubQuery,
   Op extends SubQueryFilterOperation = SubQueryFilterOperation,
 > = {
   type: "SubqueryFilter"
@@ -189,8 +189,8 @@ export type LogicalTree<
 export type LogicalExpression =
   | ValueTypes
   | LogicalTree<any, LogicalOperation, any>
-  | ColumnFilter<any>
-  | SubqueryFilter<any>
+  | ColumnFilter
+  | SubqueryFilter
 
 /**
  * A Column that we don't know the ownership of
@@ -216,7 +216,9 @@ export type TableColumnReference<
  * A reference (bound or unbound) to a column
  */
 export type ColumnReference<
-  Reference extends UnboundColumnReference | TableColumnReference,
+  Reference extends UnboundColumnReference | TableColumnReference =
+    | UnboundColumnReference
+    | TableColumnReference,
   Alias extends string = Reference["column"],
 > = {
   type: "ColumnReference"
@@ -233,7 +235,7 @@ export type ColumnAggregateOperation = "SUM" | "COUNT" | "AVG" | "MAX" | "MIN"
  * An aggregation on a column (ex: COUNT(id) AS `count`)
  */
 export type ColumnAggregate<
-  Column extends ColumnReference<any> = ColumnReference<any>,
+  Column extends ColumnReference = ColumnReference,
   Aggregate extends ColumnAggregateOperation = ColumnAggregateOperation,
   Alias extends string = string,
 > = {
@@ -265,7 +267,7 @@ export type JoinType = "LEFT" | "RIGHT" | "INNER" | "OUTER"
  */
 export type JoinClause<
   Type extends JoinType = JoinType,
-  From extends TableReference<any> | NamedQuery<any> = TableReference<any>,
+  From extends TableReference | NamedQuery = TableReference,
   On extends LogicalExpression = LogicalExpression,
 > = {
   type: "JoinClause"
@@ -277,7 +279,7 @@ export type JoinClause<
 /**
  * Selected columns can be references or aggregates
  */
-export type SelectedColumn = ColumnAggregate<any> | ColumnReference<any>
+export type SelectedColumn = ColumnAggregate | ColumnReference
 
 export type SelectColumns = {
   [key: string]: SelectedColumn
@@ -288,7 +290,7 @@ export type SelectColumns = {
  */
 export type SelectClause<
   Columns extends SelectColumns | "*" = "*",
-  From extends TableReference<any> | NamedQuery<any> = TableReference<any>,
+  From extends TableReference | NamedQuery = TableReference,
 > = {
   type: "SelectClause"
   columns: Columns
@@ -311,14 +313,14 @@ export type WhereClause<Where extends LogicalExpression = LogicalExpression> = {
 }
 
 export type GroupByClause<
-  GroupBy extends ColumnReference<any>[] = ColumnReference<any>[],
+  GroupBy extends ColumnReference[] = ColumnReference[],
 > = {
   groupBy: GroupBy
 }
 
 // TODO: Add asc/desc
 export type OrderingClause<
-  OrderBy extends ColumnReference<any>[] = ColumnReference<any>[],
+  OrderBy extends ColumnReference[] = ColumnReference[],
 > = {
   orderBy: OrderBy
 }
@@ -328,9 +330,7 @@ export type HavingClause<Having extends LogicalExpression = LogicalExpression> =
     having: Having
   }
 
-export type SelectJoinClause<
-  Joins extends JoinClause<any>[] = JoinClause<any>[],
-> = {
+export type SelectJoinClause<Joins extends JoinClause[] = JoinClause[]> = {
   joins: Joins
 }
 
@@ -338,7 +338,7 @@ export type SelectJoinClause<
  * Updates can modify columns
  */
 export type ColumnAssignment<
-  Column extends ColumnReference<any> = ColumnReference<any>,
+  Column extends ColumnReference = ColumnReference,
   Value extends ValueTypes = ValueTypes,
 > = {
   type: "ColumnAssignment"
@@ -347,7 +347,7 @@ export type ColumnAssignment<
 }
 
 export type ReturningClause<
-  Returning extends TableColumnReference<any>[] = TableColumnReference<any>[],
+  Returning extends TableColumnReference[] = TableColumnReference[],
 > = {
   returning: Returning
 }
@@ -356,8 +356,8 @@ export type ReturningClause<
  * Structure for an update clause
  */
 export type UpdateClause<
-  Table extends TableReference<any> = TableReference<any>,
-  Columns extends ColumnAssignment<any>[] = ColumnAssignment<any>[],
+  Table extends TableReference = TableReference,
+  Columns extends ColumnAssignment[] = ColumnAssignment[],
 > = {
   type: "UpdateClause"
   columns: Columns
@@ -367,9 +367,7 @@ export type UpdateClause<
 /**
  * Structure for a delete clause
  */
-export type DeleteClause<
-  Table extends TableReference<any> = TableReference<any>,
-> = {
+export type DeleteClause<Table extends TableReference = TableReference> = {
   type: "DeleteClause"
   table: Table
 }
@@ -378,9 +376,9 @@ export type DeleteClause<
  * Structure for an insert clause
  */
 export type InsertClause<
-  Table extends TableReference<any> = TableReference<any>,
-  Columns extends ColumnReference<any>[] = ColumnReference<any>[],
-  Values extends ValueTypes[] | SelectClause<any> = ValueTypes[],
+  Table extends TableReference = TableReference,
+  Columns extends ColumnReference[] = ColumnReference[],
+  Values extends ValueTypes[] | SelectClause = ValueTypes[],
 > = {
   type: "InsertClause"
   table: Table
@@ -392,7 +390,7 @@ export type InsertClause<
  * A named query
  */
 export type NamedQuery<
-  Query extends SQLQuery<any> = SQLQuery<any>,
+  Query extends SQLQuery = SQLQuery,
   Alias extends string = string,
 > = {
   type: "NamedQuery"
@@ -410,7 +408,7 @@ export type CombineOperation = "UNION" | "INTERSECT" | "MINUS" | "EXCEPT"
  */
 export type CombinedQuery<
   Operation extends CombineOperation = CombineOperation,
-  Next extends SelectClause<any> = SelectClause<any>,
+  Next extends SelectClause = SelectClause,
 > = {
   type: "CombinedQuery"
   op: Operation
@@ -421,29 +419,32 @@ export type CombinedQuery<
  * A chain of select clauses
  */
 export type CombinedQueryClause<
-  Original extends SelectClause<any> = SelectClause<any>,
-  Additions extends CombinedQuery<any>[] = CombinedQuery<any>[],
+  Original extends SelectClause = SelectClause,
+  Additions extends CombinedQuery[] = CombinedQuery[],
 > = {
   type: "CombinedQueryClause"
   original: Original
   additions: Additions
 }
 
-export type WithClause<With extends NamedQuery<any>[] = NamedQuery<any>[]> = {
+export type WithClause<With extends NamedQuery[] = NamedQuery[]> = {
   with: With
 }
 
 export type QueryClause =
-  | SelectClause<any>
-  | UpdateClause<any>
-  | DeleteClause<any>
-  | InsertClause<any>
-  | CombinedQueryClause<any>
+  | SelectClause
+  | UpdateClause
+  | DeleteClause
+  | InsertClause
 
 /**
  * Structure for a generic SQL Query
  */
-export type SQLQuery<Query extends QueryClause = SelectClause<any>> = {
+export type SQLQuery<
+  Query extends QueryClause | CombinedQueryClause =
+    | QueryClause
+    | CombinedQueryClause,
+> = {
   type: "SQLQuery"
   query: Query
 }

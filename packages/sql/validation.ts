@@ -6,6 +6,7 @@
 import type { Flatten, Invalid } from "@telefrek/type-utils/index.js"
 import type {
   ColumnReference,
+  CombinedQueryClause,
   DeleteClause,
   InsertClause,
   NamedQuery,
@@ -350,7 +351,7 @@ type CheckColumnInfo<T> = T extends ["*"]
     ? T
     : never
 
-type ExtractTableReference<Q extends QueryClause> =
+type ExtractTableReference<Q extends QueryClause | CombinedQueryClause> =
   Q extends SelectClause<infer _, infer From>
     ? From
     : Q extends UpdateClause<infer From, infer _>
@@ -361,7 +362,7 @@ type ExtractTableReference<Q extends QueryClause> =
           ? From
           : never
 
-type ExtractColumns<Q extends QueryClause> =
+type ExtractColumns<Q extends QueryClause | CombinedQueryClause> =
   Q extends SelectClause<infer Columns, infer From>
     ? ExtractColumnNames<Columns, From["alias"]>
     : Q extends ReturningClause<infer Returning>

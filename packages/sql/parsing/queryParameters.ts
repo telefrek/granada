@@ -32,8 +32,12 @@ export type ParameterInfo<
 export type FindQueryParameters<Q extends SQLQuery<any>> =
   Q extends SQLQuery<infer Query>
     ? Q extends WithClause<infer Queries>
-      ? [...FindWithParameters<Queries>, ...FindQueryClauseParameters<Query>]
-      : FindQueryClauseParameters<Query>
+      ? Query extends QueryClause
+        ? [...FindWithParameters<Queries>, ...FindQueryClauseParameters<Query>]
+        : []
+      : Query extends QueryClause
+        ? FindQueryClauseParameters<Query>
+        : []
     : []
 
 type FindQueryClauseParameters<Q extends QueryClause> =
