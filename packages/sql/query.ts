@@ -26,8 +26,8 @@ import type {
  * Query bound to the final schema
  */
 type SchemaBoundQuery<
-  Schema extends SQLDatabaseSchema<any, any>,
-  Query extends SQLQuery<any>,
+  Schema extends SQLDatabaseSchema,
+  Query extends SQLQuery,
 > = {
   schema: Schema
   query: Query
@@ -36,10 +36,7 @@ type SchemaBoundQuery<
 /**
  * Intermediate transform stage for creating a query from a schema and string/SQLQuery
  */
-type BoundQuery<
-  Schema extends SQLDatabaseSchema<any, any>,
-  Query extends SQLQuery<any>,
-> =
+type BoundQuery<Schema extends SQLDatabaseSchema, Query extends SQLQuery> =
   ValidateSchema<Schema, Query> extends SQLDatabaseSchema<
     infer TableSchema,
     infer Relations
@@ -47,10 +44,7 @@ type BoundQuery<
     ? SchemaBoundQuery<SQLDatabaseSchema<TableSchema, Relations>, Query>
     : ValidateSchema<Schema, Query>
 
-type BoundQueryType<
-  S extends string,
-  Schema extends SQLDatabaseSchema<any, any>,
-> =
+type BoundQueryType<S extends string, Schema extends SQLDatabaseSchema> =
   BoundQuery<Schema, ParseSQLQuery<S>> extends SchemaBoundQuery<
     infer ValidSchema,
     infer Q
@@ -65,10 +59,7 @@ type BoundQueryType<
       : VerifyQuery<ValidSchema, Q>
     : never
 
-type BuildParameters<
-  Q extends SQLQuery<any>,
-  Schema extends SQLDatabaseSchema<any, any>,
-> =
+type BuildParameters<Q extends SQLQuery, Schema extends SQLDatabaseSchema> =
   FindQueryParameters<Q> extends [infer P, ...infer Rest]
     ? Rest extends never[]
       ? P extends ParameterInfo<infer Name, infer Column, infer Table>
@@ -83,7 +74,7 @@ type BuildParameters<
         : object
     : object
 
-type MapParameters<T, Schema extends SQLDatabaseSchema<any, any>> = T extends [
+type MapParameters<T, Schema extends SQLDatabaseSchema> = T extends [
   infer P,
   ...infer Rest,
 ]
@@ -94,7 +85,7 @@ type MapParameters<T, Schema extends SQLDatabaseSchema<any, any>> = T extends [
     : object
   : object
 
-export function createBuilder<S extends SQLDatabaseSchema<any, any>>() {
+export function createBuilder<S extends SQLDatabaseSchema>() {
   return <T extends string>(
     q: ValidateQueryString<S, T>,
   ): BoundQueryType<T, S> => {

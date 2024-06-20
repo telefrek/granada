@@ -51,13 +51,13 @@ export type SQLDatabaseTables = {
 
 export type SQLDatabaseSchema<
   Tables extends SQLDatabaseTables = SQLDatabaseTables,
-  Relations extends ForeignKey<any>[] = [],
+  Relations extends ForeignKey[] = ForeignKey[],
 > = {
   tables: Tables
   relations: Relations
 }
 
-type EmptySchema = SQLDatabaseSchema<{}, []>
+type EmptySchema = SQLDatabaseSchema<{}, ForeignKey[]>
 
 export type ColumnTypeDefinition<T> = [T] extends [SQLBuiltinTypes]
   ? Flatten<IncrementalType<T> & VariableType<T> & BaseColumnDefinition<T>>

@@ -115,7 +115,7 @@ export type BaseColumnDefinition<ColumnType extends ValidSQLTypes> = {
   type: ColumnType
 }
 
-export type ColumnDefinition<ColumnType extends ValidSQLTypes> =
+export type ColumnDefinition<ColumnType extends ValidSQLTypes = ValidSQLTypes> =
   ColumnType extends IncrementalSQLTypes
     ? IncrementalColumnDefinition<ColumnType>
     : ColumnType extends VariableSQLTypes
