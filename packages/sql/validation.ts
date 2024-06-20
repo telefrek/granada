@@ -32,7 +32,7 @@ import {
  * Validate the query string against the schema
  */
 export type ValidateQueryString<
-  Schema extends SQLDatabaseSchema<any, any>,
+  Schema extends SQLDatabaseSchema,
   Query extends string,
 > =
   _IsValidQuery<Schema, ParseSQLQuery<Query>> extends true
@@ -43,8 +43,8 @@ export type ValidateQueryString<
  * Validate the parsed query against the schema
  */
 export type ValidateQuery<
-  Schema extends SQLDatabaseSchema<any, any>,
-  Query extends SQLQuery<any>,
+  Schema extends SQLDatabaseSchema,
+  Query extends SQLQuery,
 > =
   _IsValidQuery<Schema, Query> extends true
     ? Query
@@ -55,8 +55,8 @@ export type ValidateQuery<
  * returning the validated schema to use
  */
 export type ValidateSchema<
-  Schema extends SQLDatabaseSchema<any, any>,
-  Query extends SQLQuery<any>,
+  Schema extends SQLDatabaseSchema,
+  Query extends SQLQuery,
 > =
   AddProjections<
     ExtractProjections<SplitTables<Query>>,
@@ -69,8 +69,8 @@ export type ValidateSchema<
  * Verify the query itself and determine the resulting type/parameters
  */
 export type VerifyQuery<
-  Schema extends SQLDatabaseSchema<any, any>,
-  Query extends SQLQuery<any>,
+  Schema extends SQLDatabaseSchema,
+  Query extends SQLQuery,
 > =
   ExtractReturnType<Schema, Query> extends { [key: string]: any } // TODO: handle parameters too
     ? QueryValidationResult<ExtractReturnType<Schema, Query>, object>
@@ -88,26 +88,26 @@ export type QueryValidationResult<
 }
 
 type ExtractReturnType<
-  Schema extends SQLDatabaseSchema<any, any>,
-  Query extends SQLQuery<any>,
+  Schema extends SQLDatabaseSchema,
+  Query extends SQLQuery,
 > =
   Query extends SQLQuery<infer Q>
     ? Q extends QueryClause
-      ? Q extends SelectClause<any, any>
+      ? Q extends SelectClause
         ? ExtractSelectReturnType<Schema, Q>
         : Invalid<`Unsupported query type`>
       : Invalid<`Cannot extract return from non QueryClause`>
     : Invalid<`Query is not a SQLQuery`>
 
 type ExtractSelectReturnType<
-  Schema extends SQLDatabaseSchema<any, any>,
-  Select extends SelectClause<any>,
+  Schema extends SQLDatabaseSchema,
+  Select extends SelectClause,
 > =
   Select extends SelectClause<infer Columns, infer From>
     ? Schema extends SQLDatabaseSchema<infer TableSchema, infer _>
       ? From["alias"] extends keyof TableSchema // TODO: joins much? lol
         ? ExtractReturnColumns<Columns, From["alias"], TableSchema> extends {
-            [key: string]: ColumnTypeDefinition<any>
+            [key: string]: ColumnTypeDefinition<unknown>
           }
           ? SQLTableEntity<{
               columns: ExtractReturnColumns<Columns, From["alias"], TableSchema>
@@ -140,8 +140,8 @@ type ExtractReturnColumns<
   : Invalid<`Invalid column types in return type building`>
 
 // type ExtractParameters<
-//   _Schema extends SQLDatabaseSchema<any, any>,
-//   _Query extends SQLQuery<any>,
+//   _Schema extends SQLDatabaseSchema,
+//   _Query extends SQLQuery,
 // > = object
 
 /**
@@ -162,10 +162,7 @@ type ExtractReturnColumns<
  *    kinda difficult to do with the type system lol...
  */
 
-type _IsValidQuery<
-  Schema extends SQLDatabaseSchema<any, any>,
-  Query extends SQLQuery<any>,
-> =
+type _IsValidQuery<Schema extends SQLDatabaseSchema, Query extends SQLQuery> =
   AddProjections<
     ExtractProjections<SplitTables<Query>>,
     Schema
@@ -178,14 +175,14 @@ type _IsValidQuery<
  */
 type AddProjections<
   Projections,
-  Schema extends SQLDatabaseSchema<any, any>,
+  Schema extends SQLDatabaseSchema,
 > = Projections extends [infer Projection, ...infer Rest]
   ? Rest extends never[]
-    ? Projection extends ProjectedQuery<any, any>
+    ? Projection extends ProjectedQuery
       ? AddProjection<Projection, Schema>
       : Invalid<"Invalid projection, corrupted query syntax">
-    : Projection extends ProjectedQuery<any>
-      ? AddProjection<Projection, Schema> extends SQLDatabaseSchema<any, any>
+    : Projection extends ProjectedQuery
+      ? AddProjection<Projection, Schema> extends SQLDatabaseSchema
         ? AddProjections<Rest, AddProjection<Projection, Schema>>
         : AddProjection<Projection, Schema>
       : Invalid<"Invalid projection, corrupted query syntax">
@@ -197,8 +194,8 @@ type AddProjections<
  * Add the projection to the schema
  */
 type AddProjection<
-  Projection extends ProjectedQuery<any>,
-  Schema extends SQLDatabaseSchema<any, any>,
+  Projection extends ProjectedQuery,
+  Schema extends SQLDatabaseSchema,
 > =
   Schema extends SQLDatabaseSchema<infer TableSchema, infer Relations>
     ? Projection extends ProjectedQuery<
@@ -305,7 +302,7 @@ type TableQuery<
 type ProjectedQuery<
   Table extends string = string,
   Columns extends ColumnSourceInfo[] | "*" = ColumnSourceInfo[],
-  Reference extends ProjectedQuery<any> | TableQuery<any> = TableQuery<any>,
+  Reference extends ProjectedQuery | TableQuery = TableQuery,
 > = {
   type: "Projection"
   table: Table
@@ -331,12 +328,12 @@ type ExtractProjections<T> = T extends [infer Query, ...infer Rest]
         : never
   : never
 
-type SplitTables<Query extends SQLQuery<any>> =
+type SplitTables<Query extends SQLQuery> =
   Query extends WithClause<infer With>
     ? [...WithClause<With>["with"], Query["query"]]
     : [Query["query"]]
 
-type ExtractProjection<Query extends NamedQuery<any>> =
+type ExtractProjection<Query extends NamedQuery> =
   Query extends NamedQuery<infer Q, infer Alias>
     ? ProjectedQuery<
         Alias,

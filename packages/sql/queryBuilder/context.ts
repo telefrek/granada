@@ -229,10 +229,7 @@ export class QueryContextBuilder<
  * @template Table The table name to check
  * @template Context The current context to check against
  */
-type CheckDuplicateTable<
-  Table extends string,
-  Context extends QueryContext<any>,
-> =
+type CheckDuplicateTable<Table extends string, Context extends QueryContext> =
   Context extends QueryContext<infer _Database, infer Active, infer _Returning>
     ? Table extends keyof Active
       ? never

@@ -217,9 +217,9 @@ class SQLSchemaBuilder<T extends SQLDatabaseSchema<any, any>> {
 }
 
 type AddTableToSchema<
-  Schema extends SQLDatabaseSchema<any, any>,
+  Schema extends SQLDatabaseSchema,
   Name extends string,
-  TableSchema extends SQLTableSchema<any>,
+  TableSchema extends SQLTableSchema,
 > =
   Schema extends SQLDatabaseSchema<infer Tables, infer Relations>
     ? SQLDatabaseSchema<

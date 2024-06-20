@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type {
   ColumnFilter,
   LogicalTree,
@@ -29,7 +28,7 @@ export type ParameterInfo<
 /**
  * Type to identify all of the query parameters in the given query
  */
-export type FindQueryParameters<Q extends SQLQuery<any>> =
+export type FindQueryParameters<Q extends SQLQuery> =
   Q extends SQLQuery<infer Query>
     ? Q extends WithClause<infer Queries>
       ? Query extends QueryClause
@@ -42,7 +41,7 @@ export type FindQueryParameters<Q extends SQLQuery<any>> =
 
 type FindQueryClauseParameters<Q extends QueryClause> =
   Q extends SelectClause<infer _, infer From>
-    ? Q extends WhereClause<any>
+    ? Q extends WhereClause
       ? FindWhereParameters<Q, From["alias"]>
       : []
     : []
