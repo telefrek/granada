@@ -1,4 +1,5 @@
 import type { Keys, StringKeys } from "@telefrek/type-utils"
+import type { SelectClause, TableReference } from "../ast.js"
 import type { SQLDatabaseSchema } from "../schema.js"
 import {
   QueryContextBuilder,
@@ -18,13 +19,13 @@ export interface FromBuilder<Database extends SQLDatabaseSchema> {
     table: Table,
   ): SelectBuilder<
     Database,
-    Table,
     ActivateTableContext<
       Database,
       QueryContext<Database>,
       Table,
       Database["tables"][Table]["columns"]
-    >
+    >,
+    SelectClause<"*", TableReference<Table>>
   >
 }
 
@@ -41,13 +42,13 @@ class DefaultFromBuilder<Database extends SQLDatabaseSchema>
     table: Table,
   ): SelectBuilder<
     Database,
-    Table,
     ActivateTableContext<
       Database,
       QueryContext<Database>,
       Table,
       Database["tables"][Table]["columns"]
-    >
+    >,
+    SelectClause<"*", TableReference<Table>>
   > {
     return createSelect(
       QueryContextBuilder.create(this._database).copy(table).context,

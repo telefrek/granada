@@ -289,8 +289,10 @@ export type SelectColumns = {
  * Structure for a select clause
  */
 export type SelectClause<
-  Columns extends SelectColumns | "*" = "*",
-  From extends TableReference | NamedQuery = TableReference,
+  Columns extends SelectColumns | "*" = SelectColumns | "*",
+  From extends TableReference | NamedQuery<any> =
+    | TableReference
+    | NamedQuery<any>,
 > = {
   type: "SelectClause"
   columns: Columns

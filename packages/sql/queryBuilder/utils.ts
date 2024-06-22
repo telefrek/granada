@@ -67,37 +67,40 @@ type GetUniqueColumn<
     : never
 }[StringKeys<Tables>]
 
+export type ColumnReferenceType<Column extends string> =
+  Column extends `${infer C} AS ${infer Alias}`
+    ? C extends `${infer Table}.${infer Col}`
+      ? ColumnReference<TableColumnReference<Table, Col>, Alias>
+      : ColumnReference<UnboundColumnReference<C>, Alias>
+    : Column extends `${infer Table}.${infer Col}`
+      ? ColumnReference<TableColumnReference<Table, Col>>
+      : ColumnReference<UnboundColumnReference<Column>>
+
+const ALIAS_REGEX = /(.)+ AS (.)+/
+const TABLE_BOUND_REGEX = /([^.])+\.([^.])+/
+
 export function buildColumnReference<Column extends string>(
   column: Column,
-): ColumnReference<UnboundColumnReference<Column>>
-export function buildColumnReference<
-  Column extends string,
-  Table extends string,
->(
-  column: Column,
-  table: Table,
-): ColumnReference<TableColumnReference<Table, Column>>
-export function buildColumnReference<
-  Column extends string,
-  Table extends string,
->(
-  column: Column,
-  table?: Table,
-):
-  | ColumnReference<UnboundColumnReference<Column>>
-  | ColumnReference<TableColumnReference<Table, Column>> {
-  if (table !== undefined) {
-    return {
-      type: "ColumnReference",
-      reference: {
-        type: "TableColumnReference",
-        table,
-        column,
-      },
-      alias: column,
-    }
+): ColumnReferenceType<Column> {
+  if (ALIAS_REGEX.test(column)) {
+    const data = column.split(" AS ")
+
+    const ref = TABLE_BOUND_REGEX.test(data[0])
+      ? (splitColumn(data[0]) as unknown as ColumnReferenceType<Column>)
+      : (unboundColumn(data[0]) as unknown as ColumnReferenceType<Column>)
+
+    ref["alias"] = data[1]
+    return ref
   }
 
+  return TABLE_BOUND_REGEX.test(column)
+    ? (splitColumn(column) as unknown as ColumnReferenceType<Column>)
+    : (unboundColumn(column) as unknown as ColumnReferenceType<Column>)
+}
+
+function unboundColumn<Column extends string>(
+  column: Column,
+): ColumnReference<UnboundColumnReference<Column>> {
   return {
     type: "ColumnReference",
     reference: {
@@ -106,6 +109,24 @@ export function buildColumnReference<
     },
     alias: column,
   }
+}
+
+function splitColumn<Column extends string>(
+  column: Column,
+): Column extends `${infer Table}.${infer Col}`
+  ? ColumnReference<TableColumnReference<Table, Col>>
+  : never {
+  const data = column.split(".")
+  return {
+    type: "ColumnReference",
+    reference: {
+      type: "TableColumnReference",
+      table: data[0],
+      column: data[1],
+    },
+    alias: data[1],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any
 }
 
 export function parseValue<T>(value: T): ValueTypes {

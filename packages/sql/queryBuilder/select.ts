@@ -1,11 +1,11 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import type { Flatten, StringKeys } from "@telefrek/type-utils"
+import type { Flatten } from "@telefrek/type-utils"
 import type { UnionToTuple } from "@telefrek/type-utils/unsafe.js"
 import type {
   ColumnReference,
   LogicalExpression,
+  NamedQuery,
+  SQLQuery,
   SelectClause,
-  SelectColumns,
   SelectedColumn,
   TableReference,
   WhereClause,
@@ -16,13 +16,63 @@ import {
   type SQLDatabaseTables,
 } from "../schema.js"
 import type { SQLBuiltinTypes } from "../types.js"
-import { type QueryContext, type QueryContextColumns } from "./context.js"
-import type {
-  AliasedValue,
-  BuildColumnReferences,
-  getColumnType,
+import type { QueryAST } from "./common.js"
+import {
+  type ChangeContextReturning,
+  type QueryContext,
+  type QueryContextColumns,
+} from "./context.js"
+import {
+  buildColumnReference,
+  type AliasedValue,
+  type BuildColumnReferences,
+  type getColumnType,
 } from "./utils.js"
-import { whereClause, type WhereClauseBuilder } from "./where.js"
+import {
+  whereClause,
+  type AddWhereToAST,
+  type WhereBuilder,
+  type WhereClauseBuilder,
+} from "./where.js"
+
+/**
+ * Allows selecting columns for a Select statement
+ */
+export interface SelectColumnsBuilder<
+  Database extends SQLDatabaseSchema,
+  Context extends QueryContext<Database>,
+  From extends TableReference | NamedQuery,
+> {
+  columns<
+    Columns extends
+      | QueryContextColumns<Context>
+      | AliasedValue<QueryContextColumns<Context>>,
+    Next extends SelectBuilder<
+      Database,
+      ModifyReturn<Context, Columns>,
+      SelectClause<CheckColumns<Columns>, From>
+    >,
+  >(
+    first: CheckColumn<Columns>,
+    ...rest: CheckColumn<Columns>[]
+  ): Next
+}
+
+/**
+ * Full select clause builder
+ */
+export interface SelectBuilder<
+  Database extends SQLDatabaseSchema,
+  Context extends QueryContext<Database>,
+  Query extends SelectClause,
+> extends QueryAST<Query>,
+    SelectColumnsBuilder<Database, Context, Query["from"]>,
+    WhereBuilder<
+      Database,
+      Context,
+      Query,
+      SelectBuilder<Database, Context, Query>
+    > {}
 
 /**
  * Check to ensure the alias has a valid string since {@link AliasedValue} allows
@@ -66,11 +116,10 @@ type ToSchema<T, O = object> = T extends [infer Head, ...infer Rest]
 /**
  * Type to manipulate the return type using the columns specified
  */
-type ModifyReturn<Context, Columns extends string> =
-  Context extends QueryContext<infer Database, infer Active, infer _>
-    ? QueryContext<
-        Database,
-        Active,
+type ModifyReturn<Context extends QueryContext, Columns extends string> =
+  Context extends QueryContext<infer _Database, infer Active, infer _>
+    ? ChangeContextReturning<
+        Context,
         ToSchema<UnionToTuple<MapColumns<Columns, Active>>>
       >
     : never
@@ -82,18 +131,28 @@ export function createSelect<
 >(
   context: Context,
   table: Table,
-): SelectBuilder<Database, Table, Context, never, "*"> {
-  return new DefaultSelectBuilder(table, context)
+): SelectBuilder<
+  Database,
+  ChangeContextReturning<Context, Database["tables"][Table]["columns"]>,
+  SelectClause<"*", TableReference<Table>>
+> {
+  return new DefaultSelectBuilder(
+    {
+      type: "SelectClause",
+      from: {
+        type: "TableReference",
+        table,
+        alias: table,
+      },
+      columns: "*",
+    },
+    context,
+  ) as unknown as SelectBuilder<
+    Database,
+    ChangeContextReturning<Context, Database["tables"][Table]["columns"]>,
+    SelectClause<"*", TableReference<Table>>
+  >
 }
-
-type CheckSelect<Select, Where> =
-  Select extends SelectClause<infer Columns, infer From>
-    ? [Where] extends [never]
-      ? SelectClause<Columns, From>
-      : Where extends LogicalExpression
-        ? Flatten<SelectClause<Columns, From> & WhereClause<Where>>
-        : never
-    : Select
 
 type CheckColumns<Columns extends string> =
   UnionToTuple<BuildColumnReferences<Columns>> extends SelectedColumn[]
@@ -116,105 +175,65 @@ type BuildSelectColumns<Columns, O = object> = Columns extends [
       : never
   : never
 
-export interface SelectBuilder<
-  Database extends SQLDatabaseSchema,
-  Table extends string,
-  Context extends QueryContext<Database>,
-  Where extends LogicalExpression = never,
-  SelectedColumns extends SelectColumns | "*" = SelectColumns | "*",
-> {
-  readonly ast: CheckSelect<
-    SelectClause<SelectedColumns, TableReference<Table>>,
-    Where
-  >
-
-  where<Exp extends LogicalExpression>(
-    builder: (w: WhereClauseBuilder<Context>) => Exp,
-  ): SelectBuilder<Database, Table, Context, Exp, SelectedColumns>
-
-  columns<
-    Columns extends
-      | QueryContextColumns<Context>
-      | AliasedValue<QueryContextColumns<Context>>,
-  >(
-    first: CheckColumn<Columns>,
-    ...rest: CheckColumn<Columns>[]
-  ): SelectBuilder<
-    Database,
-    Table,
-    ModifyReturn<Context, Columns>,
-    Where,
-    CheckColumns<Columns>
-  >
-}
-
 class DefaultSelectBuilder<
   Database extends SQLDatabaseSchema,
-  Active extends SQLDatabaseTables,
-  Table extends StringKeys<Active>,
-  Context extends QueryContext<Database, Active> = QueryContext<
-    Database,
-    Active,
-    Active[Table]["columns"]
-  >,
-  Where extends LogicalExpression = never,
-  SelectedColumns extends SelectColumns | "*" = SelectColumns | "*",
-> implements SelectBuilder<Database, Table, Context, Where>
+  Context extends QueryContext<Database>,
+  Query extends SelectClause,
+> implements SelectBuilder<Database, Context, Query>
 {
-  private _table: TableReference<Table>
-  private _columns: SelectedColumns = "*" as any
+  private _query: Query
   private _context: Context
-  private _where?: LogicalExpression
 
-  constructor(table: Table, context: Context) {
-    this._table = {
-      type: "TableReference",
-      table,
-      alias: table,
-    }
+  constructor(query: Query, context: Context) {
+    this._query = query
     this._context = context
   }
 
-  get ast(): CheckSelect<
-    SelectClause<SelectedColumns, TableReference<Table>>,
-    Where
-  > {
-    const select: SelectClause<SelectedColumns, TableReference<Table>> = {
-      type: "SelectClause",
-      columns: this._columns,
-      from: this._table,
+  columns<
+    Columns extends
+      | QueryContextColumns<Context>
+      | `${QueryContextColumns<Context>} AS ${string}`,
+    Next extends SelectBuilder<
+      Database,
+      ModifyReturn<Context, Columns>,
+      SelectClause<CheckColumns<Columns>, Query["from"]>
+    >,
+  >(first: CheckColumn<Columns>, ...rest: CheckColumn<Columns>[]): Next {
+    this._query.columns = {}
+    const columns = [buildColumnReference(first)]
+
+    if (rest !== undefined && rest.length > 0) {
+      columns.push(...rest.map((r) => buildColumnReference(r)))
     }
 
-    return (
-      this._where !== undefined ? { ...select, where: this._where } : select
-    ) as any
+    // Add the columns
+    for (const col of columns) {
+      Object.defineProperty(this._query.columns, col["alias"], {
+        value: col,
+        enumerable: true,
+      })
+    }
+
+    return this as unknown as Next
   }
 
   where<Exp extends LogicalExpression>(
     builder: (w: WhereClauseBuilder<Context>) => Exp,
-  ): SelectBuilder<Database, Table, Context, Exp, SelectedColumns> {
-    this._where = builder(whereClause(this._context))
-    return this as any
+  ): AddWhereToAST<SelectBuilder<Database, Context, Query>, Exp> {
+    const where: WhereClause<Exp> = {
+      where: builder(whereClause(this._context)),
+    }
+
+    return new DefaultSelectBuilder(
+      { ...this._query, ...where },
+      this._context,
+    ) as unknown as AddWhereToAST<SelectBuilder<Database, Context, Query>, Exp>
   }
 
-  columns<
-    Columns extends
-      | QueryContextColumns<Context>
-      | AliasedValue<QueryContextColumns<Context>>,
-  >(
-    first: CheckColumn<Columns>,
-    ...rest: CheckColumn<Columns>[]
-  ): SelectBuilder<
-    Database,
-    Table,
-    ModifyReturn<Context, Columns>,
-    Where,
-    CheckColumns<Columns>
-  > {
-    const foo = [first, ...rest]
-    if (foo === undefined) {
-      throw new Error("nope")
+  get ast(): SQLQuery<Query> {
+    return {
+      type: "SQLQuery",
+      query: this._query,
     }
-    return this as any
   }
 }

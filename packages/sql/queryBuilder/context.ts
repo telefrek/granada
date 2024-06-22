@@ -29,6 +29,14 @@ export type QueryContext<
   returning: Returning
 }
 
+export type ChangeContextReturning<
+  Context extends QueryContext,
+  Returning extends SQLColumnSchema,
+> =
+  Context extends QueryContext<infer Database, infer Active, infer _>
+    ? QueryContext<Database, Active, Returning>
+    : never
+
 /**
  * Utility type to extract the shape of the returning query
  *

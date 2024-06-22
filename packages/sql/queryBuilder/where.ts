@@ -2,7 +2,7 @@
  * Where query clause building
  */
 
-import type { Keys } from "@telefrek/type-utils"
+import type { Flatten, Keys } from "@telefrek/type-utils"
 import type {
   ArrayValueType,
   BigIntValueType,
@@ -10,19 +10,47 @@ import type {
   BufferValueType,
   ColumnFilter,
   ColumnReference,
+  CombinedQueryClause,
   FilteringOperation,
   LogicalExpression,
   LogicalTree,
   NullValueType,
   NumberValueType,
   ParameterValueType,
+  QueryClause,
   StringValueType,
   TableColumnReference,
   UnboundColumnReference,
+  WhereClause,
 } from "../ast.js"
-import type { TableColumnType } from "../schema.js"
+import type { SQLDatabaseSchema, TableColumnType } from "../schema.js"
+import type { QueryAST } from "./common.js"
 import { type QueryContext, type QueryContextColumns } from "./context.js"
 import { buildColumnReference, parseValue } from "./utils.js"
+
+export interface WhereBuilder<
+  Database extends SQLDatabaseSchema,
+  Context extends QueryContext<Database>,
+  Query extends QueryClause | CombinedQueryClause,
+  Next extends QueryAST<Query>,
+> extends QueryAST<Query> {
+  /**
+   *
+   */
+  where<Exp extends LogicalExpression>(
+    builder: (w: WhereClauseBuilder<Context>) => Exp,
+  ): AddWhereToAST<Next, Exp>
+}
+
+export type AddWhereToAST<
+  Next extends QueryAST,
+  Exp extends LogicalExpression,
+> =
+  Next extends QueryAST<infer Query>
+    ? Flatten<Query & WhereClause<Exp>> extends QueryClause
+      ? QueryAST<Flatten<Query & WhereClause<Exp>>>
+      : never
+    : never
 
 type ColumnType<Context extends QueryContext, Column> =
   Context extends QueryContext<infer _Database, infer Active, infer _Returning>
@@ -120,21 +148,15 @@ function buildFilter<
   value: Value,
 ): ColumnFilter<
   Column extends `${infer Table}.${infer Col}`
-    ? ColumnReference<TableColumnReference<Table, Col>>
-    : ColumnReference<UnboundColumnReference<Column>>,
+    ? ColumnReference<TableColumnReference<Table, Col>, Col>
+    : ColumnReference<UnboundColumnReference<Column>, Column>,
   Operation,
   CheckValueType<Value>
 > {
-  const data = column.split(".")
-  const left =
-    data.length > 1
-      ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (buildColumnReference(data[1], data[0]) as any)
-      : buildColumnReference(column)
-
   return {
     type: "ColumnFilter",
-    left,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    left: buildColumnReference(column) as any,
     op,
     right: (isParameter(value)
       ? {
