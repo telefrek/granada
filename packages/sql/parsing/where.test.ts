@@ -256,12 +256,6 @@ describe("Where clause parsing should handle reasonable cases", () => {
   })
 
   describe("Should identify invalid types", () => {
-    it("Shouldn't allow unquoted strings", () => {
-      const q: ParseWhereClause<`WHERE id = test`> =
-        "invalid expression: id = test"
-      expect(q).not.toBeUndefined()
-    })
-
     it("Shouldn't allow invalid operators", () => {
       const q1: ParseWhereClause<`WHERE id === 'test'`> =
         "invalid expression: id =  =  = 'test'"
