@@ -1,13 +1,14 @@
 import { TEST_DATABASE } from "../testUtils.js"
 import { SQLBuiltinTypes } from "../types.js"
 import { QueryContextBuilder } from "./context.js"
+import { buildTableReference } from "./utils.js"
 
 describe("Query context should be buildable and reflect the correct types", () => {
   it("Should work with the test database", () => {
     // Add something random
     const context = QueryContextBuilder.create(TEST_DATABASE)
       .add("test", (builder) => builder.addColumn("id", SQLBuiltinTypes.BIGINT))
-      .copy("orders")
+      .copy(buildTableReference("orders"))
       .returning(TEST_DATABASE["tables"]["orders"]["columns"]).context
 
     // Ensure the active has the new data

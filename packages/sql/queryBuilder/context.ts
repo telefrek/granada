@@ -7,6 +7,7 @@ import type {
   Keys,
   StringKeys,
 } from "@telefrek/type-utils/index.js"
+import type { TableReference } from "../ast.js"
 import {
   columnSchemaBuilder,
   type ColumnSchemaManager,
@@ -55,6 +56,26 @@ export type QueryReturnType<Context extends QueryContext<any, any, any>> =
       : {
           rows: number
         }
+    : never
+
+export type ContextTables<Context extends QueryContext> =
+  Context extends QueryContext<infer D, infer A, infer _>
+    ? D extends SQLDatabaseSchema
+      ? A extends SQLDatabaseTables
+        ? StringKeys<A> | StringKeys<D["tables"]>
+        : never
+      : never
+    : never
+
+export type ContextTable<Context extends QueryContext, Table extends string> =
+  Context extends QueryContext<infer D, infer A, infer _>
+    ? D extends SQLDatabaseSchema
+      ? Table extends StringKeys<D["tables"]>
+        ? D["tables"][Table]["columns"]
+        : A extends SQLDatabaseTables
+          ? A[Table]["columns"]
+          : never
+      : never
     : never
 
 /**
@@ -219,20 +240,20 @@ export class QueryContextBuilder<
    *
    * @template Table The table from the database to copy
    */
-  copy<Table extends StringKeys<Database["tables"]>>(
-    table: CheckDuplicateTable<Table, Context>,
+  copy<Table extends TableReference>(
+    table: CheckDuplicateTableReference<Table, Context>,
   ): QueryContextBuilder<
     Database,
     ActivateTableContext<
       Database,
       Context,
-      Table & string,
-      Database["tables"][Table]["columns"]
+      Table["alias"] & string,
+      Database["tables"][Table["table"]]["columns"]
     >
   > {
     return this.add(
-      table,
-      this._context["database"]["tables"][table]["columns"],
+      table.alias as any,
+      this._context["database"]["tables"][table.table]["columns"],
     )
   }
 
@@ -256,15 +277,25 @@ export class QueryContextBuilder<
   }
 }
 
+type CheckDuplicateTable<Table extends string, Context extends QueryContext> =
+  Context extends QueryContext<infer _Database, infer Active, infer _Returning>
+    ? Table extends keyof Active
+      ? never
+      : Table
+    : Table
+
 /**
  * Verifies the table name is not already in the active set
  *
  * @template Table The table name to check
  * @template Context The current context to check against
  */
-type CheckDuplicateTable<Table extends string, Context extends QueryContext> =
+type CheckDuplicateTableReference<
+  Table extends TableReference,
+  Context extends QueryContext,
+> =
   Context extends QueryContext<infer _Database, infer Active, infer _Returning>
-    ? Table extends keyof Active
+    ? Table["alias"] extends keyof Active
       ? never
       : Table
     : Table

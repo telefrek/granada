@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import type { Flatten, Keys, StringKeys } from "@telefrek/type-utils"
+import type { Flatten, StringKeys } from "@telefrek/type-utils"
 import type {
   JoinClause,
   JoinExpression,
@@ -13,6 +13,8 @@ import type { SQLDatabaseSchema } from "../schema.js"
 import {
   QueryContextBuilder,
   type ActivateTableContext,
+  type ContextTable,
+  type ContextTables,
   type QueryContext,
   type QueryContextColumns,
 } from "./context.js"
@@ -53,7 +55,9 @@ type AddJoin<
 export interface JoinBuilder<
   Database extends SQLDatabaseSchema,
   Context extends QueryContext<Database>,
-  Table extends StringKeys<Database["tables"]>,
+  Table extends
+    | StringKeys<Database["tables"]>
+    | AliasedValue<StringKeys<Database["tables"]>>,
   Query extends SelectClause<"*", TableAliasRef<Table>>,
 > extends SelectColumnsBuilder<
     Database,
@@ -62,7 +66,9 @@ export interface JoinBuilder<
   > {
   join<
     Type extends JoinType,
-    JoinTable extends StringKeys<Database["tables"]>,
+    JoinTable extends
+      | ContextTables<Context>
+      | AliasedValue<ContextTables<Context>>,
     Exp extends LogicalExpression,
   >(
     type: Type,
@@ -73,7 +79,7 @@ export interface JoinBuilder<
           Database,
           Context,
           JoinTable,
-          Database["tables"][JoinTable]["columns"]
+          ContextTable<Context, TableAliasRef<JoinTable & string>["alias"]>
         >
       >,
     ) => Exp,
@@ -83,14 +89,18 @@ export interface JoinBuilder<
       Database,
       Context,
       JoinTable,
-      Database["tables"][JoinTable]["columns"]
+      ContextTable<Context, TableAliasRef<JoinTable & string>["alias"]>
     >,
     AddJoin<Query, Type, TableAliasRef<JoinTable>, Exp>
   >
 }
 
 export interface FromBuilder<Database extends SQLDatabaseSchema> {
-  from<Table extends StringKeys<Database["tables"]>>(
+  from<
+    Table extends
+      | StringKeys<Database["tables"]>
+      | AliasedValue<StringKeys<Database["tables"]>>,
+  >(
     table: CheckAlias<Table>,
   ): JoinBuilder<
     Database,
@@ -114,7 +124,11 @@ class DefaultFromBuilder<Database extends SQLDatabaseSchema>
     this._database = database
   }
 
-  from<Table extends Extract<Keys<Database["tables"]>, string>>(
+  from<
+    Table extends
+      | StringKeys<Database["tables"]>
+      | AliasedValue<StringKeys<Database["tables"]>>,
+  >(
     table: CheckAlias<Table>,
   ): JoinBuilder<
     Database,
@@ -128,7 +142,9 @@ class DefaultFromBuilder<Database extends SQLDatabaseSchema>
     SelectClause<"*", TableAliasRef<Table>>
   > {
     return new DefaultJoinBuilder(
-      QueryContextBuilder.create(this._database).copy(table).context,
+      QueryContextBuilder.create(this._database).copy(
+        buildTableReference(table) as any,
+      ).context,
       table,
     ) as any
   }
@@ -173,7 +189,9 @@ class DefaultJoinBuilder<
 
   join<
     Type extends JoinType,
-    JoinTable extends StringKeys<Database["tables"]>,
+    JoinTable extends
+      | ContextTables<Context>
+      | AliasedValue<ContextTables<Context>>,
     Exp extends LogicalExpression,
   >(
     type: Type,
@@ -183,8 +201,8 @@ class DefaultJoinBuilder<
         ActivateTableContext<
           Database,
           Context,
-          JoinTable,
-          Database["tables"][JoinTable]["columns"]
+          TableAliasRef<JoinTable & string>["alias"],
+          ContextTable<Context, TableAliasRef<JoinTable & string>["alias"]>
         >
       >,
     ) => Exp,
@@ -193,13 +211,13 @@ class DefaultJoinBuilder<
     ActivateTableContext<
       Database,
       Context,
-      JoinTable,
-      Database["tables"][JoinTable]["columns"]
+      TableAliasRef<JoinTable & string>["table"],
+      ContextTable<Context, TableAliasRef<JoinTable & string>["alias"]>
     >,
     AddJoin<Query, Type, TableAliasRef<JoinTable>, Exp>
   > {
     const ctx = new QueryContextBuilder<Database, Context>(this._context).copy(
-      table as any,
+      buildTableReference(table) as any,
     ).context
 
     const q: AddJoin<Query, Type, TableAliasRef<JoinTable>, Exp> = {

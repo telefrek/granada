@@ -1,5 +1,3 @@
-import { log } from "console"
-import { inspect } from "util"
 import { query } from "../builder.js"
 import type { ParseSQLQuery } from "../parser.js"
 import { TEST_DATABASE } from "../testUtils.js"
@@ -12,8 +10,6 @@ describe("Select clauses should be buildable from a schema", () => {
         .columns("address", "id AS user_id")
         .where((b) => b.filter("id", ">", ":id")).ast
 
-    log(inspect(b, true, 10, true))
-
     // Verify both the type AND the value for aliasing is correct...
     expect(b.query.columns.user_id.reference.column).toBe("id")
   })
@@ -25,7 +21,8 @@ describe("Select clauses should be buildable from a schema", () => {
         .join("INNER", "orders", (b) => b.filter("user_id", "=", "users.id"))
         .columns("email", "address").ast
 
-    log(inspect(b, true, 10, true))
     expect(b).not.toBeUndefined()
+    expect(b.query.type).toBe("SelectClause")
+    expect(b.query.join.on.right.type).toBe("ColumnReference")
   })
 })
