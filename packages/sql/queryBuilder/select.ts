@@ -78,7 +78,7 @@ export interface SelectBuilder<
  * Check to ensure the alias has a valid string since {@link AliasedValue} allows
  * "" as a valid string
  */
-type CheckColumn<T> = T extends `${infer _} AS ${infer Alias}`
+export type CheckColumn<T> = T extends `${infer _} AS ${infer Alias}`
   ? Alias extends ""
     ? never
     : T
@@ -116,7 +116,7 @@ type ToSchema<T, O = object> = T extends [infer Head, ...infer Rest]
 /**
  * Type to manipulate the return type using the columns specified
  */
-type ModifyReturn<Context extends QueryContext, Columns extends string> =
+export type ModifyReturn<Context extends QueryContext, Columns extends string> =
   Context extends QueryContext<infer _Database, infer Active, infer _>
     ? ChangeContextReturning<
         Context,
@@ -154,7 +154,7 @@ export function createSelect<
   >
 }
 
-type CheckColumns<Columns extends string> =
+export type CheckColumns<Columns extends string> =
   UnionToTuple<BuildColumnReferences<Columns>> extends SelectedColumn[]
     ? BuildSelectColumns<UnionToTuple<BuildColumnReferences<Columns>>>
     : "*"
