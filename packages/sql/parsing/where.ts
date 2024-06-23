@@ -18,6 +18,7 @@ import type {
 import type { Invalid } from "@telefrek/type-utils"
 import { Dec, Inc } from "@telefrek/type-utils/numeric.js"
 import { Trim } from "@telefrek/type-utils/strings.js"
+import type { ColumnReferenceType } from "../queryBuilder/utils.js"
 import { ParseColumnDetails } from "./columns.js"
 import { OptionKeywords } from "./keywords.js"
 import type { NormalizedJoin } from "./normalization.js"
@@ -38,6 +39,11 @@ export type ParseWhereClause<T extends string> =
       ? WhereClause<W>
       : Where
     : never
+
+export type ParseExpression<T extends string> =
+  ParseExpressionTree<NormalizeWhere<T>> extends LogicalExpression
+    ? ParseExpressionTree<NormalizeWhere<T>>
+    : Invalid<"Expression is invalid">
 
 /**
  * Defines a where extractor
@@ -226,5 +232,5 @@ type CheckValueType<T> = T extends `:${infer Name}`
               : T extends `${infer First}${infer _}`
                 ? [First] extends [Digits]
                   ? NumberValueType<number>
-                  : Invalid<`Failed to detect value from: ${T & string}`>
-                : Invalid<`Failed to detect value from: ${T & string}`>
+                  : ColumnReferenceType<T & string>
+                : ColumnReferenceType<T & string>

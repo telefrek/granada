@@ -1,18 +1,22 @@
 import { ParseColumnReference } from "./columns.js"
 
 import {
-  JoinClause,
+  JoinExpression,
   SelectClause,
   WhereClause,
   type ColumnReference,
+  type JoinClause,
+  type JoinType,
+  type LogicalExpression,
+  type TableReference,
 } from "../ast.js"
 
 import { Flatten, Invalid } from "@telefrek/type-utils"
 import { ParseTableReference } from "./tables.js"
 import { ExtractUntil, NextToken, SplitSQL, StartsWith } from "./utils.js"
-import { ExtractWhere } from "./where.js"
+import { ExtractWhere, type ParseExpression } from "./where.js"
 
-import { FromKeywords, JoinKeywords } from "./keywords.js"
+import { FromKeywords, JoinKeywords, type OptionKeywords } from "./keywords.js"
 
 /**
  * Parse the next select statement from the string
@@ -26,7 +30,7 @@ export type ParseSelect<T> =
  * Check to get the type information
  */
 type CheckSelect<T> =
-  T extends Partial<SelectClause<infer Columns, infer From>>
+  Flatten<T> extends Partial<SelectClause<infer Columns, infer From>>
     ? Flatten<SelectClause<Columns, From> & CheckWhere<T> & CheckJoins<T>>
     : Invalid<"Not a valid SELECT statement">
 
@@ -85,10 +89,10 @@ type CheckWhere<T> =
   T extends WhereClause<infer Where> ? WhereClause<Where> : object
 
 /**
- * Verify if there is a {@link JoinClause}
+ * Verify if there is a {@link JoinExpression}
  */
 type CheckJoins<T> =
-  T extends JoinClause<infer Joins> ? JoinClause<Joins> : object
+  T extends JoinClause<infer JType> ? JoinClause<JType> : object
 
 /**
  * Extract the from information
@@ -96,9 +100,11 @@ type CheckJoins<T> =
 type ExtractFrom<T> =
   NextToken<T> extends [infer _, infer Clause]
     ? ExtractUntil<Clause, FromKeywords> extends [infer From, infer Rest]
-      ? {
-          from: ParseTableReference<From>
-        } & ExtractJoin<Rest>
+      ? Flatten<
+          {
+            from: ParseTableReference<From>
+          } & ExtractJoin<Rest>
+        >
       : {
           from: ParseTableReference<Clause>
         }
@@ -109,7 +115,35 @@ type ExtractFrom<T> =
  */
 type ExtractJoin<T> =
   StartsWith<T, JoinKeywords> extends true
-    ? "not supported"
+    ? ExtractUntil<T, "WHERE" | OptionKeywords> extends [
+        infer JoinClause,
+        infer Rest,
+      ]
+      ? ExtractWhere<Rest & string> extends [infer Where, infer _]
+        ? ParseJoinClause<JoinClause> & CheckWhere<Where>
+        : ParseJoinClause<JoinClause>
+      : ParseJoinClause<T>
     : ExtractWhere<T & string> extends [infer Where, infer _]
       ? CheckWhere<Where>
       : object
+
+type ParseJoinClause<T> =
+  T extends `${infer Modifiers} JOIN ${infer Reference} ON ${infer Clause}`
+    ? ParseExpression<Clause> extends LogicalExpression
+      ? Modifiers extends JoinType
+        ? JoinClause<
+            JoinExpression<
+              Modifiers,
+              TableReference<Reference>,
+              ParseExpression<Clause>
+            >
+          >
+        : JoinClause<
+            JoinExpression<
+              "INNER",
+              TableReference<Reference>,
+              ParseExpression<Clause>
+            >
+          >
+      : never
+    : never

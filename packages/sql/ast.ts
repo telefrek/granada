@@ -265,15 +265,19 @@ export type JoinType = "LEFT" | "RIGHT" | "INNER" | "OUTER"
 /**
  * A join clause
  */
-export type JoinClause<
+export type JoinExpression<
   Type extends JoinType = JoinType,
-  From extends TableReference | NamedQuery = TableReference,
+  From extends TableReference | NamedQuery = TableReference | NamedQuery,
   On extends LogicalExpression = LogicalExpression,
 > = {
   type: "JoinClause"
   joinType: Type
   from: From
   on: On
+}
+
+export type JoinClause<Join extends JoinExpression> = {
+  join: Join
 }
 
 /**
@@ -332,7 +336,9 @@ export type HavingClause<Having extends LogicalExpression = LogicalExpression> =
     having: Having
   }
 
-export type SelectJoinClause<Joins extends JoinClause[] = JoinClause[]> = {
+export type SelectJoinClause<
+  Joins extends JoinExpression[] = JoinExpression[],
+> = {
   joins: Joins
 }
 
