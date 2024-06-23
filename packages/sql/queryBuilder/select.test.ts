@@ -19,67 +19,13 @@ describe("Select clauses should be buildable from a schema", () => {
   })
 
   it("Should allow a join between two tables", () => {
-    const b: ParseSQLQuery<`SELECT address, email FROM users AS u INNER JOIN orders ON user_id=u.id`> =
-      {
-        type: "SQLQuery",
-        query: {
-          type: "SelectClause",
-          from: {
-            type: "TableReference",
-            table: "users",
-            alias: "u",
-          },
-          join: {
-            type: "JoinClause",
-            joinType: "INNER",
-            from: {
-              type: "TableReference",
-              table: "orders",
-              alias: "orders",
-            },
-            on: {
-              type: "ColumnFilter",
-              left: {
-                type: "ColumnReference",
-                reference: {
-                  type: "UnboundColumnReference",
-                  column: "user_id",
-                },
-                alias: "user_id",
-              },
-              op: "=",
-              right: {
-                type: "ColumnReference",
-                reference: {
-                  type: "TableColumnReference",
-                  table: "u",
-                  column: "id",
-                },
-                alias: "id",
-              },
-            },
-          },
-          columns: {
-            address: {
-              type: "ColumnReference",
-              reference: {
-                type: "UnboundColumnReference",
-                column: "address",
-              },
-              alias: "address",
-            },
-            email: {
-              type: "ColumnReference",
-              reference: {
-                type: "UnboundColumnReference",
-                column: "email",
-              },
-              alias: "email",
-            },
-          },
-        },
-      }
+    const b: ParseSQLQuery<`SELECT address, email FROM users INNER JOIN orders ON user_id=users.id`> =
+      query(TEST_DATABASE)
+        .select.from("users")
+        .join("INNER", "orders", (b) => b.filter("user_id", "=", "users.id"))
+        .columns("email", "address").ast
 
+    log(inspect(b, true, 10, true))
     expect(b).not.toBeUndefined()
   })
 })

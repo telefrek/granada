@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Flatten, Keys, StringKeys } from "@telefrek/type-utils"
 import type {
   JoinClause,
@@ -17,13 +18,18 @@ import {
 } from "./context.js"
 import {
   createSelect,
-  type CheckColumn,
+  type CheckAlias,
   type CheckColumns,
   type ModifyReturn,
   type SelectBuilder,
   type SelectColumnsBuilder,
 } from "./select.js"
-import type { WhereClauseBuilder } from "./where.js"
+import {
+  buildTableReference,
+  type AliasedValue,
+  type TableAliasRef,
+} from "./utils.js"
+import { whereClause, type WhereClauseBuilder } from "./where.js"
 
 export function createFrom<Database extends SQLDatabaseSchema>(
   database: Database,
@@ -48,8 +54,12 @@ export interface JoinBuilder<
   Database extends SQLDatabaseSchema,
   Context extends QueryContext<Database>,
   Table extends StringKeys<Database["tables"]>,
-  Query extends SelectClause<"*", TableReference<Table>>,
-> extends SelectColumnsBuilder<Database, Context, Query["from"]> {
+  Query extends SelectClause<"*", TableAliasRef<Table>>,
+> extends SelectColumnsBuilder<
+    Database,
+    Context,
+    SelectClause<"*", TableAliasRef<Table>>
+  > {
   join<
     Type extends JoinType,
     JoinTable extends StringKeys<Database["tables"]>,
@@ -57,17 +67,31 @@ export interface JoinBuilder<
   >(
     type: Type,
     table: JoinTable,
-    builder: (w: WhereClauseBuilder<Context>) => Exp,
+    builder: (
+      w: WhereClauseBuilder<
+        ActivateTableContext<
+          Database,
+          Context,
+          JoinTable,
+          Database["tables"][JoinTable]["columns"]
+        >
+      >,
+    ) => Exp,
   ): SelectBuilder<
     Database,
-    Context,
-    AddJoin<Query, Type, TableReference<Table>, Exp>
+    ActivateTableContext<
+      Database,
+      Context,
+      JoinTable,
+      Database["tables"][JoinTable]["columns"]
+    >,
+    AddJoin<Query, Type, TableAliasRef<JoinTable>, Exp>
   >
 }
 
 export interface FromBuilder<Database extends SQLDatabaseSchema> {
   from<Table extends StringKeys<Database["tables"]>>(
-    table: Table,
+    table: CheckAlias<Table>,
   ): JoinBuilder<
     Database,
     ActivateTableContext<
@@ -77,7 +101,7 @@ export interface FromBuilder<Database extends SQLDatabaseSchema> {
       Database["tables"][Table]["columns"]
     >,
     Table,
-    SelectClause<"*", TableReference<Table>>
+    SelectClause<"*", TableAliasRef<Table>>
   >
 }
 
@@ -91,7 +115,7 @@ class DefaultFromBuilder<Database extends SQLDatabaseSchema>
   }
 
   from<Table extends Extract<Keys<Database["tables"]>, string>>(
-    table: Table,
+    table: CheckAlias<Table>,
   ): JoinBuilder<
     Database,
     ActivateTableContext<
@@ -101,12 +125,12 @@ class DefaultFromBuilder<Database extends SQLDatabaseSchema>
       Database["tables"][Table]["columns"]
     >,
     Table,
-    SelectClause<"*", TableReference<Table>>
+    SelectClause<"*", TableAliasRef<Table>>
   > {
     return new DefaultJoinBuilder(
       QueryContextBuilder.create(this._database).copy(table).context,
       table,
-    )
+    ) as any
   }
 }
 
@@ -114,33 +138,37 @@ class DefaultJoinBuilder<
   Database extends SQLDatabaseSchema,
   Context extends QueryContext<Database>,
   Table extends StringKeys<Database["tables"]>,
-  Query extends SelectClause<"*", TableReference<Table>>,
+  Query extends SelectClause<"*", TableAliasRef<Table>>,
 > implements JoinBuilder<Database, Context, Table, Query>
 {
   private _context: Context
-  private _table: Table
+  private _query: Query
 
   constructor(context: Context, table: Table) {
     this._context = context
-    this._table = table
+    this._query = {
+      type: "SelectClause",
+      columns: "*",
+      from: buildTableReference(table),
+    } as Query
   }
 
   columns<
     Columns extends
       | QueryContextColumns<Context>
-      | `${QueryContextColumns<Context>} AS ${string}`,
+      | AliasedValue<QueryContextColumns<Context>>,
     Next extends SelectBuilder<
       Database,
       ModifyReturn<Context, Columns>,
-      SelectClause<CheckColumns<Columns>, Query["from"]>
+      SelectClause<CheckColumns<Columns>, TableAliasRef<Table>>
     >,
-  >(first: CheckColumn<Columns>, ...rest: CheckColumn<Columns>[]): Next {
-    const select = createSelect(this._context, this._table) as SelectBuilder<
-      Database,
-      Context,
-      Query
-    >
-    return select.columns(first, ...rest)
+  >(first: CheckAlias<Columns>, ...rest: CheckAlias<Columns>[]): Next {
+    const select = createSelect<Database, Context, Query>(
+      this._context,
+      this._query,
+    )
+
+    return select.columns(first as any, ...rest) as unknown as Next
   }
 
   join<
@@ -150,16 +178,40 @@ class DefaultJoinBuilder<
   >(
     type: Type,
     table: JoinTable,
-    builder: (w: WhereClauseBuilder<Context>) => Exp,
+    builder: (
+      w: WhereClauseBuilder<
+        ActivateTableContext<
+          Database,
+          Context,
+          JoinTable,
+          Database["tables"][JoinTable]["columns"]
+        >
+      >,
+    ) => Exp,
   ): SelectBuilder<
     Database,
-    Context,
-    AddJoin<Query, Type, TableReference<Table>, Exp>
-  > {
-    return createSelect(this._context, this._table) as SelectBuilder<
+    ActivateTableContext<
       Database,
       Context,
-      AddJoin<Query, Type, TableReference<Table>, Exp>
-    >
+      JoinTable,
+      Database["tables"][JoinTable]["columns"]
+    >,
+    AddJoin<Query, Type, TableAliasRef<JoinTable>, Exp>
+  > {
+    const ctx = new QueryContextBuilder<Database, Context>(this._context).copy(
+      table as any,
+    ).context
+
+    const q: AddJoin<Query, Type, TableAliasRef<JoinTable>, Exp> = {
+      ...this._query,
+      join: {
+        type: "JoinClause",
+        joinType: type,
+        from: buildTableReference(table),
+        on: builder(whereClause(ctx)),
+      },
+    } as any
+
+    return createSelect(ctx, q) as any
   }
 }

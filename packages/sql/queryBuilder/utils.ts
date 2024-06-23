@@ -1,7 +1,16 @@
 import type { StringKeys } from "@telefrek/type-utils"
 import type {
+  ArrayValueType,
+  BigIntValueType,
+  BooleanValueType,
+  BufferValueType,
   ColumnReference,
+  NullValueType,
+  NumberValueType,
+  ParameterValueType,
+  StringValueType,
   TableColumnReference,
+  TableReference,
   UnboundColumnReference,
   ValueTypes,
 } from "../ast.js"
@@ -42,6 +51,26 @@ export type BuildColumnReferences<Columns extends string> =
       ? ColumnReference<TableColumnReference<Table, Col>>
       : ColumnReference<UnboundColumnReference<Columns>>
 
+export type CheckValueType<T> = T extends number
+  ? NumberValueType<T>
+  : T extends bigint
+    ? BigIntValueType<T>
+    : T extends boolean
+      ? BooleanValueType<T>
+      : T extends [null]
+        ? NullValueType
+        : T extends Int8Array
+          ? BufferValueType<T>
+          : T extends []
+            ? ArrayValueType<T>
+            : T extends string
+              ? T extends `:${infer _}`
+                ? ParameterValueType<_>
+                : T extends `$${infer _}`
+                  ? ParameterValueType<_>
+                  : StringValueType<T>
+              : never
+
 /**
  * Extract the column type from a column or table.column reference pair
  */
@@ -78,6 +107,30 @@ export type ColumnReferenceType<Column extends string> =
 
 const ALIAS_REGEX = /(.)+ AS (.)+/
 const TABLE_BOUND_REGEX = /([^.])+\.([^.])+/
+
+export type TableAliasRef<Table extends string> =
+  Table extends `${infer T} AS ${infer Alias}`
+    ? TableReference<T, Alias>
+    : TableReference<Table>
+
+export function buildTableReference<Table extends string>(
+  table: Table,
+): TableAliasRef<Table> {
+  if (ALIAS_REGEX.test(table)) {
+    const data = table.split(" AS ")
+    return {
+      type: "TableReference",
+      table: data[0],
+      alias: data[1],
+    } as TableAliasRef<Table>
+  }
+
+  return {
+    type: "TableReference",
+    table,
+    alias: table,
+  } as TableAliasRef<Table>
+}
 
 export function buildColumnReference<Column extends string>(
   column: Column,

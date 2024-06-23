@@ -3,11 +3,9 @@ import type { UnionToTuple } from "@telefrek/type-utils/unsafe.js"
 import type {
   ColumnReference,
   LogicalExpression,
-  NamedQuery,
   SQLQuery,
   SelectClause,
   SelectedColumn,
-  TableReference,
   WhereClause,
 } from "../ast.js"
 import {
@@ -35,13 +33,18 @@ import {
   type WhereClauseBuilder,
 } from "./where.js"
 
+export type UpdateSelectColumns<
+  Q extends SelectClause,
+  Columns extends string,
+> = Flatten<Omit<Q, "columns"> & { columns: CheckColumns<Columns> }>
+
 /**
  * Allows selecting columns for a Select statement
  */
 export interface SelectColumnsBuilder<
   Database extends SQLDatabaseSchema,
   Context extends QueryContext<Database>,
-  From extends TableReference | NamedQuery,
+  Query extends SelectClause,
 > {
   columns<
     Columns extends
@@ -50,11 +53,11 @@ export interface SelectColumnsBuilder<
     Next extends SelectBuilder<
       Database,
       ModifyReturn<Context, Columns>,
-      SelectClause<CheckColumns<Columns>, From>
+      UpdateSelectColumns<Query, Columns>
     >,
   >(
-    first: CheckColumn<Columns>,
-    ...rest: CheckColumn<Columns>[]
+    first: CheckAlias<Columns>,
+    ...rest: CheckAlias<Columns>[]
   ): Next
 }
 
@@ -66,7 +69,7 @@ export interface SelectBuilder<
   Context extends QueryContext<Database>,
   Query extends SelectClause,
 > extends QueryAST<Query>,
-    SelectColumnsBuilder<Database, Context, Query["from"]>,
+    SelectColumnsBuilder<Database, Context, Query>,
     WhereBuilder<
       Database,
       Context,
@@ -78,7 +81,7 @@ export interface SelectBuilder<
  * Check to ensure the alias has a valid string since {@link AliasedValue} allows
  * "" as a valid string
  */
-export type CheckColumn<T> = T extends `${infer _} AS ${infer Alias}`
+export type CheckAlias<T> = T extends `${infer _} AS ${infer Alias}`
   ? Alias extends ""
     ? never
     : T
@@ -127,30 +130,25 @@ export type ModifyReturn<Context extends QueryContext, Columns extends string> =
 export function createSelect<
   Database extends SQLDatabaseSchema,
   Context extends QueryContext<Database>,
-  Table extends string,
+  Query extends SelectClause,
 >(
   context: Context,
-  table: Table,
+  query: Query,
 ): SelectBuilder<
   Database,
-  ChangeContextReturning<Context, Database["tables"][Table]["columns"]>,
-  SelectClause<"*", TableReference<Table>>
+  ChangeContextReturning<
+    Context,
+    Database["tables"][Query["from"]["alias"]]["columns"]
+  >,
+  Query
 > {
-  return new DefaultSelectBuilder(
-    {
-      type: "SelectClause",
-      from: {
-        type: "TableReference",
-        table,
-        alias: table,
-      },
-      columns: "*",
-    },
-    context,
-  ) as unknown as SelectBuilder<
+  return new DefaultSelectBuilder(query, context) as unknown as SelectBuilder<
     Database,
-    ChangeContextReturning<Context, Database["tables"][Table]["columns"]>,
-    SelectClause<"*", TableReference<Table>>
+    ChangeContextReturning<
+      Context,
+      Database["tables"][Query["from"]["alias"]]["columns"]
+    >,
+    Query
   >
 }
 
@@ -198,7 +196,7 @@ class DefaultSelectBuilder<
       ModifyReturn<Context, Columns>,
       SelectClause<CheckColumns<Columns>, Query["from"]>
     >,
-  >(first: CheckColumn<Columns>, ...rest: CheckColumn<Columns>[]): Next {
+  >(first: CheckAlias<Columns>, ...rest: CheckAlias<Columns>[]): Next {
     this._query.columns = {}
     const columns = [buildColumnReference(first)]
 

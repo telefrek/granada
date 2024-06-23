@@ -1,7 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/ban-types */
 
-import type { Flatten, IsUnion, Keys } from "@telefrek/type-utils/index.js"
+import type {
+  Flatten,
+  IsUnion,
+  Keys,
+  StringKeys,
+} from "@telefrek/type-utils/index.js"
 import {
   columnSchemaBuilder,
   type ColumnSchemaManager,
@@ -10,6 +15,7 @@ import {
   type SQLDatabaseTables,
   type SQLRowEntity,
   type SQLTableSchema,
+  type TableColumnType,
 } from "../schema.js"
 
 /**
@@ -65,6 +71,25 @@ export type QueryContextColumns<Context extends QueryContext<any, any, any>> =
           [Key in Keys<Active>]: `${Keys<Active[Key]["columns"]> & string}`
         }[Keys<Active>]
     : never
+
+export type ColumnType<Context extends QueryContext, Column> =
+  Context extends QueryContext<infer _Database, infer Active, infer _Returning>
+    ? Column extends `${infer Table}.${infer Column}`
+      ? TableColumnType<Active[Table]["columns"][Column]>
+      : {
+          [Key in Keys<Active>]: Column extends keyof Active[Key]["columns"]
+            ? TableColumnType<Active[Key]["columns"][Column]>
+            : never
+        }[Keys<Active>]
+    : never
+
+export type MatchingColumns<Context extends QueryContext, Column> = {
+  [K in QueryContextColumns<Context>]: Column extends K
+    ? never
+    : ColumnType<Context, K> extends ColumnType<Context, Column>
+      ? K
+      : never
+}[QueryContextColumns<Context>]
 
 /**
  * Utility type to find all the columns with names that are non-unique and
@@ -194,8 +219,8 @@ export class QueryContextBuilder<
    *
    * @template Table The table from the database to copy
    */
-  copy<Table extends keyof Database["tables"]>(
-    table: CheckDuplicateTable<Table & string, Context>,
+  copy<Table extends StringKeys<Database["tables"]>>(
+    table: CheckDuplicateTable<Table, Context>,
   ): QueryContextBuilder<
     Database,
     ActivateTableContext<

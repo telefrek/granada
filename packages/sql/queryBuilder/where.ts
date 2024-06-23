@@ -2,31 +2,33 @@
  * Where query clause building
  */
 
-import type { Flatten, Keys } from "@telefrek/type-utils"
+import type { Flatten } from "@telefrek/type-utils"
 import type {
-  ArrayValueType,
-  BigIntValueType,
-  BooleanValueType,
-  BufferValueType,
   ColumnFilter,
   ColumnReference,
   CombinedQueryClause,
   FilteringOperation,
   LogicalExpression,
   LogicalTree,
-  NullValueType,
-  NumberValueType,
-  ParameterValueType,
   QueryClause,
-  StringValueType,
   TableColumnReference,
   UnboundColumnReference,
   WhereClause,
 } from "../ast.js"
-import type { SQLDatabaseSchema, TableColumnType } from "../schema.js"
+import type { SQLDatabaseSchema } from "../schema.js"
 import type { QueryAST } from "./common.js"
-import { type QueryContext, type QueryContextColumns } from "./context.js"
-import { buildColumnReference, parseValue } from "./utils.js"
+import {
+  type ColumnType,
+  type MatchingColumns,
+  type QueryContext,
+  type QueryContextColumns,
+} from "./context.js"
+import {
+  buildColumnReference,
+  parseValue,
+  type BuildColumnReferences,
+  type CheckValueType,
+} from "./utils.js"
 
 export interface WhereBuilder<
   Database extends SQLDatabaseSchema,
@@ -52,17 +54,6 @@ export type AddWhereToAST<
       : never
     : never
 
-type ColumnType<Context extends QueryContext, Column> =
-  Context extends QueryContext<infer _Database, infer Active, infer _Returning>
-    ? Column extends `${infer Table}.${infer Column}`
-      ? TableColumnType<Active[Table]["columns"][Column]>
-      : {
-          [Key in Keys<Active>]: Column extends keyof Active[Key]["columns"]
-            ? TableColumnType<Active[Key]["columns"][Column]>
-            : never
-        }[Keys<Active>]
-    : never
-
 type Parameter<
   Value,
   Context extends QueryContext,
@@ -71,7 +62,7 @@ type Parameter<
   ? Value
   : Value extends `$${infer _}`
     ? Value
-    : ColumnType<Context, Column>
+    : ColumnType<Context, Column> | MatchingColumns<Context, Column>
 
 type RefType<C extends string> = C extends `${infer Table}.${infer Column}`
   ? ColumnReference<TableColumnReference<Table, Column>>
@@ -91,8 +82,16 @@ export interface WhereClauseBuilder<Context extends QueryContext> {
     column: Column,
     op: Op,
     value: Parameter<Value, Context, Column>,
-  ): ColumnFilter<RefType<Column>, Op, CheckValueType<Value>>
+  ): ColumnFilter<
+    RefType<Column>,
+    Op,
+    CheckColumnRef<Value, QueryContextColumns<Context>>
+  >
 }
+
+type CheckColumnRef<Value, Columns extends string> = Value extends Columns
+  ? BuildColumnReferences<Value>
+  : CheckValueType<Value>
 
 export function whereClause<Context extends QueryContext>(
   context: Context,
@@ -129,20 +128,31 @@ class DefaultWhereClauseBuilder<Context extends QueryContext>
     column: Column,
     op: Op,
     value: Parameter<Value, Context, Column>,
-  ): ColumnFilter<RefType<Column>, Op, CheckValueType<Value>> {
-    return buildFilter<Column, Op, Value>(
+  ): ColumnFilter<
+    RefType<Column>,
+    Op,
+    CheckColumnRef<Value, QueryContextColumns<Context>>
+  > {
+    return buildFilter<Context, Column, Op, Value>(
+      this._context,
       column,
       op,
       value as Value,
-    ) as unknown as ColumnFilter<RefType<Column>, Op, CheckValueType<Value>>
+    ) as unknown as ColumnFilter<
+      RefType<Column>,
+      Op,
+      CheckColumnRef<Value, QueryContextColumns<Context>>
+    >
   }
 }
 
 function buildFilter<
+  Context extends QueryContext,
   Column extends string,
   Operation extends FilteringOperation,
   Value,
 >(
+  context: Context,
   column: Column,
   op: Operation,
   value: Value,
@@ -151,7 +161,7 @@ function buildFilter<
     ? ColumnReference<TableColumnReference<Table, Col>, Col>
     : ColumnReference<UnboundColumnReference<Column>, Column>,
   Operation,
-  CheckValueType<Value>
+  CheckColumnRef<Value, QueryContextColumns<Context>>
 > {
   return {
     type: "ColumnFilter",
@@ -163,8 +173,48 @@ function buildFilter<
           type: "ParameterValue",
           name: String(value).substring(1),
         }
-      : parseValue(value)) as CheckValueType<Value>,
+      : isColumn(context, value)
+        ? buildColumnReference(value as string)
+        : parseValue(value)) as CheckColumnRef<
+      Value,
+      QueryContextColumns<Context>
+    >,
   }
+}
+
+function isColumn<Context extends QueryContext, Value>(
+  context: Context,
+  value: Value,
+): boolean {
+  if (typeof value === "string") {
+    if (value.indexOf(".") > 0) {
+      const data = value.split(".")
+      if (Object.hasOwn(context.active, data[0])) {
+        const table = Object.getOwnPropertyDescriptor(
+          context.active,
+          data[0],
+        )?.value
+        if (table !== undefined && Object.hasOwn(table["columns"], data[1])) {
+          return true
+        }
+      }
+    } else {
+      for (const key of Object.keys(context.active)) {
+        const table = Object.getOwnPropertyDescriptor(
+          context.active,
+          key,
+        )?.value
+        if (table !== undefined) {
+          for (const col of Object.keys(table["columns"])) {
+            if (col === value) {
+              return true
+            }
+          }
+        }
+      }
+    }
+  }
+  return false
 }
 
 function isParameter<T>(value: T): boolean {
@@ -173,23 +223,3 @@ function isParameter<T>(value: T): boolean {
     (value.startsWith(":") || value.startsWith("$"))
   )
 }
-
-type CheckValueType<T> = T extends number
-  ? NumberValueType<T>
-  : T extends bigint
-    ? BigIntValueType<T>
-    : T extends boolean
-      ? BooleanValueType<T>
-      : T extends [null]
-        ? NullValueType
-        : T extends Int8Array
-          ? BufferValueType<T>
-          : T extends []
-            ? ArrayValueType<T>
-            : T extends string
-              ? T extends `:${infer _}`
-                ? ParameterValueType<_>
-                : T extends `$${infer _}`
-                  ? ParameterValueType<_>
-                  : StringValueType<T>
-              : never
