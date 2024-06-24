@@ -159,11 +159,14 @@ function unboundColumn<Column extends string>(
   }
 }
 
+type SplitColumnType<Column extends string> =
+  Column extends `${infer Table}.${infer Col}`
+    ? ColumnReference<TableColumnReference<Table, Col>>
+    : never
+
 function splitColumn<Column extends string>(
   column: Column,
-): Column extends `${infer Table}.${infer Col}`
-  ? ColumnReference<TableColumnReference<Table, Col>>
-  : never {
+): SplitColumnType<Column> {
   const data = column.split(".")
   return {
     type: "ColumnReference",
@@ -173,8 +176,7 @@ function splitColumn<Column extends string>(
       column: data[1],
     },
     alias: data[1],
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } as any
+  } as unknown as SplitColumnType<Column>
 }
 
 export function parseValue<T>(value: T): ValueTypes {

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Flatten, StringKeys } from "@telefrek/type-utils"
 import type {
   JoinClause,
@@ -140,7 +139,17 @@ class DefaultFromBuilder<Database extends SQLDatabaseSchema>
         buildTableReference(table),
       ).context,
       table,
-    ) as any
+    ) as unknown as JoinBuilder<
+      Database,
+      ActivateTableContext<
+        Database,
+        QueryContext<Database>,
+        CheckTableReference<Table & string>["alias"],
+        Database["tables"][CheckTableReference<Table>["table"]]["columns"]
+      >,
+      Table,
+      SelectClause<"*", CheckTableReference<Table>>
+    >
   }
 }
 
@@ -185,7 +194,7 @@ class DefaultJoinBuilder<
       this._query,
     )
 
-    return select.columns(first as any, ...rest) as unknown as Next
+    return select.columns(first, ...rest) as unknown as Next
   }
 
   join<

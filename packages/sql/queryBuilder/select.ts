@@ -131,23 +131,10 @@ export function createSelect<
   Database extends SQLDatabaseSchema,
   Context extends QueryContext<Database>,
   Query extends SelectClause,
->(
-  context: Context,
-  query: Query,
-): SelectBuilder<
-  Database,
-  ChangeContextReturning<
-    Context,
-    Database["tables"][Query["from"]["alias"]]["columns"]
-  >,
-  Query
-> {
+>(context: Context, query: Query): SelectBuilder<Database, Context, Query> {
   return new DefaultSelectBuilder(query, context) as unknown as SelectBuilder<
     Database,
-    ChangeContextReturning<
-      Context,
-      Database["tables"][Query["from"]["alias"]]["columns"]
-    >,
+    Context,
     Query
   >
 }

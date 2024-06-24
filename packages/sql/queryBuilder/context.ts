@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/ban-types */
 
 import type {
@@ -240,7 +239,10 @@ export class QueryContextBuilder<
     })
 
     // Ignore the typing we know it is correct here
-    return this as any
+    return this as unknown as QueryContextBuilder<
+      Database,
+      ActivateTableContext<Database, Context, Table, Updated>
+    >
   }
 
   /**
@@ -258,12 +260,12 @@ export class QueryContextBuilder<
     ActivateTableContext<
       Database,
       Context,
-      Table["alias"] & string,
+      Table["alias"],
       Database["tables"][Table["table"]]["columns"]
     >
   > {
     return this.add(
-      table.alias as any,
+      table.alias as CheckDuplicateTable<string, Context>,
       this._context["database"]["tables"][table.table]["columns"],
     )
   }
@@ -284,7 +286,10 @@ export class QueryContextBuilder<
   > {
     Object.defineProperty(this._context, "returning", { value: schema })
 
-    return this as any
+    return this as unknown as QueryContextBuilder<
+      Database,
+      AddReturnToContext<Database, Context, Schema>
+    >
   }
 }
 
