@@ -2,9 +2,13 @@
  * Set of utilities to validate a query against a schema
  */
 
+import { log } from "console"
+import { inspect } from "util"
 import type {
   ColumnReference,
+  FilteringOperation,
   JoinClause,
+  LogicalExpression,
   NamedQuery,
   SQLQuery,
   SelectClause,
@@ -53,6 +57,16 @@ export class QueryParser<Database extends SQLDatabaseSchema> {
     return parseQueryClause(normalize(query)) as ParseSQLQuery<T>
   }
 }
+
+/**
+ * Parse the query clause
+ *
+ * NOTE: This does NOT check anything for validity as that should be done via
+ * the type system.  If called outside of this context things WILL break
+ *
+ * @param s the string to parse
+ * @returns A generic SQLQuery
+ */
 
 function parseQueryClause(s: string): SQLQuery {
   const tokens = s.split(" ")
@@ -122,18 +136,62 @@ function parseColumnReference(s: string): ColumnReference {
 }
 
 function parseFrom(tokens: string[]): { from: TableReference | NamedQuery } {
-  tokens.shift()
+  if ("FROM" !== tokens.shift()) {
+    throw new Error("Invalid from tokens")
+  }
+
+  // TODO: Parse named queries...
   return {
     from: parseTableReference(tokens.join(" ")),
   }
 }
 
-function parseJoin(_tokens: string[]): { join?: JoinClause } {
+function parseJoin(tokens: string[]): { join?: JoinClause } {
+  if (tokens.length === 0) {
+    return {}
+  }
+
+  // Find all the clauses
+  let next = takeUntil(tokens, [","])
+  while (next.length > 0) {
+    log(inspect(next, true, 10, true))
+    next = takeUntil(tokens, [","])
+  }
+
   return {}
 }
 
-function parseWhere(_tokens: string[]): { where?: WhereClause } {
-  return {}
+function parseWhere(tokens: string[]): WhereClause | object {
+  if (tokens.length === 0) {
+    return {}
+  }
+
+  if ("WHERE" !== tokens.shift()) {
+    throw new Error(`Invalid where tokens`)
+  }
+
+  return {
+    where: parseLogicalExpression(tokens),
+  }
+}
+
+function parseLogicalExpression(tokens: string[]): LogicalExpression {
+  const segments = tokens.join(" ").split(/(?=[>=<!])|(?<=[>=<!])/g)
+  const left = takeUntil(segments, [">", "<", "=", "!"]).join(" ").trim()
+  const op = takeWhile(segments, ["<", ">", "=", "!"]).join("")
+  const right = segments.join(" ").trim()
+
+  log(`left: ${left}, op: ${op}, right: ${right}`)
+
+  return {
+    type: "ColumnFilter",
+    left: parseColumnReference(left),
+    op: op as FilteringOperation,
+    right: {
+      type: "StringValue",
+      value: right,
+    },
+  }
 }
 
 function parseTableReference(table: string): TableReference {
@@ -171,6 +229,24 @@ function takeUntil(tokens: string[], filters: string[]): string[] {
   return ret
 }
 
+function takeWhile(tokens: string[], filters: string[]): string[] {
+  const ret = []
+
+  let cnt = 0
+
+  while (tokens.length > 0 && filters.indexOf(tokens[0]) >= 0 && cnt === 0) {
+    const token = tokens.shift()!
+    ret.push(token)
+    if (token === "(") {
+      cnt++
+    } else if (token === ")") {
+      cnt--
+    }
+  }
+
+  return ret
+}
+
 function normalize<T extends string>(s: T): NormalizeQuery<T> {
   return s
     .split(/ |\n|(?=[,()])|(?<=[,()])/g)
@@ -183,32 +259,24 @@ function normalizeWord(s: string): string {
   return NORMALIZE_TARGETS.indexOf(s.toUpperCase()) < 0 ? s : s.toUpperCase()
 }
 
+const LOGICAL_KEYS = ["AND", "OR", "NOT"]
+
 const QUERY_KEYS = ["SELECT", "UPDATE", "INSERT", "DELETE", "WITH"]
 
-const WHERE_KEYS = ["HAVING", "ORDER", "BY", "LIMIT", "OFFSET"]
+const WHERE_KEYS = ["WHERE", "HAVING", "ORDER", "BY", "LIMIT", "OFFSET"]
 
-const JOIN_KEYS = [
-  "JOIN",
-  "OUTER",
-  "INNER",
-  "FULL",
-  "LEFT",
-  "RIGHT",
-  "LATERAL",
-  "ON",
-]
+const JOIN_KEYS = ["JOIN", "OUTER", "INNER", "FULL", "LEFT", "RIGHT", "LATERAL"]
 
-const FROM_KEYS = ["WHERE", ...WHERE_KEYS, ...JOIN_KEYS]
+const FROM_KEYS = [...WHERE_KEYS, ...JOIN_KEYS]
 
 const NORMALIZE_TARGETS = [
   ...QUERY_KEYS,
   ...FROM_KEYS,
+  ...LOGICAL_KEYS,
   "FROM",
   "AS",
   "UNION",
   "EXTRACT",
   "INTERSECT",
-  "AND",
-  "OR",
-  "NOT",
+  "ON",
 ]

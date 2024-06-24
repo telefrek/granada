@@ -33,7 +33,7 @@ describe("Select clauses should be buildable from a schema", () => {
 
   it("Should work with a full database only setup", () => {
     const q = DB.parse(
-      `select address, u.email as e from users as u inner join orders as o on user_id=u.id where id > 1`,
+      `select address, u.email as e from users as u inner join orders as o on user_id=u.id where u.id >= 1`,
     )
 
     log(inspect(q, true, 10, true))
