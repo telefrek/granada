@@ -276,7 +276,7 @@ export type JoinExpression<
   on: On
 }
 
-export type JoinClause<Join extends JoinExpression> = {
+export type JoinClause<Join extends JoinExpression = JoinExpression> = {
   join: Join
 }
 

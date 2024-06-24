@@ -67,7 +67,7 @@ export type CheckValueType<T> = T extends number
               ? T extends `:${infer _}`
                 ? ParameterValueType<_>
                 : T extends `$${infer _}`
-                  ? ParameterValueType<_>
+                  ? never
                   : StringValueType<T>
               : never
 

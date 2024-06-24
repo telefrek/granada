@@ -217,8 +217,8 @@ type Digits = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
 // digits and expand to bigint if over 8 characters by default
 type CheckValueType<T> = T extends `:${infer Name}`
   ? ParameterValueType<Name>
-  : T extends `$${infer Name}`
-    ? ParameterValueType<Name>
+  : T extends `$${infer _}`
+    ? Invalid<`index position not supported`>
     : T extends `'${infer Value}'`
       ? StringValueType<Value>
       : T extends `0x${infer _}`

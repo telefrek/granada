@@ -208,25 +208,8 @@ describe("Where clause parsing should handle reasonable cases", () => {
 
       expect(n).not.toBeUndefined()
 
-      const i: ParseWhereClause<`WHERE c = $0`> = {
-        where: {
-          type: "ColumnFilter",
-          left: {
-            type: "ColumnReference",
-            reference: {
-              type: "UnboundColumnReference",
-              column: "c",
-            },
-            alias: "c",
-          },
-          op: "=",
-          right: {
-            type: "ParameterValue",
-            name: "0",
-          },
-        },
-      }
-
+      // We can't support this type of indexing
+      const i: ParseWhereClause<`WHERE c = $0`> = "invalid expression: c = $0"
       expect(i).not.toBeUndefined()
     })
 

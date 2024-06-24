@@ -102,7 +102,7 @@ type CollapseTree<T, Table extends string> = T extends [
 type FindParameters<E, Table extends string> =
   E extends ColumnFilter<infer _Left, infer _Op, infer Right>
     ? Right extends ParameterValueType<infer Name>
-      ? [{ name: Name; column: E["left"]["alias"]; table: Table }] //[ParameterInfo<Name, E["left"]["alias"], Table>]
+      ? [{ name: Name; column: E["left"]["alias"]; table: Table }]
       : []
     : E extends SubqueryFilter<infer _Column, infer Sub, infer _Op>
       ? Sub extends SubQuery<infer Query>

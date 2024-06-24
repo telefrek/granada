@@ -66,3 +66,4 @@ type NormalizedKeyWords =
   | "LIMIT"
   | "OFFSET"
   | "WITH"
+  | "ON"

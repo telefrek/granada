@@ -1,3 +1,5 @@
+import { log } from "console"
+import { inspect } from "util"
 import type { ParseSQLQuery } from "../parser.js"
 import { DB } from "../testUtils.js"
 
@@ -27,5 +29,13 @@ describe("Select clauses should be buildable from a schema", () => {
     expect(b.query.type).toBe("SelectClause")
     expect(b.query.join.on.right.type).toBe("ColumnReference")
     expect(b.query.join.from.alias).toBe("o")
+  })
+
+  it("Should work with a full database only setup", () => {
+    const q = DB.parse(
+      `select address, u.email as e from users as u inner join orders as o on user_id=u.id where id > 1`,
+    )
+
+    log(inspect(q, true, 10, true))
   })
 })
