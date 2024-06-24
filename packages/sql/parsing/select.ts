@@ -15,7 +15,6 @@ import { ParseTableReference } from "./tables.js"
 import { ExtractUntil, NextToken, SplitSQL, StartsWith } from "./utils.js"
 import { ExtractWhere, type ParseExpression } from "./where.js"
 
-import type { TableAliasRef } from "../queryBuilder/utils.js"
 import { FromKeywords, JoinKeywords, type OptionKeywords } from "./keywords.js"
 
 /**
@@ -134,14 +133,14 @@ type ParseJoinClause<T> =
         ? JoinClause<
             JoinExpression<
               Modifiers,
-              TableAliasRef<Reference>,
+              ParseTableReference<Reference>,
               ParseExpression<Clause>
             >
           >
         : JoinClause<
             JoinExpression<
               "INNER",
-              TableAliasRef<Reference>,
+              ParseTableReference<Reference>,
               ParseExpression<Clause>
             >
           >

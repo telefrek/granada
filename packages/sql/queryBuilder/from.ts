@@ -30,7 +30,7 @@ import {
 import {
   buildTableReference,
   type AliasedValue,
-  type TableAliasRef,
+  type ParseTableReference,
 } from "./utils.js"
 import { whereClause, type WhereClauseBuilder } from "./where.js"
 
@@ -59,7 +59,7 @@ export interface JoinBuilder<
   Table extends
     | StringKeys<Database["tables"]>
     | AliasedValue<StringKeys<Database["tables"]>>,
-  Query extends SelectClause<"*", TableAliasRef<Table>>,
+  Query extends SelectClause<"*", ParseTableReference<Table>>,
 > extends SelectColumnsBuilder<Database, Context, Query> {
   join<
     Type extends JoinType,
@@ -75,8 +75,11 @@ export interface JoinBuilder<
         ActivateTableContext<
           Database,
           Context,
-          TableAliasRef<JoinTable & string>["alias"],
-          ContextTable<Context, TableAliasRef<JoinTable & string>["table"]>
+          ParseTableReference<JoinTable & string>["alias"],
+          ContextTable<
+            Context,
+            ParseTableReference<JoinTable & string>["table"]
+          >
         >
       >,
     ) => Exp,
@@ -85,10 +88,10 @@ export interface JoinBuilder<
     ActivateTableContext<
       Database,
       Context,
-      TableAliasRef<JoinTable & string>["alias"],
-      ContextTable<Context, TableAliasRef<JoinTable & string>["table"]>
+      ParseTableReference<JoinTable & string>["alias"],
+      ContextTable<Context, ParseTableReference<JoinTable & string>["table"]>
     >,
-    AddJoin<Query, Type, TableAliasRef<JoinTable>, Exp>
+    AddJoin<Query, Type, ParseTableReference<JoinTable>, Exp>
   >
 }
 
@@ -104,11 +107,13 @@ export interface FromBuilder<Database extends SQLDatabaseSchema> {
     ActivateTableContext<
       Database,
       QueryContext<Database>,
-      TableAliasRef<Table & string>["alias"],
-      Database["tables"][TableAliasRef<Table & string>["table"]]["columns"]
+      ParseTableReference<Table & string>["alias"],
+      Database["tables"][ParseTableReference<
+        Table & string
+      >["table"]]["columns"]
     >,
     Table,
-    SelectClause<"*", TableAliasRef<Table>>
+    SelectClause<"*", ParseTableReference<Table>>
   >
 }
 
@@ -132,11 +137,13 @@ class DefaultFromBuilder<Database extends SQLDatabaseSchema>
     ActivateTableContext<
       Database,
       QueryContext<Database>,
-      TableAliasRef<Table & string>["alias"],
-      Database["tables"][TableAliasRef<Table & string>["table"]]["columns"]
+      ParseTableReference<Table & string>["alias"],
+      Database["tables"][ParseTableReference<
+        Table & string
+      >["table"]]["columns"]
     >,
     Table,
-    SelectClause<"*", TableAliasRef<Table>>
+    SelectClause<"*", ParseTableReference<Table>>
   > {
     return new DefaultJoinBuilder(
       QueryContextBuilder.create(this._database).copy(
@@ -151,7 +158,7 @@ class DefaultJoinBuilder<
   Database extends SQLDatabaseSchema,
   Context extends QueryContext<Database>,
   Table extends StringKeys<Database["tables"]>,
-  Query extends SelectClause<"*", TableAliasRef<Table>>,
+  Query extends SelectClause<"*", ParseTableReference<Table>>,
 > implements JoinBuilder<Database, Context, Table, Query>
 {
   private _context: Context
@@ -180,7 +187,7 @@ class DefaultJoinBuilder<
     Next extends SelectBuilder<
       Database,
       ModifyReturn<Context, Columns>,
-      SelectClause<CheckColumns<Columns>, TableAliasRef<Table>>
+      SelectClause<CheckColumns<Columns>, ParseTableReference<Table>>
     >,
   >(first: CheckAlias<Columns>, ...rest: CheckAlias<Columns>[]): Next {
     const select = createSelect<Database, Context, Query>(
@@ -205,8 +212,11 @@ class DefaultJoinBuilder<
         ActivateTableContext<
           Database,
           Context,
-          TableAliasRef<JoinTable & string>["alias"],
-          ContextTable<Context, TableAliasRef<JoinTable & string>["table"]>
+          ParseTableReference<JoinTable & string>["alias"],
+          ContextTable<
+            Context,
+            ParseTableReference<JoinTable & string>["table"]
+          >
         >
       >,
     ) => Exp,
@@ -215,16 +225,16 @@ class DefaultJoinBuilder<
     ActivateTableContext<
       Database,
       Context,
-      TableAliasRef<JoinTable & string>["alias"],
-      ContextTable<Context, TableAliasRef<JoinTable & string>["table"]>
+      ParseTableReference<JoinTable & string>["alias"],
+      ContextTable<Context, ParseTableReference<JoinTable & string>["table"]>
     >,
-    AddJoin<Query, Type, TableAliasRef<JoinTable>, Exp>
+    AddJoin<Query, Type, ParseTableReference<JoinTable>, Exp>
   > {
     const ctx = new QueryContextBuilder<Database, Context>(this._context).copy(
       buildTableReference(table) as any,
     ).context
 
-    const q: AddJoin<Query, Type, TableAliasRef<JoinTable>, Exp> = {
+    const q: AddJoin<Query, Type, ParseTableReference<JoinTable>, Exp> = {
       ...this._query,
       join: {
         type: "JoinClause",

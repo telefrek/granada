@@ -108,28 +108,28 @@ export type ColumnReferenceType<Column extends string> =
 const ALIAS_REGEX = /(.)+ AS (.)+/
 const TABLE_BOUND_REGEX = /([^.])+\.([^.])+/
 
-export type TableAliasRef<Table extends string> =
+export type ParseTableReference<Table extends string> =
   Table extends `${infer T} AS ${infer Alias}`
     ? TableReference<T, Alias>
     : TableReference<Table>
 
 export function buildTableReference<Table extends string>(
   table: Table,
-): TableAliasRef<Table> {
+): ParseTableReference<Table> {
   if (ALIAS_REGEX.test(table)) {
     const data = table.split(" AS ")
     return {
       type: "TableReference",
       table: data[0],
       alias: data[1],
-    } as TableAliasRef<Table>
+    } as ParseTableReference<Table>
   }
 
   return {
     type: "TableReference",
     table,
     alias: table,
-  } as TableAliasRef<Table>
+  } as ParseTableReference<Table>
 }
 
 export function buildColumnReference<Column extends string>(
