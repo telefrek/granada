@@ -6,6 +6,7 @@ import type {
   JoinType,
   LogicalExpression,
   NamedQuery,
+  SQLQuery,
   SelectClause,
   TableReference,
 } from "../ast.js"
@@ -59,11 +60,7 @@ export interface JoinBuilder<
     | StringKeys<Database["tables"]>
     | AliasedValue<StringKeys<Database["tables"]>>,
   Query extends SelectClause<"*", TableAliasRef<Table>>,
-> extends SelectColumnsBuilder<
-    Database,
-    Context,
-    SelectClause<"*", TableAliasRef<Table>>
-  > {
+> extends SelectColumnsBuilder<Database, Context, Query> {
   join<
     Type extends JoinType,
     JoinTable extends
@@ -78,8 +75,8 @@ export interface JoinBuilder<
         ActivateTableContext<
           Database,
           Context,
-          JoinTable,
-          ContextTable<Context, TableAliasRef<JoinTable & string>["alias"]>
+          TableAliasRef<JoinTable & string>["alias"],
+          ContextTable<Context, TableAliasRef<JoinTable & string>["table"]>
         >
       >,
     ) => Exp,
@@ -88,8 +85,8 @@ export interface JoinBuilder<
     ActivateTableContext<
       Database,
       Context,
-      JoinTable,
-      ContextTable<Context, TableAliasRef<JoinTable & string>["alias"]>
+      TableAliasRef<JoinTable & string>["alias"],
+      ContextTable<Context, TableAliasRef<JoinTable & string>["table"]>
     >,
     AddJoin<Query, Type, TableAliasRef<JoinTable>, Exp>
   >
@@ -107,8 +104,8 @@ export interface FromBuilder<Database extends SQLDatabaseSchema> {
     ActivateTableContext<
       Database,
       QueryContext<Database>,
-      Table,
-      Database["tables"][Table]["columns"]
+      TableAliasRef<Table & string>["alias"],
+      Database["tables"][TableAliasRef<Table & string>["table"]]["columns"]
     >,
     Table,
     SelectClause<"*", TableAliasRef<Table>>
@@ -135,8 +132,8 @@ class DefaultFromBuilder<Database extends SQLDatabaseSchema>
     ActivateTableContext<
       Database,
       QueryContext<Database>,
-      Table,
-      Database["tables"][Table]["columns"]
+      TableAliasRef<Table & string>["alias"],
+      Database["tables"][TableAliasRef<Table & string>["table"]]["columns"]
     >,
     Table,
     SelectClause<"*", TableAliasRef<Table>>
@@ -159,6 +156,13 @@ class DefaultJoinBuilder<
 {
   private _context: Context
   private _query: Query
+
+  get ast(): SQLQuery<Query> {
+    return {
+      type: "SQLQuery",
+      query: this._query,
+    }
+  }
 
   constructor(context: Context, table: Table) {
     this._context = context
@@ -202,7 +206,7 @@ class DefaultJoinBuilder<
           Database,
           Context,
           TableAliasRef<JoinTable & string>["alias"],
-          ContextTable<Context, TableAliasRef<JoinTable & string>["alias"]>
+          ContextTable<Context, TableAliasRef<JoinTable & string>["table"]>
         >
       >,
     ) => Exp,
@@ -211,8 +215,8 @@ class DefaultJoinBuilder<
     ActivateTableContext<
       Database,
       Context,
-      TableAliasRef<JoinTable & string>["table"],
-      ContextTable<Context, TableAliasRef<JoinTable & string>["alias"]>
+      TableAliasRef<JoinTable & string>["alias"],
+      ContextTable<Context, TableAliasRef<JoinTable & string>["table"]>
     >,
     AddJoin<Query, Type, TableAliasRef<JoinTable>, Exp>
   > {

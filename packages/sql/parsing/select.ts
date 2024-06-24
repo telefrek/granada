@@ -8,7 +8,6 @@ import {
   type JoinClause,
   type JoinType,
   type LogicalExpression,
-  type TableReference,
 } from "../ast.js"
 
 import { Flatten, Invalid } from "@telefrek/type-utils"
@@ -16,6 +15,7 @@ import { ParseTableReference } from "./tables.js"
 import { ExtractUntil, NextToken, SplitSQL, StartsWith } from "./utils.js"
 import { ExtractWhere, type ParseExpression } from "./where.js"
 
+import type { TableAliasRef } from "../queryBuilder/utils.js"
 import { FromKeywords, JoinKeywords, type OptionKeywords } from "./keywords.js"
 
 /**
@@ -134,14 +134,14 @@ type ParseJoinClause<T> =
         ? JoinClause<
             JoinExpression<
               Modifiers,
-              TableReference<Reference>,
+              TableAliasRef<Reference>,
               ParseExpression<Clause>
             >
           >
         : JoinClause<
             JoinExpression<
               "INNER",
-              TableReference<Reference>,
+              TableAliasRef<Reference>,
               ParseExpression<Clause>
             >
           >

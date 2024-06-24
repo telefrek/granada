@@ -45,7 +45,7 @@ export interface SelectColumnsBuilder<
   Database extends SQLDatabaseSchema,
   Context extends QueryContext<Database>,
   Query extends SelectClause,
-> {
+> extends QueryAST<Query> {
   columns<
     Columns extends
       | QueryContextColumns<Context>
