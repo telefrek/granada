@@ -49,7 +49,7 @@ export type ChangeContextReturning<
  *
  * @template Context The query context to extract
  */
-export type QueryReturnType<Context extends QueryContext<any, any, any>> =
+export type QueryReturnType<Context extends QueryContext> =
   Context extends QueryContext<infer _Database, infer _Active, infer Returning>
     ? Returning extends SQLColumnSchema
       ? SQLRowEntity<Returning>
@@ -84,7 +84,7 @@ export type ContextTable<Context extends QueryContext, Table extends string> =
  *
  * @template Context The query context to use for finding values
  */
-export type QueryContextColumns<Context extends QueryContext<any, any, any>> =
+export type QueryContextColumns<Context extends QueryContext> =
   Context extends QueryContext<infer _Database, infer Active, infer _Returning>
     ? IsUnion<Keys<Active>> extends true
       ? TableColumns<Active>
@@ -166,6 +166,11 @@ type OtherColumns<
     : keyof Tables[Key]["columns"]
 }[Keys<Tables>]
 
+type BuilderType<Context> =
+  Context extends QueryContext<infer Database, infer Active, infer Returning>
+    ? QueryContextBuilder<Database, QueryContext<Database, Active, Returning>>
+    : never
+
 /**
  * Helper for building {@link QueryContext} instances
  *
@@ -173,7 +178,7 @@ type OtherColumns<
  */
 export class QueryContextBuilder<
   Database extends SQLDatabaseSchema,
-  Context extends QueryContext<Database, any, any>,
+  Context extends QueryContext<Database>,
 > {
   /**
    * Create a context builder for the given schema
@@ -189,6 +194,12 @@ export class QueryContextBuilder<
       active: {},
       returning: 0,
     })
+  }
+
+  static modify<Context extends QueryContext>(
+    context: Context,
+  ): BuilderType<Context> {
+    return new QueryContextBuilder(context) as unknown as BuilderType<Context>
   }
 
   private _context: Context
@@ -295,10 +306,12 @@ type CheckDuplicateTableReference<
   Context extends QueryContext,
 > =
   Context extends QueryContext<infer _Database, infer Active, infer _Returning>
-    ? Table["alias"] extends keyof Active
-      ? never
-      : Table
-    : Table
+    ? Table extends TableReference<infer T, infer A>
+      ? A extends keyof Active
+        ? never
+        : TableReference<T, A>
+      : never
+    : never
 
 /**
  * Add the return type to the context

@@ -11,3 +11,8 @@ export type ParseTableReference<T> =
     : T extends `${infer TableName} AS ${infer Alias}`
       ? TableReference<TableName, Alias>
       : TableReference<T & string>
+
+export type CheckTableReference<T> =
+  ParseTableReference<T> extends TableReference<infer Table, infer Alias>
+    ? TableReference<Table, Alias>
+    : never

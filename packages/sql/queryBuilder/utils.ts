@@ -10,10 +10,10 @@ import type {
   ParameterValueType,
   StringValueType,
   TableColumnReference,
-  TableReference,
   UnboundColumnReference,
   ValueTypes,
 } from "../ast.js"
+import type { CheckTableReference } from "../parsing/tables.js"
 import type { SQLDatabaseTables } from "../schema.js"
 
 export function deepCopy<T, U = T extends Array<infer V> ? V : never>(
@@ -108,28 +108,23 @@ export type ColumnReferenceType<Column extends string> =
 const ALIAS_REGEX = /(.)+ AS (.)+/
 const TABLE_BOUND_REGEX = /([^.])+\.([^.])+/
 
-export type ParseTableReference<Table extends string> =
-  Table extends `${infer T} AS ${infer Alias}`
-    ? TableReference<T, Alias>
-    : TableReference<Table>
-
 export function buildTableReference<Table extends string>(
   table: Table,
-): ParseTableReference<Table> {
+): CheckTableReference<Table> {
   if (ALIAS_REGEX.test(table)) {
     const data = table.split(" AS ")
     return {
       type: "TableReference",
       table: data[0],
       alias: data[1],
-    } as ParseTableReference<Table>
+    } as CheckTableReference<Table>
   }
 
   return {
     type: "TableReference",
     table,
     alias: table,
-  } as ParseTableReference<Table>
+  } as unknown as CheckTableReference<Table>
 }
 
 export function buildColumnReference<Column extends string>(

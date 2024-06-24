@@ -10,6 +10,7 @@ import type {
   SelectClause,
   TableReference,
 } from "../ast.js"
+import type { CheckTableReference } from "../parsing/tables.js"
 import type { SQLDatabaseSchema } from "../schema.js"
 import {
   QueryContextBuilder,
@@ -27,11 +28,7 @@ import {
   type SelectBuilder,
   type SelectColumnsBuilder,
 } from "./select.js"
-import {
-  buildTableReference,
-  type AliasedValue,
-  type ParseTableReference,
-} from "./utils.js"
+import { buildTableReference, type AliasedValue } from "./utils.js"
 import { whereClause, type WhereClauseBuilder } from "./where.js"
 
 export function createFrom<Database extends SQLDatabaseSchema>(
@@ -59,7 +56,7 @@ export interface JoinBuilder<
   Table extends
     | StringKeys<Database["tables"]>
     | AliasedValue<StringKeys<Database["tables"]>>,
-  Query extends SelectClause<"*", ParseTableReference<Table>>,
+  Query extends SelectClause<"*", CheckTableReference<Table>>,
 > extends SelectColumnsBuilder<Database, Context, Query> {
   join<
     Type extends JoinType,
@@ -75,11 +72,8 @@ export interface JoinBuilder<
         ActivateTableContext<
           Database,
           Context,
-          ParseTableReference<JoinTable & string>["alias"],
-          ContextTable<
-            Context,
-            ParseTableReference<JoinTable & string>["table"]
-          >
+          CheckTableReference<JoinTable>["alias"],
+          ContextTable<Context, CheckTableReference<JoinTable>["table"]>
         >
       >,
     ) => Exp,
@@ -88,10 +82,10 @@ export interface JoinBuilder<
     ActivateTableContext<
       Database,
       Context,
-      ParseTableReference<JoinTable & string>["alias"],
-      ContextTable<Context, ParseTableReference<JoinTable & string>["table"]>
+      CheckTableReference<JoinTable & string>["alias"],
+      ContextTable<Context, CheckTableReference<JoinTable>["table"]>
     >,
-    AddJoin<Query, Type, ParseTableReference<JoinTable>, Exp>
+    AddJoin<Query, Type, CheckTableReference<JoinTable>, Exp>
   >
 }
 
@@ -107,13 +101,11 @@ export interface FromBuilder<Database extends SQLDatabaseSchema> {
     ActivateTableContext<
       Database,
       QueryContext<Database>,
-      ParseTableReference<Table & string>["alias"],
-      Database["tables"][ParseTableReference<
-        Table & string
-      >["table"]]["columns"]
+      CheckTableReference<Table & string>["alias"],
+      Database["tables"][CheckTableReference<Table>["table"]]["columns"]
     >,
     Table,
-    SelectClause<"*", ParseTableReference<Table>>
+    SelectClause<"*", CheckTableReference<Table>>
   >
 }
 
@@ -137,17 +129,15 @@ class DefaultFromBuilder<Database extends SQLDatabaseSchema>
     ActivateTableContext<
       Database,
       QueryContext<Database>,
-      ParseTableReference<Table & string>["alias"],
-      Database["tables"][ParseTableReference<
-        Table & string
-      >["table"]]["columns"]
+      CheckTableReference<Table & string>["alias"],
+      Database["tables"][CheckTableReference<Table>["table"]]["columns"]
     >,
     Table,
-    SelectClause<"*", ParseTableReference<Table>>
+    SelectClause<"*", CheckTableReference<Table>>
   > {
     return new DefaultJoinBuilder(
       QueryContextBuilder.create(this._database).copy(
-        buildTableReference(table) as any,
+        buildTableReference(table),
       ).context,
       table,
     ) as any
@@ -158,7 +148,7 @@ class DefaultJoinBuilder<
   Database extends SQLDatabaseSchema,
   Context extends QueryContext<Database>,
   Table extends StringKeys<Database["tables"]>,
-  Query extends SelectClause<"*", ParseTableReference<Table>>,
+  Query extends SelectClause<"*", CheckTableReference<Table>>,
 > implements JoinBuilder<Database, Context, Table, Query>
 {
   private _context: Context
@@ -187,7 +177,7 @@ class DefaultJoinBuilder<
     Next extends SelectBuilder<
       Database,
       ModifyReturn<Context, Columns>,
-      SelectClause<CheckColumns<Columns>, ParseTableReference<Table>>
+      SelectClause<CheckColumns<Columns>, CheckTableReference<Table>>
     >,
   >(first: CheckAlias<Columns>, ...rest: CheckAlias<Columns>[]): Next {
     const select = createSelect<Database, Context, Query>(
@@ -212,11 +202,8 @@ class DefaultJoinBuilder<
         ActivateTableContext<
           Database,
           Context,
-          ParseTableReference<JoinTable & string>["alias"],
-          ContextTable<
-            Context,
-            ParseTableReference<JoinTable & string>["table"]
-          >
+          CheckTableReference<JoinTable>["alias"],
+          ContextTable<Context, CheckTableReference<JoinTable>["table"]>
         >
       >,
     ) => Exp,
@@ -225,16 +212,16 @@ class DefaultJoinBuilder<
     ActivateTableContext<
       Database,
       Context,
-      ParseTableReference<JoinTable & string>["alias"],
-      ContextTable<Context, ParseTableReference<JoinTable & string>["table"]>
+      CheckTableReference<JoinTable>["alias"],
+      ContextTable<Context, CheckTableReference<JoinTable>["table"]>
     >,
-    AddJoin<Query, Type, ParseTableReference<JoinTable>, Exp>
+    AddJoin<Query, Type, CheckTableReference<JoinTable>, Exp>
   > {
-    const ctx = new QueryContextBuilder<Database, Context>(this._context).copy(
-      buildTableReference(table) as any,
+    const ctx = QueryContextBuilder.modify(this._context).copy(
+      buildTableReference(table),
     ).context
 
-    const q: AddJoin<Query, Type, ParseTableReference<JoinTable>, Exp> = {
+    const q = {
       ...this._query,
       join: {
         type: "JoinClause",
@@ -242,8 +229,8 @@ class DefaultJoinBuilder<
         from: buildTableReference(table),
         on: builder(whereClause(ctx)),
       },
-    } as any
+    } as unknown as AddJoin<Query, Type, CheckTableReference<JoinTable>, Exp>
 
-    return createSelect(ctx, q) as any
+    return createSelect(ctx, q)
   }
 }
