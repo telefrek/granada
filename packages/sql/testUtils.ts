@@ -2,6 +2,7 @@
  * Shared utilities for testing various aspects of the SQL lib that we don't need to publish
  */
 
+import { QueryParser } from "./parser.js"
 import { createSchemaBuilder } from "./schema.js"
 import { SQLBuiltinTypes } from "./types.js"
 
@@ -30,3 +31,8 @@ export const TEST_DATABASE = createSchemaBuilder()
       .addColumn("description", SQLBuiltinTypes.TEXT)
       .withKey("id"),
   ).schema
+
+/**
+ * Export the pseudo database
+ */
+export const DB = new QueryParser(TEST_DATABASE)

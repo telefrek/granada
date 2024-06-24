@@ -2,9 +2,10 @@
  * Set of utilities to validate a query against a schema
  */
 
-import type { Invalid } from "@telefrek/type-utils"
+import { queryBuilder, type QueryBuilder } from "./builder.js"
 import type { NormalizeQuery } from "./parsing/normalization.js"
 import type { ParseSQL } from "./parsing/queries.js"
+import type { SQLDatabaseSchema } from "./schema.js"
 
 /**
  * Things to do
@@ -24,16 +25,22 @@ export type ParseSQLQuery<Query extends string> = ParseSQL<
   NormalizeQuery<Query>
 >
 
-export type ParseAlias<Value extends string, Valid extends string> =
-  NormalizeQuery<Value> extends `${infer Target} AS ${infer Alias}`
-    ? [Target] extends [Valid]
-      ? SQLAlias<Target, Alias>
-      : Invalid<`${Target} does not extend a valid column`>
-    : [Value] extends [Valid]
-      ? [Value]
-      : Invalid<`${Value} does not extend ${Valid}`>
+/**
+ * Class to help with Query parsing
+ */
+export class QueryParser<Database extends SQLDatabaseSchema> {
+  private _database: Database
 
-export type SQLAlias<Target, Alias> = {
-  target: Target
-  alias: Alias
+  constructor(database: Database) {
+    this._database = database
+  }
+
+  get builder(): QueryBuilder<Database> {
+    return queryBuilder(this._database)
+  }
+
+  parse<T extends string>(query: T): ParseSQLQuery<T> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return query as any
+  }
 }

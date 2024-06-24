@@ -5,7 +5,7 @@
 import { createFrom, type FromBuilder } from "./queryBuilder/from.js"
 import type { SQLDatabaseSchema } from "./schema.js"
 
-export function query<Database extends SQLDatabaseSchema>(
+export function queryBuilder<Database extends SQLDatabaseSchema>(
   database: Database,
 ): QueryBuilder<Database> {
   return new DefaultQueryBuilder(database)
