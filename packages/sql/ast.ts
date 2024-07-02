@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-
 /**
  * The building blocks for our SQL AST structure
  */
@@ -285,6 +284,9 @@ export type JoinClause<Join extends JoinExpression = JoinExpression> = {
  */
 export type SelectedColumn = ColumnAggregate | ColumnReference
 
+/**
+ *
+ */
 export type SelectColumns = {
   [key: string]: SelectedColumn
 }
@@ -324,9 +326,19 @@ export type GroupByClause<
   groupBy: GroupBy
 }
 
-// TODO: Add asc/desc
+export type Order = "ASCENDING" | "DESCENDING"
+
+export type ColumnOrdering<
+  Column extends ColumnReference = ColumnReference,
+  Direction extends Order = "ASCENDING",
+> = {
+  type: "ColumnOrdering"
+  column: Column
+  order: Direction
+}
+
 export type OrderingClause<
-  OrderBy extends ColumnReference[] = ColumnReference[],
+  OrderBy extends ColumnOrdering[] = ColumnOrdering[],
 > = {
   orderBy: OrderBy
 }

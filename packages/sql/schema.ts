@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/ban-types */
 /* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/ban-types */
 /**
  * Handle schema generation and manipulation
  */
@@ -59,7 +59,9 @@ export type SQLDatabaseSchema<
 
 type EmptySchema = SQLDatabaseSchema<{}, ForeignKey[]>
 
-export type ColumnTypeDefinition<T> = [T] extends [SQLBuiltinTypes]
+export type ColumnTypeDefinition<T = SQLBuiltinTypes> = [T] extends [
+  SQLBuiltinTypes,
+]
   ? Flatten<IncrementalType<T> & VariableType<T> & BaseColumnDefinition<T>>
   : never
 
@@ -98,10 +100,10 @@ export function SQLColumn<
   return {
     ...options,
     type,
-  } as any
+  } as unknown as Consolidate<ColumnTypeDefinition<T>, Options>
 }
 
-export type TableColumnType<T extends ColumnTypeDefinition<any>> =
+export type TableColumnType<T extends ColumnTypeDefinition> =
   T["array"] extends true ? TSSQLType<T["type"]>[] : TSSQLType<T["type"]>
 
 export type SQLTableEntity<T extends SQLTableSchema> = SQLRowEntity<
@@ -181,7 +183,7 @@ class ColumnSchemaBuilder<T extends SQLColumnSchema = {}> {
   }
 }
 
-class SQLSchemaBuilder<T extends SQLDatabaseSchema<any, any>> {
+class SQLSchemaBuilder<T extends SQLDatabaseSchema> {
   private _schema: T
   constructor(schema: T) {
     this._schema = schema
@@ -191,10 +193,7 @@ class SQLSchemaBuilder<T extends SQLDatabaseSchema<any, any>> {
     return this._schema
   }
 
-  addTable<
-    Name extends string,
-    Builder extends SQLTableSchemaBuilder<Name, any, any>,
-  >(
+  addTable<Name extends string, Builder extends SQLTableSchemaBuilder<Name>>(
     name: Name,
     builder: (b: SQLTableSchemaBuilder<Name>) => Builder,
   ): SQLSchemaBuilder<

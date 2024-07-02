@@ -2,8 +2,6 @@
  * Common Type utilities
  */
 
-import type { ECKeyPairKeyObjectOptions } from "crypto"
-
 /**
  * Utility type to return back the type that was given
  */
@@ -53,23 +51,19 @@ export type IsUnion<T, U extends T = T> = (
 
 /**
  * All of the literal required keys from a type
- *
- * @template T The object to inspect
  */
 export type RequiredLiteralKeys<T> = {
   [K in keyof T as string extends K
     ? never
     : number extends K
       ? never
-      : ECKeyPairKeyObjectOptions extends Pick<T, K>
+      : object extends Pick<T, K>
         ? never
         : K]: T[K]
 }
 
 /**
  * All of the optional (explicit) keys
- *
- * @template T The object to inspect
  */
 export type OptionalLiteralKeys<T> = {
   [K in keyof T as string extends K

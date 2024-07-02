@@ -1,8 +1,4 @@
 /**
- * SQL related type specification
- */
-
-/**
  * The set of built-in types for the SQL spec that are supported in this library
  */
 export enum SQLBuiltinTypes {
